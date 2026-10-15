@@ -2,6 +2,9 @@ import asyncio
 import logging
 import os
 import re
+import time
+from collections import OrderedDict
+from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
 import httpx
@@ -122,8 +125,7 @@ def map_arxiv_entry(entry) -> PaperOut | None:
             pdf_url = link.attrib["href"]
     venue = clean(local_text(entry, "journal_ref"))
     if not venue:
-        category = next(local_children(entry, "primary_category"), None)
-        venue = category.attrib.get("term") if category is not None else None
+        venue = "arXiv（预印本）"
     return PaperOut(
         id=f"arxiv:{arxiv_id}",
         title=title,
@@ -157,6 +159,8 @@ def map_s2_paper(payload: dict) -> PaperOut | None:
     venue = clean(payload.get("venue"))
     if not venue and isinstance(payload.get("journal"), dict):
         venue = clean(payload["journal"].get("name"))
+    if arxiv_id and (not venue or venue.lower() in ("arxiv", "arxiv.org")):
+        venue = "arXiv（预印本）"
     year = payload.get("year")
     if not isinstance(year, int):
         published = str(payload.get("publicationDate") or "")
@@ -165,7 +169,7 @@ def map_s2_paper(payload: dict) -> PaperOut | None:
     if not isinstance(citation_count, int):
         citation_count = None
     return PaperOut(
-        id=paper_identity(arxiv_id, doi, paper_id),
+        id=f"s2:{paper_id}",
         title=title,
         authors=authors,
         abstract=clean(payload.get("abstract")),
@@ -269,22 +273,62 @@ def s2_year(year_from: int | None, year_to: int | None) -> str | None:
     return None
 
 
+# Bounded process-local cache; deploy with one worker.
+_CACHE: OrderedDict = OrderedDict()
+_PAPERS: OrderedDict = OrderedDict()
+_GATES: dict[str, asyncio.Lock] = {}
+_NEXT: dict[str, float] = {}
+_COOLDOWN: dict[str, float] = {}
+
+
+def semantic_enabled() -> bool:
+    return bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip())
+
+
 async def request(client: httpx.AsyncClient, url: str, params: dict, headers: dict | None, label: str, allow_not_found: bool = False) -> httpx.Response:
-    response = None
-    for attempt in range(2):
-        response = await client.get(url, params=params, headers=headers)
-        if response.status_code == 429 and attempt == 0:
-            await asyncio.sleep(1.2)
-            continue
-        break
-    assert response is not None
-    if response.status_code == 429:
-        raise SourceFailure(f"{label} 请求过于频繁，请稍后再试")
-    if response.status_code == 404 and allow_not_found:
-        return response
-    if response.status_code >= 400:
-        raise SourceFailure(f"{label} 返回错误（{response.status_code}）")
-    return response
+    key = (url, tuple(sorted(params.items())))
+    async with _GATES.setdefault(label, asyncio.Lock()):
+        cached = _CACHE.get(key)
+        if cached and cached[0] > time.monotonic():
+            _CACHE.move_to_end(key)
+            return cached[1]
+        if label == "Semantic Scholar" and not semantic_enabled():
+            raise SourceFailure("Semantic Scholar 暂不可用：尚未配置 API 密钥，请使用 arXiv")
+        if _COOLDOWN.get(label, 0) > time.monotonic():
+            raise SourceFailure(f"{label} 正在限流冷却，请稍后重试或选择其他来源")
+        for attempt in range(3):
+            await asyncio.sleep(max(0, _NEXT.get(label, 0) - time.monotonic()))
+            _NEXT[label] = time.monotonic() + (1.1 if label == "Semantic Scholar" else 3.1)
+            response = await client.get(url, params=params, headers=headers)
+            if response.status_code == 429:
+                retry = response.headers.get("Retry-After", "")
+                try:
+                    delay = float(retry)
+                except ValueError:
+                    try:
+                        delay = parsedate_to_datetime(retry).timestamp() - time.time()
+                    except (ValueError, TypeError, OverflowError):
+                        delay = 2 ** (attempt + 1)
+                delay = max(1, min(delay, 3600))
+                _COOLDOWN[label] = time.monotonic() + delay
+                if delay <= 8 and attempt < 2:
+                    await asyncio.sleep(delay)
+                    continue
+                _COOLDOWN[label] = time.monotonic() + max(60, delay)
+                raise SourceFailure(f"{label} 正在限流冷却，请稍后重试或选择其他来源")
+            if response.status_code in (502, 503, 504) and attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            if response.status_code == 404 and allow_not_found:
+                return response
+            if response.status_code >= 400:
+                raise SourceFailure(f"{label} 返回错误（{response.status_code}）")
+            _CACHE[key] = (time.monotonic() + 600, response)
+            _CACHE.move_to_end(key)
+            while len(_CACHE) > 128:
+                _CACHE.popitem(last=False)
+            return response
+    raise SourceFailure(f"{label} 查询失败")
 
 
 async def search_arxiv(client: httpx.AsyncClient, query: str, offset: int, limit: int, sort: str, year_from: int | None, year_to: int | None) -> tuple[list[PaperOut], int]:
@@ -379,17 +423,45 @@ async def run_source(name: str, fetcher) -> SourceResult:
         return SourceResult(name, [], 0, f"{label} 查询失败")
 
 
+async def unique_prefix(fetcher, target: int, maximum: int) -> tuple[list[PaperOut], int]:
+    """Fetch fixed cached batches until enough unique records exist for slicing.
+
+    S2 accepts at most 100 records per request and only its first 1000 hits.
+    Fixed batch boundaries reuse the provider cache while users change pages.
+    """
+    papers: list[PaperOut] = []
+    raw_offset = 0
+    total = 0
+    while len(papers) < target and raw_offset < maximum:
+        size = min(100, maximum - raw_offset)
+        batch, total = await fetcher(raw_offset, size)
+        papers = merge_papers([papers + batch], "relevance")
+        raw_offset += size
+        if raw_offset >= total or not batch:
+            break
+    return papers, total
+
+
 async def search_papers(query: str, page: int, page_size: int, sort: str, source: str, year_from: int | None, year_to: int | None) -> dict:
     offset = (page - 1) * page_size
+    target = offset + page_size
     timeout = httpx.Timeout(25.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         jobs = []
         if source in ("all", "arxiv"):
-            jobs.append(run_source("arxiv", lambda: search_arxiv(client, query, offset, page_size, sort, year_from, year_to)))
-        if source in ("all", "semantic_scholar"):
-            jobs.append(run_source("semantic_scholar", lambda: search_semantic_scholar(client, query, offset, page_size, year_from, year_to)))
+            jobs.append(run_source("arxiv", lambda: unique_prefix(
+                lambda start, size: search_arxiv(client, query, start, size, sort, year_from, year_to), target, 10000)))
+        if source == "semantic_scholar" or (source == "all" and semantic_enabled()):
+            jobs.append(run_source("semantic_scholar", lambda: unique_prefix(
+                lambda start, size: search_semantic_scholar(client, query, start, size, year_from, year_to), target, 1000)))
         results = await asyncio.gather(*jobs)
     papers = merge_papers([item.papers for item in results if not item.error], sort)
+    # Keep merged metadata identical when navigating from a card to its detail.
+    for paper in papers:
+        _PAPERS[paper.id] = (time.monotonic() + 600, paper)
+        _PAPERS.move_to_end(paper.id)
+    while len(_PAPERS) > 1000:
+        _PAPERS.popitem(last=False)
     totals = [item.total for item in results if not item.error]
     return {
         "query": query,
@@ -397,24 +469,23 @@ async def search_papers(query: str, page: int, page_size: int, sort: str, source
         "page_size": page_size,
         "total": max(totals) if totals else 0,
         "total_estimated": len(totals) > 1,
-        "papers": papers,
+        "papers": papers[offset:offset + page_size],
         "source_counts": {item.name: item.total for item in results if not item.error},
         "source_errors": {item.name: item.error for item in results if item.error},
     }
 
 
 async def fetch_paper(paper_id: str) -> PaperOut | None:
+    cached = _PAPERS.get(paper_id)
+    if cached and cached[0] > time.monotonic():
+        return cached[1]
     timeout = httpx.Timeout(25.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         if paper_id.startswith("arxiv:"):
             paper = await fetch_arxiv_paper(client, paper_id.removeprefix("arxiv:"))
             if paper is None:
                 return None
-            try:
-                extra = await fetch_s2_paper(client, f"ARXIV:{paper.arxiv_id}")
-            except (SourceFailure, httpx.HTTPError):
-                extra = None
-            return combine(paper, extra) if extra else paper
+            return paper
         if paper_id.startswith("s2:"):
             return await fetch_s2_paper(client, paper_id.removeprefix("s2:"))
         if paper_id.startswith("doi:"):

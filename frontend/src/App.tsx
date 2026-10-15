@@ -6,11 +6,12 @@ import SearchPage from "./pages/SearchPage";
 
 export default function App() {
   return (
-    <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: "#1f4b99", borderRadius: 8 } }}>
+    <ConfigProvider button={{ autoInsertSpace: false }} locale={zhCN} theme={{ token: { colorPrimary: "#1f4b99", borderRadius: 8 } }}>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<SearchPage />} />
           <Route path="/paper" element={<PaperPage />} />
+          <Route path="*" element={<main className="wrap detail"><h1>页面不存在</h1><a href="/">返回检索</a></main>} />
         </Routes>
       </BrowserRouter>
     </ConfigProvider>

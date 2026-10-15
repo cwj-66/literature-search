@@ -21,7 +21,13 @@ export default function PaperPage() {
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    document.title = paper ? `${paper.title} - 论文详情 - 文献检索` : "论文详情 - 文献检索";
+  }, [paper]);
+
+  useEffect(() => {
+    setPaper(null);
     if (!id) {
+      setLoading(false);
       setError("缺少论文编号");
       setPaper(null);
       return;
@@ -77,9 +83,9 @@ export default function PaperPage() {
             <Descriptions.Item label="作者">{formatAuthors(paper.authors)}</Descriptions.Item>
             <Descriptions.Item label="年份">{paper.year ?? "未知"}</Descriptions.Item>
             <Descriptions.Item label="期刊/会议">{paper.venue ?? "未知"}</Descriptions.Item>
-            <Descriptions.Item label="引用量">{paper.citation_count ?? "未知"}</Descriptions.Item>
-            <Descriptions.Item label="CCF">{paper.ccf_rank ?? "未知"}</Descriptions.Item>
-            <Descriptions.Item label="中科院分区">{paper.cas_partition ?? "未知"}</Descriptions.Item>
+            {paper.citation_count != null ? <Descriptions.Item label="引用量">{paper.citation_count.toLocaleString("zh-CN")}</Descriptions.Item> : null}
+            {paper.ccf_rank ? <Descriptions.Item label="CCF">{paper.ccf_rank}</Descriptions.Item> : null}
+            {paper.cas_partition ? <Descriptions.Item label="中科院分区">{paper.cas_partition}</Descriptions.Item> : null}
             <Descriptions.Item label="arXiv">{paper.arxiv_id ?? "无"}</Descriptions.Item>
             <Descriptions.Item label="DOI">{paper.doi ?? "无"}</Descriptions.Item>
           </Descriptions>
@@ -87,12 +93,12 @@ export default function PaperPage() {
           <Typography.Paragraph>{paper.abstract || "摘要缺失"}</Typography.Paragraph>
           <div className="card-links">
             {paper.url ? (
-              <a href={paper.url} target="_blank" rel="noreferrer">
+              <a href={paper.url} target="_blank" rel="noopener noreferrer" aria-label="原文（将打开新窗口）" title="将打开新窗口">
                 原文
               </a>
             ) : null}
             {paper.pdf_url ? (
-              <a href={paper.pdf_url} target="_blank" rel="noreferrer">
+              <a href={paper.pdf_url} target="_blank" rel="noopener noreferrer" aria-label="PDF（将打开新窗口）" title="将打开新窗口">
                 PDF
               </a>
             ) : null}

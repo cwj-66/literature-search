@@ -30,9 +30,9 @@ export function PaperCard({ paper }: { paper: Paper }) {
           </Tag>
         ))}
         <Tag>{paper.year ?? "年份未知"}</Tag>
-        <Tag>引用 {paper.citation_count ?? "未知"}</Tag>
-        <Tag>CCF {paper.ccf_rank ?? "未知"}</Tag>
-        <Tag>中科院 {paper.cas_partition ?? "未知"}</Tag>
+        {paper.citation_count != null ? <Tag>引用 {paper.citation_count.toLocaleString("zh-CN")}</Tag> : null}
+        {paper.ccf_rank ? <Tag>CCF {paper.ccf_rank}</Tag> : null}
+        {paper.cas_partition ? <Tag>中科院 {paper.cas_partition}</Tag> : null}
       </div>
       <h2 className="paper-title">
         <Link to={href}>{paper.title}</Link>
@@ -49,12 +49,12 @@ export function PaperCard({ paper }: { paper: Paper }) {
       <div className="card-links">
         <Link to={href}>详情</Link>
         {paper.url ? (
-          <a href={paper.url} target="_blank" rel="noreferrer">
+          <a href={paper.url} target="_blank" rel="noopener noreferrer" aria-label="原文（将打开新窗口）" title="将打开新窗口">
             原文
           </a>
         ) : null}
         {paper.pdf_url ? (
-          <a href={paper.pdf_url} target="_blank" rel="noreferrer">
+          <a href={paper.pdf_url} target="_blank" rel="noopener noreferrer" aria-label="PDF（将打开新窗口）" title="将打开新窗口">
             PDF
           </a>
         ) : null}
