@@ -1,0 +1,151 @@
+body {
+  margin: 0;
+  background: #f4f6f9;
+  color: #1c1e21;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+a {
+  color: #1f4b99;
+}
+
+.wrap {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  border-bottom: 1px solid #e6e8ee;
+}
+
+.topbar-inner {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.brand {
+  flex: none;
+  color: #1f4b99;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px 96px;
+  box-sizing: border-box;
+}
+
+.hero h1 {
+  margin: 0 0 8px;
+  font-size: 36px;
+  font-weight: 650;
+}
+
+.hero-lead {
+  margin: 0 0 24px;
+  color: #5c6570;
+}
+
+.hero-search,
+.search-form {
+  width: min(720px, 100%);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.samples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.results {
+  padding: 20px 0 48px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #5c6570;
+  font-size: 13px;
+}
+
+.paper-card {
+  background: #fff;
+  border: 1px solid #e6e8ee;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.paper-title {
+  margin: 8px 0 4px;
+  font-size: 17px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+
+.paper-title a {
+  color: #18315c;
+  text-decoration: none;
+}
+
+.paper-title a:hover {
+  color: #1f4b99;
+}
+
+.meta {
+  color: #5c6570;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.card-links {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.pager {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.detail {
+  padding: 24px 0 48px;
+}
+
+.detail h1 {
+  margin: 12px 0;
+  font-size: 26px;
+  line-height: 1.4;
+}
