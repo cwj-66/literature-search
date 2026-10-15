@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Empty, Input, InputNumber, Pagination, Select, Spin } from "antd";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { searchPapers } from "../api";
 import { PaperCard } from "../components/PaperCard";
 import type { SearchResponse } from "../types";
@@ -194,6 +194,7 @@ export default function SearchPage() {
         <h1>文献检索</h1>
         <p className="hero-lead">检索学术论文，实时标注可用数据源</p>
         {form}
+        <p><Link to="/library">本地分析库 · 通过 ID / 链接导入</Link></p>
         {error ? <Alert style={{ width: "min(720px, 100%)", marginTop: 16 }} type="error" showIcon message={error} /> : null}
         <div className="samples">
           {SAMPLES.map((item) => (
@@ -215,6 +216,7 @@ export default function SearchPage() {
             文献检索
           </a>
           <div style={{ flex: 1 }}>{form}</div>
+          <Link to="/library">本地分析库</Link>
         </div>
       </header>
       <main className="wrap results">
@@ -237,6 +239,7 @@ export default function SearchPage() {
             type={result?.papers.length ? "warning" : "error"}
             showIcon
             message={message}
+            action={<Button size="small" loading={loading} onClick={() => setRetry((value) => value + 1)}>重试</Button>}
           />
         ))}
         {loading ? (

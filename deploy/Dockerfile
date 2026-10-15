@@ -8,6 +8,7 @@ WORKDIR /app
 COPY backend/requirements.txt /app/requirements.txt
 RUN uv pip install --system --no-cache -r /app/requirements.txt
 COPY backend/app /app/app
+RUN mkdir -p /app/data && chown 10001:10001 /app/data
 USER 10001:10001
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "*"]

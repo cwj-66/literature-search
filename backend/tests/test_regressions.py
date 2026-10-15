@@ -53,14 +53,14 @@ class RegressionTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(2, waits)
             self.assertIn(4, waits)
 
-    async def test_no_key_all_skips_s2_but_explicit_reports_unavailable(self):
-        with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_API_KEY": ""}), patch.object(provider, "search_arxiv", new=AsyncMock(return_value=([paper(1)], 1))), patch.object(provider, "search_semantic_scholar", new_callable=AsyncMock) as s2:
+    async def test_no_key_all_attempts_s2_and_admin_can_disable(self):
+        with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_API_KEY": "", "SEMANTIC_SCHOLAR_ENABLED": "true"}), patch.object(provider, "search_arxiv", new=AsyncMock(return_value=([paper(1)], 1))), patch.object(provider, "search_semantic_scholar", new=AsyncMock(return_value=([paper(2)], 1))) as s2:
             result = await provider.search_papers("test", 1, 20, "relevance", "all", None, None)
             self.assertEqual(result["source_errors"], {})
-            self.assertEqual(len(result["papers"]), 1)
-            s2.assert_not_called()
+            self.assertEqual(len(result["papers"]), 2)
+            s2.assert_awaited_once()
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: self.fail("must not call upstream"))) as client:
-            with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_API_KEY": ""}), self.assertRaises(provider.SourceFailure):
+            with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_ENABLED": "false"}), self.assertRaises(provider.SourceFailure):
                 await provider.request(client, "https://test", {}, {}, "Semantic Scholar")
 
     async def test_duplicate_versions_refill_and_pages_do_not_overlap(self):
@@ -115,10 +115,10 @@ class RegressionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(fetch.call_args.args[0], "deep learning")
             self.assertEqual((await client.get("/api/health")).json(), {"status": "ok"})
-            for method, status in [("GET", 200), ("DELETE", 400), ("POST", 400), ("PATCH", 400)]:
+            for method, status in [("GET", 200), ("DELETE", 400), ("POST", 200), ("PATCH", 400)]:
                 response = await client.options("/api/papers/search", headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": method})
                 self.assertEqual(response.status_code, status)
-                self.assertEqual(response.headers["access-control-allow-methods"], "GET")
+                self.assertEqual(response.headers["access-control-allow-methods"], "GET, POST")
             self.assertEqual((await client.get("/docs")).status_code, 404)
 
     def test_venue_is_not_arxiv_category(self):

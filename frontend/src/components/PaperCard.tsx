@@ -20,7 +20,7 @@ export function detailPath(id: string, from: string) {
 
 export function PaperCard({ paper }: { paper: Paper }) {
   const location = useLocation();
-  const href = detailPath(paper.id, location.pathname + location.search);
+  const href = detailPath(paper.local_id ?? paper.id, location.pathname + location.search);
   return (
     <article className="paper-card">
       <div className="tag-row">
@@ -30,9 +30,9 @@ export function PaperCard({ paper }: { paper: Paper }) {
           </Tag>
         ))}
         <Tag>{paper.year ?? "年份未知"}</Tag>
-        {paper.citation_count != null ? <Tag>引用 {paper.citation_count.toLocaleString("zh-CN")}</Tag> : null}
-        {paper.ccf_rank ? <Tag>CCF {paper.ccf_rank}</Tag> : null}
-        {paper.cas_partition ? <Tag>中科院 {paper.cas_partition}</Tag> : null}
+        <Tag>引用 {paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</Tag>
+        <Tag>CCF {paper.ccf_rank ?? "未知"}</Tag>
+        <Tag>中科院 {paper.cas_partition ?? "未知"}</Tag>
       </div>
       <h2 className="paper-title">
         <Link to={href}>{paper.title}</Link>

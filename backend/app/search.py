@@ -255,11 +255,14 @@ def merge_papers(groups: list[list[PaperOut]], sort: str) -> list[PaperOut]:
 
 
 def arxiv_search_query(query: str, year_from: int | None, year_to: int | None) -> str:
-    term = f"all:{query}"
+    # Treat UI input as literal keywords. Explicit AND/grouping prevents arXiv's
+    # implicit term operators from escaping the submittedDate restriction.
+    words = re.findall(r"[^\s\"]+", query)
+    term = "(" + " AND ".join(f'all:"{word}"' for word in words) + ")"
     if year_from or year_to:
         start = f"{year_from or 1900}0101"
         end = f"{year_to or 2100}1231"
-        term = f"{term} AND submittedDate:[{start} TO {end}]"
+        term = f"{term} AND submittedDate:[{start}0000 TO {end}2359]"
     return term
 
 
@@ -282,6 +285,10 @@ _COOLDOWN: dict[str, float] = {}
 
 
 def semantic_enabled() -> bool:
+    return os.getenv("SEMANTIC_SCHOLAR_ENABLED", "true").lower() not in ("0", "false", "no")
+
+
+def semantic_has_key() -> bool:
     return bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip())
 
 
@@ -293,7 +300,7 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
             _CACHE.move_to_end(key)
             return cached[1]
         if label == "Semantic Scholar" and not semantic_enabled():
-            raise SourceFailure("Semantic Scholar 暂不可用：尚未配置 API 密钥，请使用 arXiv")
+            raise SourceFailure("Semantic Scholar 已由管理员停用，请使用 arXiv")
         if _COOLDOWN.get(label, 0) > time.monotonic():
             raise SourceFailure(f"{label} 正在限流冷却，请稍后重试或选择其他来源")
         for attempt in range(3):
@@ -423,7 +430,13 @@ async def run_source(name: str, fetcher) -> SourceResult:
         return SourceResult(name, [], 0, f"{label} 查询失败")
 
 
-async def unique_prefix(fetcher, target: int, maximum: int) -> tuple[list[PaperOut], int]:
+def year_matches(paper: PaperOut, year_from: int | None, year_to: int | None) -> bool:
+    if year_from is None and year_to is None:
+        return True
+    return paper.year is not None and (year_from is None or paper.year >= year_from) and (year_to is None or paper.year <= year_to)
+
+
+async def unique_prefix(fetcher, target: int, maximum: int, year_from: int | None = None, year_to: int | None = None) -> tuple[list[PaperOut], int]:
     """Fetch fixed cached batches until enough unique records exist for slicing.
 
     S2 accepts at most 100 records per request and only its first 1000 hits.
@@ -435,7 +448,8 @@ async def unique_prefix(fetcher, target: int, maximum: int) -> tuple[list[PaperO
     while len(papers) < target and raw_offset < maximum:
         size = min(100, maximum - raw_offset)
         batch, total = await fetcher(raw_offset, size)
-        papers = merge_papers([papers + batch], "relevance")
+        eligible = [paper for paper in batch if year_matches(paper, year_from, year_to)]
+        papers = merge_papers([papers + eligible], "relevance")
         raw_offset += size
         if raw_offset >= total or not batch:
             break
@@ -450,12 +464,13 @@ async def search_papers(query: str, page: int, page_size: int, sort: str, source
         jobs = []
         if source in ("all", "arxiv"):
             jobs.append(run_source("arxiv", lambda: unique_prefix(
-                lambda start, size: search_arxiv(client, query, start, size, sort, year_from, year_to), target, 10000)))
+                lambda start, size: search_arxiv(client, query, start, size, sort, year_from, year_to), target, 10000, year_from, year_to)))
         if source == "semantic_scholar" or (source == "all" and semantic_enabled()):
             jobs.append(run_source("semantic_scholar", lambda: unique_prefix(
-                lambda start, size: search_semantic_scholar(client, query, start, size, year_from, year_to), target, 1000)))
+                lambda start, size: search_semantic_scholar(client, query, start, size, year_from, year_to), target, 1000, year_from, year_to)))
         results = await asyncio.gather(*jobs)
     papers = merge_papers([item.papers for item in results if not item.error], sort)
+    papers = [paper for paper in papers if year_matches(paper, year_from, year_to)]
     # Keep merged metadata identical when navigating from a card to its detail.
     for paper in papers:
         _PAPERS[paper.id] = (time.monotonic() + 600, paper)
@@ -468,7 +483,7 @@ async def search_papers(query: str, page: int, page_size: int, sort: str, source
         "page": page,
         "page_size": page_size,
         "total": max(totals) if totals else 0,
-        "total_estimated": len(totals) > 1,
+        "total_estimated": len(totals) > 1 or bool(year_from or year_to),
         "papers": papers[offset:offset + page_size],
         "source_counts": {item.name: item.total for item in results if not item.error},
         "source_errors": {item.name: item.error for item in results if item.error},

@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Descriptions, Spin, Tag, Typography } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
+import { AnalysisPanel } from "../components/AnalysisPanel";
+import { ImportButton } from "../components/ImportPaper";
 import { fetchPaper } from "../api";
 import { formatAuthors } from "../components/PaperCard";
 import type { Paper } from "../types";
@@ -19,6 +21,10 @@ export default function PaperPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
+  const refreshPaper = useCallback(() => {
+    if (!id) return;
+    fetchPaper(id).then((data) => setPaper((current) => current ? data : current)).catch(() => undefined);
+  }, [id]);
 
   useEffect(() => {
     document.title = paper ? `${paper.title} - 论文详情 - 文献检索` : "论文详情 - 文献检索";
@@ -50,7 +56,7 @@ export default function PaperPage() {
 
   return (
     <main className="wrap detail">
-      <Link to={back}>返回检索</Link>
+      <div className="card-links"><Link to={back}>返回上一页</Link><Link to="/library">本地分析库</Link></div>
       {loading ? (
         <div style={{ padding: 48, textAlign: "center" }}>
           <Spin tip="正在加载论文" />
@@ -79,13 +85,14 @@ export default function PaperPage() {
             ))}
           </div>
           <h1>{paper.title}</h1>
+          <ImportButton key={paper.id} paper={paper} onSaved={(saved) => setPaper((current) => current?.id === paper.id ? saved : current)} />
           <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
             <Descriptions.Item label="作者">{formatAuthors(paper.authors)}</Descriptions.Item>
             <Descriptions.Item label="年份">{paper.year ?? "未知"}</Descriptions.Item>
             <Descriptions.Item label="期刊/会议">{paper.venue ?? "未知"}</Descriptions.Item>
-            {paper.citation_count != null ? <Descriptions.Item label="引用量">{paper.citation_count.toLocaleString("zh-CN")}</Descriptions.Item> : null}
-            {paper.ccf_rank ? <Descriptions.Item label="CCF">{paper.ccf_rank}</Descriptions.Item> : null}
-            {paper.cas_partition ? <Descriptions.Item label="中科院分区">{paper.cas_partition}</Descriptions.Item> : null}
+            <Descriptions.Item label="引用量">{paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</Descriptions.Item>
+            <Descriptions.Item label="CCF">{paper.ccf_rank ?? "未知"}</Descriptions.Item>
+            <Descriptions.Item label="中科院分区">{paper.cas_partition ?? "未知"}</Descriptions.Item>
             <Descriptions.Item label="arXiv">{paper.arxiv_id ?? "无"}</Descriptions.Item>
             <Descriptions.Item label="DOI">{paper.doi ?? "无"}</Descriptions.Item>
           </Descriptions>
@@ -103,6 +110,7 @@ export default function PaperPage() {
               </a>
             ) : null}
           </div>
+          <AnalysisPanel paperId={id} onImported={refreshPaper} />
         </>
       ) : null}
     </main>

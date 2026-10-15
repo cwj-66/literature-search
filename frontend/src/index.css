@@ -150,6 +150,12 @@ a {
   line-height: 1.4;
 }
 
+.analysis-block { margin-top: 16px; }
+.analysis-block h2 { margin: 0 0 8px; font-size: 18px; }
+.analysis-block h3 { margin: 16px 0 6px; font-size: 15px; }
+.analysis-block ul { margin: 0; padding-left: 18px; }
+.analysis-actions { display: flex; gap: 8px; margin: 8px 0 12px; }
+
 .search-hint { color: #5c6570; font-size: 13px; margin: 8px 0; }
 .paper-title, .detail h1, .meta { overflow-wrap: anywhere; }
 @media (max-width: 600px) {

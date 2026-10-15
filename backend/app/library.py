@@ -1,0 +1,142 @@
+"""Persistent local analysis library; no external URLs are fetched directly."""
+
+import os
+import re
+import sqlite3
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+from uuid import uuid4
+
+from .schemas import LocalPaperOut, PaperOut
+from .search import combine, identity_keys
+
+
+def normalize_reference(value: str) -> str:
+    value = value.strip()
+    if value.startswith(("https://", "http://")):
+        parsed = urlparse(value)
+        host = (parsed.hostname or "").lower()
+        path = unquote(parsed.path)
+        if host in ("arxiv.org", "www.arxiv.org", "export.arxiv.org"):
+            match = re.fullmatch(r"/(?:abs|pdf)/(.+?)(?:\.pdf)?/?", path)
+            value = "arxiv:" + match[1] if match else ""
+        elif host in ("doi.org", "dx.doi.org"):
+            value = "doi:" + path.lstrip("/")
+        elif host in ("semanticscholar.org", "www.semanticscholar.org") and path.startswith("/paper/"):
+            value = "s2:" + path.rstrip("/").rsplit("/", 1)[-1]
+        else:
+            raise ValueError("仅支持 arXiv、DOI 或 Semantic Scholar 的论文链接")
+    if value.startswith("arxiv:"):
+        ref = re.sub(r"v\d+$", "", value[6:], flags=re.I)
+        if re.fullmatch(r"(?:\d{4}\.\d{4,5}|[a-zA-Z-]+(?:\.[a-zA-Z-]+)?/\d{7})", ref):
+            return "arxiv:" + ref
+    elif value.startswith("s2:") and re.fullmatch(r"[a-fA-F0-9]{40}", value[3:]):
+        return "s2:" + value[3:].lower()
+    elif value.startswith("doi:") and re.fullmatch(r"10\.\d{4,9}/\S+", value[4:]):
+        return "doi:" + value[4:].lower()
+    elif re.fullmatch(r"\d{4}\.\d{4,5}(?:v\d+)?", value):
+        return normalize_reference("arxiv:" + value)
+    elif value.startswith("10."):
+        return normalize_reference("doi:" + value)
+    raise ValueError("请输入有效的 arXiv ID、DOI、Semantic Scholar ID 或论文链接")
+
+
+@contextmanager
+def connection():
+    path = Path(os.getenv("PAPER_DB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "papers.sqlite3")))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(path, timeout=10)
+    db.row_factory = sqlite3.Row
+    try:
+        db.execute("PRAGMA foreign_keys = ON")
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS papers (
+                local_id TEXT PRIMARY KEY,
+                data TEXT NOT NULL,
+                imported_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS paper_keys (
+                key TEXT PRIMARY KEY,
+                local_id TEXT NOT NULL REFERENCES papers(local_id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS analysis_tasks (
+                task_id TEXT PRIMARY KEY,
+                paper_ref TEXT NOT NULL,
+                local_id TEXT REFERENCES papers(local_id) ON DELETE CASCADE,
+                status TEXT NOT NULL,
+                error TEXT,
+                model_name TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                reanalyze INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS analysis_results (
+                result_id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL UNIQUE REFERENCES analysis_tasks(task_id) ON DELETE CASCADE,
+                local_id TEXT NOT NULL REFERENCES papers(local_id) ON DELETE CASCADE,
+                payload TEXT NOT NULL,
+                analysis_basis TEXT NOT NULL,
+                degradation_reason TEXT,
+                source_kind TEXT NOT NULL,
+                source_url TEXT,
+                model_name TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                evidence TEXT NOT NULL,
+                generated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_analysis_tasks_ref ON analysis_tasks(paper_ref, status);
+            CREATE INDEX IF NOT EXISTS idx_analysis_tasks_local ON analysis_tasks(local_id, status);
+            CREATE INDEX IF NOT EXISTS idx_analysis_results_local ON analysis_results(local_id, generated_at);
+        """)
+        yield db
+    finally:
+        db.close()
+
+
+def as_paper(row) -> LocalPaperOut:
+    paper = PaperOut.model_validate_json(row["data"])
+    return LocalPaperOut(**paper.model_dump(), local_id=row["local_id"], imported_at=row["imported_at"])
+
+
+def get_paper(ref: str) -> LocalPaperOut | None:
+    with connection() as db:
+        row = db.execute("""SELECT * FROM papers WHERE local_id = ? OR local_id IN
+            (SELECT local_id FROM paper_keys WHERE key = ?) LIMIT 1""", (ref, ref)).fetchone()
+        return as_paper(row) if row else None
+
+
+def save_paper(paper: PaperOut, reference: str) -> tuple[LocalPaperOut, bool]:
+    keys = identity_keys(paper) | {paper.id, reference}
+    with connection() as db, db:
+        db.execute("BEGIN IMMEDIATE")
+        marks = ",".join("?" for _ in keys)
+        rows = db.execute(f"""SELECT DISTINCT p.* FROM papers p JOIN paper_keys k
+            ON p.local_id = k.local_id WHERE k.key IN ({marks}) ORDER BY p.imported_at, p.local_id""", tuple(keys)).fetchall()
+        created = not rows
+        local_id = rows[0]["local_id"] if rows else uuid4().hex
+        imported_at = rows[0]["imported_at"] if rows else datetime.now(timezone.utc).isoformat()
+        # A DOI import can later bridge an arXiv and S2 entry. Merge transactionally.
+        for row in rows:
+            paper = combine(PaperOut.model_validate_json(row["data"]), paper)
+            keys.update(r[0] for r in db.execute("SELECT key FROM paper_keys WHERE local_id = ?", (row["local_id"],)))
+        db.execute("INSERT INTO papers VALUES (?, ?, ?) ON CONFLICT(local_id) DO UPDATE SET data = excluded.data", (local_id, paper.model_dump_json(), imported_at))
+        for row in rows[1:]:
+            db.execute("""UPDATE analysis_tasks SET local_id = ?, paper_ref = CASE WHEN paper_ref = ? THEN ? ELSE paper_ref END
+                WHERE local_id = ?""", (local_id, row["local_id"], local_id, row["local_id"]))
+            db.execute("UPDATE analysis_results SET local_id = ? WHERE local_id = ?", (local_id, row["local_id"]))
+            db.execute("DELETE FROM papers WHERE local_id = ?", (row["local_id"],))
+        keys.update(identity_keys(paper))
+        keys.add(paper.id)
+        db.executemany("INSERT OR REPLACE INTO paper_keys VALUES (?, ?)", ((key, local_id) for key in keys))
+        return LocalPaperOut(**paper.model_dump(), local_id=local_id, imported_at=imported_at), created
+
+
+def list_papers(page: int, page_size: int) -> dict:
+    with connection() as db:
+        total = db.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+        rows = db.execute("SELECT * FROM papers ORDER BY imported_at DESC, local_id LIMIT ? OFFSET ?", (page_size, (page - 1) * page_size)).fetchall()
+        return {"papers": [as_paper(row) for row in rows], "total": total, "page": page, "page_size": page_size}

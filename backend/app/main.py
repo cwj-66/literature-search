@@ -1,24 +1,48 @@
 import logging
+import asyncio
+import os
+import sqlite3
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from .schemas import PaperOut, SearchResponse
-from .search import SourceFailure, fetch_paper, search_papers, semantic_enabled
+from . import analysis, analysis_store, library, llm
+from .schemas import (
+    AnalyzeRequest, AnalysisResponse, PaperOut, SearchResponse, ImportRequest, ImportResult, LocalPaperOut, LibraryResponse,
+)
+from .search import SourceFailure, fetch_paper, search_papers, semantic_enabled, semantic_has_key
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="文献检索", docs_url=None, redoc_url=None, openapi_url=None)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    pending = await asyncio.to_thread(analysis_store.recover)
+    queue = analysis.get_queue()
+    for task_id in pending:
+        queue.put_nowait(task_id)
+    worker = asyncio.create_task(analysis.worker(queue)) if os.getenv("ANALYSIS_WORKER", "1") != "0" else None
+    try:
+        yield
+    finally:
+        if worker:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+
+
+app = FastAPI(title="文献检索", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Accept", "Content-Type"],
 )
 
@@ -73,6 +97,83 @@ async def health():
 
 @app.get("/api/sources")
 async def sources():
-    return {"semantic_scholar": {"enabled": semantic_enabled(), "message":
-        "Semantic Scholar 已启用；供应商限流时将提示并保留其他来源结果" if semantic_enabled()
-        else "Semantic Scholar 暂不可用（未配置 API 密钥），当前提供 arXiv 检索"}}
+    enabled = semantic_enabled()
+    keyed = semantic_has_key()
+    message = ("Semantic Scholar 已配置密钥；上游限流时可重试" if keyed
+               else "Semantic Scholar 使用匿名访问（未配置密钥，可能限流）；失败时可重试或使用 arXiv")
+    return {"semantic_scholar": {"enabled": enabled, "key_configured": keyed,
+            "message": message if enabled else "Semantic Scholar 已由管理员停用"}}
+
+
+@app.post("/api/papers/import", response_model=ImportResult)
+async def import_paper(payload: ImportRequest, response: Response):
+    try:
+        reference = library.normalize_reference(payload.reference())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    try:
+        existing = await asyncio.to_thread(library.get_paper, reference)
+        if existing:
+            return {"paper": existing, "created": False}
+        paper = await paper_detail(reference)
+        saved, created = await asyncio.to_thread(library.save_paper, paper, reference)
+    except (sqlite3.Error, OSError):
+        logging.exception("Local library write failed")
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+    response.status_code = 201 if created else 200
+    return {"paper": saved, "created": created}
+
+
+@app.get("/api/papers", response_model=LibraryResponse)
+async def local_library(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
+    try:
+        return await asyncio.to_thread(library.list_papers, page, page_size)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+def _analysis_error(exc: analysis.ResolveError) -> HTTPException:
+    return HTTPException(status_code=exc.status, detail=exc.message)
+
+
+@app.post("/api/papers/{paper_id:path}/analyze", response_model=AnalysisResponse)
+async def analyze_paper(paper_id: str, response: Response, payload: AnalyzeRequest = Body(default_factory=AnalyzeRequest)):
+    try:
+        target = await asyncio.to_thread(analysis.resolve_target, paper_id)
+        decision = await asyncio.to_thread(
+            analysis_store.create_task, target.paper_ref, target.aliases, target.local_id,
+            payload.reanalyze, llm.model_name(), llm.PROMPT_VERSION,
+        )
+    except analysis.ResolveError as exc:
+        raise _analysis_error(exc) from None
+    except (sqlite3.Error, OSError):
+        logging.exception("analysis task create failed")
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+    if decision.created or (decision.reused and decision.task_row and decision.task_row["status"] == "pending"):
+        await analysis.enqueue(decision.task_row["task_id"])
+    response.status_code = 202 if decision.created or decision.reused else 200
+    return decision.payload()
+
+
+@app.get("/api/papers/{paper_id:path}/analysis", response_model=AnalysisResponse)
+async def paper_analysis(paper_id: str):
+    try:
+        target = await asyncio.to_thread(analysis.resolve_target, paper_id)
+        task, result = await asyncio.to_thread(analysis_store.get_state, target.aliases, target.local_id)
+    except analysis.ResolveError as exc:
+        raise _analysis_error(exc) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+    return {"task": task, "result": result}
+
+
+# Keep this after /search and /detail; path supports legacy arXiv and DOI slashes.
+@app.get("/api/papers/{id:path}", response_model=LocalPaperOut)
+async def local_paper(id: str):
+    try:
+        result = await asyncio.to_thread(library.get_paper, id)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+    if result is None:
+        raise HTTPException(status_code=404, detail="论文尚未加入本地分析库")
+    return result

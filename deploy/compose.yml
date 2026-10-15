@@ -5,6 +5,10 @@ services:
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      PAPER_DB_PATH: /app/data/papers.sqlite3
+    volumes:
+      - paper_data:/app/data
     ports:
       - "127.0.0.1:15179:8000"
     mem_limit: 256m
@@ -28,3 +32,6 @@ services:
       timeout: 6s
       retries: 3
       start_period: 15s
+
+volumes:
+  paper_data:
