@@ -1,4 +1,5 @@
 .env
+REQUIREMENTS.md
 .venv/
 __pycache__/
 *.pyc
