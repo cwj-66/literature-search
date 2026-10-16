@@ -59,6 +59,7 @@ export default function PaperPage() {
       <div className="card-links">
         <Link to={back}>返回上一页</Link>
         <Link to="/library">本地分析库</Link>
+        <Link to="/graph">知识图谱</Link>
         {id ? <Link to={`/recommend?id=${encodeURIComponent(id)}`}>相似推荐</Link> : null}
       </div>
       {loading ? (

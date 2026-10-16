@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import analysis, analysis_store, library, llm, recommend
+from . import analysis, analysis_store, library, llm, recommend, knowledge_graph
 from .schemas import (
     AnalyzeRequest, AnalysisResponse, PaperOut, SearchResponse, ImportRequest, ImportResult, LocalPaperOut, LibraryResponse,
     RecommendationResponse, NetworkResponse,
@@ -46,6 +46,14 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Accept", "Content-Type"],
 )
+
+
+@app.get("/api/knowledge-graph")
+async def get_knowledge_graph():
+    try:
+        return await asyncio.to_thread(knowledge_graph.build)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
 
 
 @app.get("/api/papers/search", response_model=SearchResponse)

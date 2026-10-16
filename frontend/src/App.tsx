@@ -5,6 +5,7 @@ import LibraryPage from "./pages/LibraryPage";
 import PaperPage from "./pages/PaperPage";
 import RecommendPage from "./pages/RecommendPage";
 import SearchPage from "./pages/SearchPage";
+import KnowledgeGraphPage from "./pages/KnowledgeGraphPage";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/paper" element={<PaperPage />} />
           <Route path="/recommend" element={<RecommendPage />} />
+          <Route path="/graph" element={<KnowledgeGraphPage />} />
           <Route path="*" element={<main className="wrap detail"><h1>页面不存在</h1><a href="/">返回检索</a></main>} />
         </Routes>
       </BrowserRouter>

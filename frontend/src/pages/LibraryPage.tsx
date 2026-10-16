@@ -24,7 +24,7 @@ export default function LibraryPage() {
     return () => controller.abort();
   }, [page, retry]);
   return <main className="wrap detail">
-    <Link to="/">返回检索</Link><h1>本地分析库</h1>
+    <div className="card-links"><Link to="/">返回检索</Link><Link to="/graph">知识图谱</Link></div><h1>本地分析库</h1>
     <p>已入库论文可在后端重启或数据源不可用时继续查看，重复导入会合并已有记录。</p>
     <ImportPanel onImported={() => { setPage(1); setRetry((value) => value + 1); }} />
     {loading ? <Spin aria-label="正在加载本地分析库" /> : null}
