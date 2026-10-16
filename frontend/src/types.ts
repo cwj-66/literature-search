@@ -27,6 +27,9 @@ export interface SearchResponse {
   papers: Paper[];
   source_counts: Record<string, number>;
   source_errors: Record<string, string>;
+  source_warnings?: Record<string, string>;
+  source_cached_at?: Record<string, string>;
+  source_retry_after?: Record<string, number>;
 }
 
 export interface ImportResult { paper: Paper; created: boolean }

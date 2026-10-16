@@ -100,7 +100,7 @@ async def sources():
     enabled = semantic_enabled()
     keyed = semantic_has_key()
     message = ("Semantic Scholar 已配置密钥；上游限流时可重试" if keyed
-               else "Semantic Scholar 使用匿名访问（未配置密钥，可能限流）；失败时可重试或使用 arXiv")
+               else "Semantic Scholar 使用公开批量检索；相关性为本地排序，结果按批次缓存")
     return {"semantic_scholar": {"enabled": enabled, "key_configured": keyed,
             "message": message if enabled else "Semantic Scholar 已由管理员停用"}}
 

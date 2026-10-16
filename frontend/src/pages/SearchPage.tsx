@@ -11,6 +11,19 @@ const SOURCE_LABEL: Record<string, string> = {
   semantic_scholar: "Semantic Scholar",
 };
 
+function SourceRetry({ seconds, loading, onRetry }: { seconds: number; loading: boolean; onRetry: () => void }) {
+  const [left, setLeft] = useState(seconds);
+  useEffect(() => {
+    setLeft(seconds);
+    if (seconds <= 0) return;
+    const timer = window.setInterval(() => setLeft((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [seconds]);
+  return <Button size="small" disabled={left > 0} loading={loading} onClick={onRetry}>
+    {left > 0 ? `${left} 秒后重试` : "重试"}
+  </Button>;
+}
+
 export default function SearchPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q")?.trim() ?? "";
@@ -232,15 +245,20 @@ export default function SearchPage() {
             }
           />
         ) : null}
-        {errors.map((message) => (
+        {Object.entries(result?.source_errors ?? {}).map(([sourceName, message]) => (
           <Alert
-            key={message}
+            key={sourceName}
             style={{ marginBottom: 12 }}
             type={result?.papers.length ? "warning" : "error"}
             showIcon
             message={message}
-            action={<Button size="small" loading={loading} onClick={() => setRetry((value) => value + 1)}>重试</Button>}
+            action={<SourceRetry seconds={result?.source_retry_after?.[sourceName] ?? 0} loading={loading} onRetry={() => setRetry((value) => value + 1)} />}
           />
+        ))}
+        {Object.entries(result?.source_warnings ?? {}).map(([sourceName, message]) => (
+          <Alert key={sourceName} style={{ marginBottom: 12 }} type="warning" showIcon message={message}
+            description={result?.source_cached_at?.[sourceName] ? `缓存时间：${new Date(result.source_cached_at[sourceName]).toLocaleString("zh-CN")}` : undefined}
+            action={<SourceRetry seconds={result?.source_retry_after?.[sourceName] ?? 0} loading={loading} onRetry={() => setRetry((value) => value + 1)} />} />
         ))}
         {loading ? (
           <div style={{ padding: 48, textAlign: "center" }}>
@@ -251,7 +269,7 @@ export default function SearchPage() {
           <>
             <div className="summary">
               {result.query !== q ? <span>实际检索词：{result.query}</span> : null}
-              <span>{result.total_estimated ? `约 ${result.total.toLocaleString("zh-CN")} 篇` : `共 ${result.total.toLocaleString("zh-CN")} 篇`}</span>
+              {errors.length && !result.papers.length ? <span>数据源暂不可用，暂无可展示结果</span> : <span>{result.total_estimated ? `约 ${result.total.toLocaleString("zh-CN")} 篇` : `共 ${result.total.toLocaleString("zh-CN")} 篇`}</span>}
               <span>本页 {result.papers.length} 篇</span>
               {Object.entries(result.source_counts).map(([key, count]) => (
                 <span key={key}>

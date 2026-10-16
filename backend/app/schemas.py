@@ -28,6 +28,9 @@ class SearchResponse(BaseModel):
     papers: list[PaperOut]
     source_counts: dict[str, int]
     source_errors: dict[str, str]
+    source_warnings: dict[str, str] = Field(default_factory=dict)
+    source_cached_at: dict[str, str] = Field(default_factory=dict)
+    source_retry_after: dict[str, int] = Field(default_factory=dict)
 
 
 class ImportRequest(BaseModel):
