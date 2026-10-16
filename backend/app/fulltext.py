@@ -31,8 +31,8 @@ HEADING = re.compile(
     r"(?im)^\s*(?:\d+(?:\.\d+){0,3}[\.\s]+)?"
     r"(?:abstract|introduction|related work|background|experimental results|experiments?|"
     r"evaluation|results|methods?|methodology|approaches?|proposed method|"
-    r"limitations?|discussions?|conclusions?|future work|"
-    r"摘要|引言|相关工作|背景|方法|模型|实验结果|实验|结果|讨论|局限性|结论|未来工作)\s*$"
+    r"limitations?|discussions?|conclusions?|future work|references|bibliography|"
+    r"摘要|引言|相关工作|背景|方法|模型|实验结果|实验|结果|讨论|局限性|结论|未来工作|参考文献)\s*$"
 )
 CLASSIFIERS = (
     ("method", re.compile(r"method|approach|model|方法|模型", re.I)),
@@ -179,6 +179,14 @@ def parse_html(data: bytes) -> list[tuple[str, str]]:
         return [("正文", text)] if text else []
     stop = set(names) | {"h1", "h2"}
     sections = []
+    prelude = []
+    for node in root.descendants:
+        if node is headings[0]:
+            break
+        if isinstance(node, NavigableString) and str(node).strip():
+            prelude.append(str(node).strip())
+    if prelude:
+        sections.append(("摘要及前置文本", "\n".join(prelude)))
     for heading in headings:
         chunks = []
         for node in heading.next_elements:
@@ -198,7 +206,15 @@ def parse_html(data: bytes) -> list[tuple[str, str]]:
 
 
 def pack(sections: list[tuple[str, str]], url: str, pdf: bool, pretruncated: bool) -> PreparedText:
-    chosen, truncated = select_sections(sections)
+    # Keep bounded source material for staged extraction, rather than silently
+    # keeping only the beginning of a long methods/experiments section.
+    sections = [(title, body) for title, body in sections if not re.fullmatch(
+        r"\s*(?:\d+[.\s]*)?(?:references|bibliography|参考文献)\s*", title, re.I)]
+    original = sum(len(body) for _, body in sections)
+    if original <= 96000:
+        chosen, truncated = sections, False
+    else:
+        chosen, truncated = select_sections(sections)
     text = "\n\n".join(f"## {title}\n{body}" for title, body in chosen).strip()
     if not text:
         raise TextFailure("PDF 正文过短或无法解析" if pdf else "返回内容不是可解析的论文全文")
@@ -303,11 +319,12 @@ def abstract_text(paper: PaperOut, reason: str) -> PreparedText | None:
     abstract = (paper.abstract or "").strip()
     if not abstract:
         return None
-    if len(abstract) > BUDGET:
+    truncated = len(abstract) > BUDGET
+    if truncated:
         abstract = abstract[:BUDGET]
     return PreparedText(
         f"## 摘要\n{abstract}", "abstract", "abstract", None, reason,
-        {"sections": [{"title": "摘要", "chars": len(abstract), "excerpt": abstract[:240]}], "char_count": len(abstract), "truncated": False},
+        {"sections": [{"title": "摘要", "chars": len(abstract), "excerpt": abstract[:240]}], "char_count": len(abstract), "truncated": truncated},
     )
 
 

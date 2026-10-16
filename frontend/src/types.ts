@@ -44,7 +44,26 @@ export interface AnalysisTask {
   reused: boolean;
 }
 
+export type ClaimKind = "summary" | "paper_type" | "research_problem" | "main_content" | "technical_method" | "method_step" | "innovation" | "evaluation" | "limitation" | "keyword";
+export interface AnalysisClaim {
+  kind: ClaimKind;
+  text: string;
+  evidence: { paragraph_id: string; quote: string }[];
+  status: "supported" | "not_stated";
+  dataset?: string | null;
+  baseline?: string | null;
+  metric?: string | null;
+  result?: string | null;
+  conditions?: string | null;
+}
+
 export interface AnalysisResult {
+  summary?: string | null;
+  paper_type?: string;
+  claims?: AnalysisClaim[];
+  source_paragraphs?: { id: string; section: string; text: string }[];
+  analysis_warnings?: string[];
+  content_hash?: string | null;
   research_problem: string;
   main_content: string;
   technical_method: string;

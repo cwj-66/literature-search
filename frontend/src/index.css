@@ -170,3 +170,9 @@ a {
   .card-links { flex-wrap: wrap; }
   .hero-lead { text-align: center; }
 }
+.analysis-claim { margin-bottom: 12px; overflow-wrap: anywhere; }
+.analysis-claim blockquote { margin: 12px 0; padding-left: 12px; border-left: 3px solid #b6c8e8; white-space: pre-wrap; }
+.evaluation-fields { margin: 8px 0; }
+.evaluation-fields > div { display: grid; grid-template-columns: minmax(90px, 125px) minmax(0, 1fr); gap: 8px; margin-bottom: 6px; }
+.evaluation-fields dt { color: #606875; }
+.evaluation-fields dd { margin: 0; }

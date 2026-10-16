@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -75,7 +77,40 @@ class AnalyzeRequest(BaseModel):
     reanalyze: bool = False
 
 
+class EvidenceReference(BaseModel):
+    paragraph_id: str = Field(min_length=1, max_length=30)
+    quote: str = Field(min_length=8, max_length=900)
+
+
+class AnalysisClaim(BaseModel):
+    kind: Literal["summary", "research_problem", "main_content", "technical_method", "method_step", "innovation", "evaluation", "limitation", "keyword", "paper_type"]
+    text: str = Field(min_length=1, max_length=2000)
+    evidence: list[EvidenceReference] = Field(default_factory=list, max_length=6)
+    dataset: str | None = Field(None, max_length=300)
+    baseline: str | None = Field(None, max_length=300)
+    metric: str | None = Field(None, max_length=300)
+    result: str | None = Field(None, max_length=500)
+    conditions: str | None = Field(None, max_length=500)
+    status: Literal["supported", "not_stated"] = "not_stated"
+
+
+class ExtractionOutput(BaseModel):
+    claims: list[AnalysisClaim] = Field(max_length=60)
+
+
+class SourceParagraph(BaseModel):
+    id: str
+    section: str
+    text: str
+
+
 class AnalysisFields(BaseModel):
+    summary: str | None = None
+    paper_type: str = "未知"
+    claims: list[AnalysisClaim] = Field(default_factory=list)
+    source_paragraphs: list[SourceParagraph] = Field(default_factory=list)
+    analysis_warnings: list[str] = Field(default_factory=list)
+    content_hash: str | None = None
     research_problem: str = Field(min_length=1, max_length=2000)
     main_content: str = Field(min_length=1, max_length=4000)
     technical_method: str = Field(min_length=1, max_length=4000)
@@ -129,6 +164,12 @@ class AnalysisTaskOut(BaseModel):
 
 
 class AnalysisResultOut(BaseModel):
+    summary: str | None = None
+    paper_type: str = "未知"
+    claims: list[AnalysisClaim] = Field(default_factory=list)
+    source_paragraphs: list[SourceParagraph] = Field(default_factory=list)
+    analysis_warnings: list[str] = Field(default_factory=list)
+    content_hash: str | None = None
     research_problem: str
     main_content: str
     technical_method: str
