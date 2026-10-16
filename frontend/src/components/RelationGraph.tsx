@@ -1,0 +1,104 @@
+import { useEffect, useRef, useState } from "react";
+import { Graph, NodeEvent, type IElementEvent } from "@antv/g6";
+import type { PaperNetwork } from "../types";
+
+function shortTitle(title: string) {
+  const chars = Array.from(title);
+  return chars.length > 18 ? `${chars.slice(0, 18).join("")}…` : title;
+}
+
+export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (id: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
+  const open = useRef(onOpen);
+  open.current = onOpen;
+
+  useEffect(() => {
+    const container = ref.current;
+    if (!container) return;
+    setFailed(false);
+    let alive = true;
+    let graph: Graph;
+    try {
+      graph = new Graph({
+        container,
+        autoFit: "view",
+        padding: 28,
+        data: {
+          nodes: data.nodes.map((node) => ({
+            id: node.id,
+            data: { ...node, label: node.center ? "当前论文" : shortTitle(node.title) },
+          })),
+          edges: data.edges.map((edge) => ({
+            id: `${edge.type}:${edge.source}>${edge.target}`,
+            source: edge.source,
+            target: edge.target,
+            data: edge,
+          })),
+        },
+        node: {
+          type: "circle",
+          style: {
+            size: (datum) => (datum.data?.center ? 52 : 34),
+            fill: (datum) => (datum.data?.center ? "#1f4b99" : "#e7eefc"),
+            stroke: "#1f4b99",
+            lineWidth: 1.5,
+            labelText: (datum) => String(datum.data?.label ?? ""),
+            labelPlacement: "bottom",
+            labelFill: "#1c1e21",
+            labelFontSize: 12,
+            labelMaxWidth: 128,
+            labelWordWrap: true,
+            labelMaxLines: 3,
+            cursor: "pointer",
+          },
+        },
+        edge: {
+          type: (datum) => (datum.data?.type === "similar" ? "quadratic" : "line"),
+          style: {
+            stroke: (datum) => (datum.data?.type === "cites" ? "#1f4b99" : "#8a94a6"),
+            lineWidth: 1.5,
+            lineDash: (datum) => (datum.data?.type === "similar" ? [5, 4] : []),
+            endArrow: (datum) => Boolean(datum.data?.directed),
+            labelText: (datum) => String(datum.data?.label ?? ""),
+            labelFontSize: 12,
+            labelFill: "#5c6570",
+            labelBackground: true,
+            labelBackgroundFill: "#ffffff",
+          },
+        },
+        layout: {
+          type: "radial",
+          unitRadius: 180,
+          linkDistance: 190,
+          preventOverlap: true,
+          nodeSize: 90,
+        },
+        behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
+      });
+    } catch {
+      setFailed(true);
+      return;
+    }
+    graph.render().catch(() => {
+      if (alive) setFailed(true);
+    });
+    graph.on(NodeEvent.CLICK, (event) => {
+      const click = event as IElementEvent;
+      if (click.targetType !== "node") return;
+      const id = click.target.id;
+      if (id) open.current(id);
+    });
+    return () => {
+      alive = false;
+      graph.destroy();
+    };
+  }, [data]);
+
+  return (
+    <>
+      {failed ? <p className="meta">关系图渲染失败，仍可从列表打开论文详情。</p> : null}
+      <div ref={ref} className="network-canvas" hidden={failed} aria-label="论文关系网络" />
+    </>
+  );
+}

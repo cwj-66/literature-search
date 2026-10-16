@@ -1,4 +1,4 @@
-import type { AnalysisState, Paper, SearchResponse, ImportResult, LibraryResponse } from "./types";
+import type { AnalysisState, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork } from "./types";
 
 export interface SearchParams {
   q: string;
@@ -65,6 +65,20 @@ export async function startAnalysis(id: string, reanalyze: boolean): Promise<Ana
 
 export async function fetchAnalysis(id: string, signal?: AbortSignal): Promise<AnalysisState> {
   const response = await fetch(`/api/papers/${encodeURIComponent(id)}/analysis`, { signal });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function fetchRecommendations(id: string, refresh: boolean, signal?: AbortSignal): Promise<Recommendations> {
+  const query = refresh ? "?refresh=true" : "";
+  const response = await fetch(`/api/papers/${encodeURIComponent(id)}/recommendations${query}`, { signal });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function fetchNetwork(id: string, refresh: boolean, signal?: AbortSignal): Promise<PaperNetwork> {
+  const query = refresh ? "?refresh=true" : "";
+  const response = await fetch(`/api/papers/${encodeURIComponent(id)}/network${query}`, { signal });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }

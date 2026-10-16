@@ -12,9 +12,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import analysis, analysis_store, library, llm
+from . import analysis, analysis_store, library, llm, recommend
 from .schemas import (
     AnalyzeRequest, AnalysisResponse, PaperOut, SearchResponse, ImportRequest, ImportResult, LocalPaperOut, LibraryResponse,
+    RecommendationResponse, NetworkResponse,
 )
 from .search import SourceFailure, fetch_paper, search_papers, semantic_enabled, semantic_has_key
 
@@ -165,6 +166,32 @@ async def paper_analysis(paper_id: str):
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
     return {"task": task, "result": result}
+
+
+@app.get("/api/papers/{paper_id:path}/recommendations", response_model=RecommendationResponse)
+async def paper_recommendations(
+    paper_id: str,
+    limit: int = Query(10, ge=1, le=10),
+    refresh: bool = Query(False),
+):
+    try:
+        return await recommend.recommendations(paper_id, limit, refresh)
+    except analysis.ResolveError as exc:
+        raise _analysis_error(exc) from None
+    except (sqlite3.Error, OSError):
+        logging.exception("recommendation lookup failed")
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+@app.get("/api/papers/{paper_id:path}/network", response_model=NetworkResponse)
+async def paper_network(paper_id: str, refresh: bool = Query(False)):
+    try:
+        return await recommend.network(paper_id, refresh)
+    except analysis.ResolveError as exc:
+        raise _analysis_error(exc) from None
+    except (sqlite3.Error, OSError):
+        logging.exception("paper network lookup failed")
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
 
 
 # Keep this after /search and /detail; path supports legacy arXiv and DOI slashes.

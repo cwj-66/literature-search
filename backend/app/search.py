@@ -502,6 +502,40 @@ async def fetch_s2_paper(client: httpx.AsyncClient, paper_ref: str) -> PaperOut 
     return None
 
 
+def papers_from_links(payload: dict, nested: str) -> list[PaperOut]:
+    rows = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise SourceFailure("Semantic Scholar 引用数据无法解析")
+    papers = []
+    for item in rows:
+        raw = item.get(nested) if isinstance(item, dict) else None
+        if isinstance(raw, dict) and (paper := map_s2_paper(raw)):
+            papers.append(paper)
+        if len(papers) >= 20:
+            break
+    return papers
+
+
+async def fetch_s2_links(client: httpx.AsyncClient, paper_ref: str, kind: str) -> list[PaperOut]:
+    nested = "citedPaper" if kind == "references" else "citingPaper"
+    fields = ",".join(f"{nested}.{name}" for name in S2_FIELDS.split(","))
+    response = await request(
+        client,
+        f"{S2_API}/{quote(paper_ref, safe='')}/{kind}",
+        {"fields": fields, "limit": 20},
+        s2_headers(),
+        "Semantic Scholar",
+        allow_not_found=True,
+    )
+    if response.status_code == 404:
+        return []
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise SourceFailure("Semantic Scholar 引用数据无法解析") from exc
+    return papers_from_links(payload, nested)
+
+
 async def fetch_arxiv_paper(client: httpx.AsyncClient, arxiv_id: str) -> PaperOut | None:
     response = await request(client, ARXIV_API, {"id_list": arxiv_id}, {"User-Agent": USER_AGENT}, "arXiv")
     import xml.etree.ElementTree as ET

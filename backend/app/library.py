@@ -91,6 +91,19 @@ def connection():
             CREATE INDEX IF NOT EXISTS idx_analysis_tasks_ref ON analysis_tasks(paper_ref, status);
             CREATE INDEX IF NOT EXISTS idx_analysis_tasks_local ON analysis_tasks(local_id, status);
             CREATE INDEX IF NOT EXISTS idx_analysis_results_local ON analysis_results(local_id, generated_at);
+            CREATE TABLE IF NOT EXISTS paper_embeddings (
+                cache_key TEXT PRIMARY KEY,
+                model TEXT NOT NULL,
+                vector TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS paper_relations (
+                source_local_id TEXT NOT NULL,
+                cache_key TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                computed_at TEXT NOT NULL,
+                PRIMARY KEY (source_local_id, cache_key)
+            );
         """)
         yield db
     finally:
@@ -133,6 +146,15 @@ def save_paper(paper: PaperOut, reference: str) -> tuple[LocalPaperOut, bool]:
         keys.add(paper.id)
         db.executemany("INSERT OR REPLACE INTO paper_keys VALUES (?, ?)", ((key, local_id) for key in keys))
         return LocalPaperOut(**paper.model_dump(), local_id=local_id, imported_at=imported_at), created
+
+
+def list_recent(limit: int) -> list[LocalPaperOut]:
+    with connection() as db:
+        rows = db.execute(
+            "SELECT * FROM papers ORDER BY imported_at DESC, local_id LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [as_paper(row) for row in rows]
 
 
 def list_papers(page: int, page_size: int) -> dict:

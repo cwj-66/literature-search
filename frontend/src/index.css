@@ -157,6 +157,12 @@ a {
 .analysis-actions { display: flex; gap: 8px; margin: 8px 0 12px; }
 
 .search-hint { color: #5c6570; font-size: 13px; margin: 8px 0; }
+.network-canvas { height: 520px; background: #fff; border: 1px solid #e6e8ee; border-radius: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 8px 0 12px; color: #5c6570; font-size: 13px; }
+.legend b { font-weight: 650; }
+.swatch { display: inline-block; width: 28px; margin-right: 6px; vertical-align: middle; border-top: 2px solid #1f4b99; }
+.swatch.similar { border-top-style: dashed; border-top-color: #8a94a6; }
+.strength { margin: 6px 0; font-size: 15px; font-weight: 650; color: #1f4b99; }
 .paper-title, .detail h1, .meta { overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .topbar-inner { display: block; padding: 12px 16px; }

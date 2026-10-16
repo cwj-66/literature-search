@@ -67,3 +67,42 @@ export interface AnalysisState {
   task: AnalysisTask | null;
   result: AnalysisResult | null;
 }
+
+export interface RecommendationReason {
+  type: string;
+  text: string;
+}
+
+export interface RecommendationItem {
+  id: string;
+  title: string;
+  year: number | null;
+  strength: number;
+  semantic_score: number | null;
+  keyword_score: number;
+  citation_score: number;
+  reasons: RecommendationReason[];
+  relations: string[];
+}
+
+export interface Recommendations {
+  paper_id: string;
+  paper_title: string;
+  algorithm_version: string;
+  weights: Record<string, number>;
+  formula: string;
+  note: string;
+  warnings: string[];
+  computed_at: string;
+  items: RecommendationItem[];
+}
+
+export interface PaperNetwork {
+  paper_id: string;
+  paper_title: string;
+  algorithm_version: string;
+  warnings: string[];
+  computed_at: string;
+  nodes: { id: string; title: string; year: number | null; center: boolean }[];
+  edges: { source: string; target: string; type: string; label: string; directed: boolean }[];
+}

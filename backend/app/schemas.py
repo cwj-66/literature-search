@@ -150,3 +150,57 @@ class AnalysisResultOut(BaseModel):
 class AnalysisResponse(BaseModel):
     task: AnalysisTaskOut | None = None
     result: AnalysisResultOut | None = None
+
+
+class ReasonOut(BaseModel):
+    type: str
+    text: str
+
+
+class RecommendationItem(BaseModel):
+    id: str
+    title: str
+    year: int | None = None
+    strength: int = Field(ge=0, le=100)
+    semantic_score: float | None = None
+    keyword_score: float = Field(ge=0, le=1)
+    citation_score: float = Field(ge=0, le=1)
+    reasons: list[ReasonOut]
+    relations: list[str]
+
+
+class RecommendationResponse(BaseModel):
+    paper_id: str
+    paper_title: str
+    algorithm_version: str
+    weights: dict[str, float]
+    formula: str
+    note: str
+    warnings: list[str]
+    computed_at: str
+    items: list[RecommendationItem]
+
+
+class NetworkNode(BaseModel):
+    id: str
+    title: str
+    year: int | None = None
+    center: bool = False
+
+
+class NetworkEdge(BaseModel):
+    source: str
+    target: str
+    type: str
+    label: str
+    directed: bool
+
+
+class NetworkResponse(BaseModel):
+    paper_id: str
+    paper_title: str
+    algorithm_version: str
+    warnings: list[str]
+    nodes: list[NetworkNode]
+    edges: list[NetworkEdge]
+    computed_at: str
