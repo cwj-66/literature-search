@@ -53,16 +53,17 @@ function StructuredView({ result }: { result: AnalysisResult }) {
     ["evaluation", "实验或验证"], ["limitation", "作者说明的局限与未来工作"], ["keyword", "关键词"],
   ];
   return <>
-    <p>论文类型：{result.paper_type || "未知"}</p>
+    <p className="analysis-paper-type">论文类型：{result.paper_type || "未知"}</p><div className="analysis-sections">
     {blocks.map(([kind, title]) => {
       const claims = result.claims?.filter((c) => c.kind === kind && c.status === "supported") || [];
-      return <section key={kind} aria-label={title}>
+      return <section key={kind} aria-label={title} className={`analysis-section analysis-${kind}`}>
         <h3>{title}</h3>
         {!claims.length ? <p className="meta">提供的材料中未明确说明</p> : null}
-        {kind === "method_step" ? <ol>{claims.map((claim, i) => <li key={i}><ClaimView claim={claim} result={result} /></li>)}</ol>
+        {kind === "keyword" && claims.length ? <><div className="tag-row">{claims.map((claim, i) => <Tag key={i}>{claim.text}</Tag>)}</div><Collapse size="small" items={[{ key: "keywords", label: "查看关键词依据", children: claims.map((claim, i) => <ClaimView key={i} claim={claim} result={result} />) }]} /></>
+          : kind === "method_step" ? <ol>{claims.map((claim, i) => <li key={i}><ClaimView claim={claim} result={result} /></li>)}</ol>
           : claims.map((claim, i) => <ClaimView key={i} claim={claim} result={result} />)}
       </section>;
-    })}
+    })}</div>
   </>;
 }
 
@@ -182,13 +183,12 @@ export function AnalysisPanel({ paperId, onImported }: { paperId: string; onImpo
   const steps = task ? stepOf(task.status) : null;
 
   return (
-    <section className="paper-card analysis-block" aria-label="AI 分析">
-      <h2>AI 分析</h2>
-      <div className="analysis-actions">
+    <section className="paper-card analysis-block" id="analysis" aria-label="AI 分析">
+      <div className="analysis-heading"><div><span className="page-kicker">结构化研读</span><h2>AI 内容分析</h2><p className="meta">梳理研究问题、方法与贡献，并查看对应原文依据。</p></div><div className="analysis-actions">
         <Button type="primary" disabled={waiting || active} loading={starting || waiting} onClick={() => run(Boolean(result))}>
           {label}
         </Button>
-      </div>
+      </div></div>
       {steps ? (
         <Steps size="small" current={steps.current} status={steps.status} items={[
           { title: "准备文本" },

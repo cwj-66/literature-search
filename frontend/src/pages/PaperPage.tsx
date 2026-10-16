@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Descriptions, Spin, Tag, Typography } from "antd";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { AnalysisPanel } from "../components/AnalysisPanel";
 import { ImportButton } from "../components/ImportPaper";
 import { fetchPaper } from "../api";
@@ -14,6 +14,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function PaperPage() {
   const [params] = useSearchParams();
+  const location = useLocation();
   const id = params.get("id")?.trim() ?? "";
   const from = params.get("from") ?? "/";
   const back = from.startsWith("/") && !from.startsWith("//") ? from : "/";
@@ -29,6 +30,9 @@ export default function PaperPage() {
   useEffect(() => {
     document.title = paper ? `${paper.title} - 论文详情 - 文献检索` : "论文详情 - 文献检索";
   }, [paper]);
+  useEffect(() => {
+    if (paper && location.hash === "#analysis") document.getElementById("analysis")?.scrollIntoView({ block: "start" });
+  }, [paper, location.hash]);
 
   useEffect(() => {
     setPaper(null);
@@ -55,12 +59,11 @@ export default function PaperPage() {
   }, [id, retry]);
 
   return (
-    <main className="wrap detail">
-      <div className="card-links">
+    <main className="wrap detail paper-detail">
+      <div className="breadcrumbs">
         <Link to={back}>返回上一页</Link>
         <Link to="/library">本地分析库</Link>
-        <Link to="/graph">知识图谱</Link>
-        {id ? <Link to={`/recommend?id=${encodeURIComponent(id)}`}>相似推荐</Link> : null}
+        <span>论文详情</span>
       </div>
       {loading ? (
         <div style={{ padding: 48, textAlign: "center" }}>
@@ -81,8 +84,8 @@ export default function PaperPage() {
         />
       ) : null}
       {paper ? (
-        <>
-          <div className="tag-row" style={{ marginTop: 16 }}>
+        <div className="paper-layout"><div className="paper-reading">
+          <header className="surface paper-heading"><div className="tag-row">
             {paper.sources.map((source) => (
               <Tag key={source} color={source === "arxiv" ? "blue" : "geekblue"}>
                 {SOURCE_LABEL[source] ?? source}
@@ -90,19 +93,8 @@ export default function PaperPage() {
             ))}
           </div>
           <h1>{paper.title}</h1>
-          <ImportButton key={paper.id} paper={paper} onSaved={(saved) => setPaper((current) => current?.id === paper.id ? saved : current)} />
-          <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="作者">{formatAuthors(paper.authors)}</Descriptions.Item>
-            <Descriptions.Item label="年份">{paper.year ?? "未知"}</Descriptions.Item>
-            <Descriptions.Item label="期刊/会议">{paper.venue ?? "未知"}</Descriptions.Item>
-            <Descriptions.Item label="引用量">{paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</Descriptions.Item>
-            <Descriptions.Item label="CCF">{paper.ccf_rank ?? "未知"}</Descriptions.Item>
-            <Descriptions.Item label="中科院分区">{paper.cas_partition ?? "未知"}</Descriptions.Item>
-            <Descriptions.Item label="arXiv">{paper.arxiv_id ?? "无"}</Descriptions.Item>
-            <Descriptions.Item label="DOI">{paper.doi ?? "无"}</Descriptions.Item>
-          </Descriptions>
-          <Typography.Title level={5}>摘要</Typography.Title>
-          <Typography.Paragraph>{paper.abstract || "摘要缺失"}</Typography.Paragraph>
+          <p className="paper-authors">{formatAuthors(paper.authors)}</p>
+          <p className="meta">{paper.year ?? "年份未知"} · {paper.venue ?? "发表来源未知"}</p>
           <div className="card-links">
             {paper.url ? (
               <a href={paper.url} target="_blank" rel="noopener noreferrer" aria-label="原文（将打开新窗口）" title="将打开新窗口">
@@ -115,8 +107,23 @@ export default function PaperPage() {
               </a>
             ) : null}
           </div>
+          </header>
+          <section className="surface paper-abstract" id="abstract"><div className="section-heading"><div><span className="page-kicker">原文内容</span><h2>论文摘要</h2></div></div>
+            <Typography.Paragraph>{paper.abstract || "摘要缺失"}</Typography.Paragraph>
+          </section>
           <AnalysisPanel paperId={id} onImported={refreshPaper} />
-        </>
+        </div><aside className="paper-sidebar">
+          <section className="surface paper-facts"><h2>文献信息</h2><Descriptions column={1} size="small">
+            <Descriptions.Item label="年份">{paper.year ?? "未知"}</Descriptions.Item>
+            <Descriptions.Item label="期刊／会议">{paper.venue ?? "未知"}</Descriptions.Item>
+            <Descriptions.Item label="引用量">{paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</Descriptions.Item>
+            <Descriptions.Item label="CCF">{paper.ccf_rank ?? "未知"}</Descriptions.Item>
+            <Descriptions.Item label="中科院分区">{paper.cas_partition ?? "未知"}</Descriptions.Item>
+            <Descriptions.Item label="arXiv">{paper.arxiv_id ?? "无"}</Descriptions.Item>
+            <Descriptions.Item label="DOI">{paper.doi ?? "无"}</Descriptions.Item>
+          </Descriptions><ImportButton key={paper.id} paper={paper} onSaved={(saved) => setPaper((current) => current?.id === paper.id ? saved : current)} /></section>
+          <nav className="surface reading-nav" aria-label="论文阅读与探索"><span className="page-kicker">阅读与探索</span><a href="#abstract">01　阅读原文摘要</a><a href="#analysis">02　AI 内容分析</a><Link to={`/recommend?id=${encodeURIComponent(id)}`}>03　查找相似文献 ↗</Link><Link to="/graph">04　探索知识图谱 ↗</Link></nav>
+        </aside></div>
       ) : null}
     </main>
   );

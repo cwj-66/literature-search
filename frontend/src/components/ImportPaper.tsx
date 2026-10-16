@@ -39,7 +39,7 @@ export function ImportPanel({ onImported }: { onImported: () => void }) {
     finally { setLoading(false); }
   }
   return <section className="paper-card" aria-label="导入论文">
-    <h2>通过 ID / 链接导入</h2>
+    <span className="page-kicker">添加研究材料</span><h2>导入论文</h2>
     <p className="meta">支持 arXiv ID、DOI、Semantic Scholar ID 及对应论文链接。仅保存论文元数据和摘要，尚未执行 AI 分析。</p>
     <Input.Search aria-label="论文 ID 或链接" value={reference} maxLength={500}
       onChange={(event) => { setReference(event.target.value); setError(""); setSaved(null); }}

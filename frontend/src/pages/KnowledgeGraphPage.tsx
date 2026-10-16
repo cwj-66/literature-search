@@ -72,7 +72,7 @@ export default function KnowledgeGraphPage() {
   return <main className="kg-page">
     <header className="kg-header">
       <div><div className="kg-breadcrumb"><Link to="/">文献检索</Link><span>/</span>知识探索</div>
-        <h1>让论文之间的联系，看得见。</h1><p>从一篇论文出发，探索作者、研究主题与学术来源。</p></div>
+        <h1>知识图谱</h1><p>连接论文、作者与研究主题，在关系与时间中探索知识。</p></div>
       <Link className="kg-library-link" to="/library">本地分析库 ↗</Link>
     </header>
     <div className="kg-scope-bar"><Segmented aria-label="图谱数据来源" value={mode} onChange={v => setMode(String(v))} options={[{ label: "RAG 示例", value: "example" }, { label: "本地论文库", value: "local" }]} />

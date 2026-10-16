@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Empty, Spin, Tag } from "antd";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { fetchNetwork, fetchRecommendations } from "../api";
+import { fetchLibrary, fetchNetwork, fetchRecommendations } from "../api";
 import { RelationGraph } from "../components/RelationGraph";
-import type { PaperNetwork, Recommendations } from "../types";
+import type { Paper, PaperNetwork, Recommendations } from "../types";
 
 function scoreText(value: number | null) {
   return value == null ? "暂无" : value.toFixed(2);
@@ -19,6 +19,17 @@ export default function RecommendPage() {
   const [networkError, setNetworkError] = useState("");
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [network, setNetwork] = useState<PaperNetwork | null>(null);
+  const [choices, setChoices] = useState<Paper[]>([]);
+  const [choosing, setChoosing] = useState(false);
+  const [choiceError, setChoiceError] = useState("");
+  useEffect(() => {
+    if (id) return;
+    const controller = new AbortController(); setChoosing(true); setChoiceError("");
+    fetchLibrary(1, controller.signal).then(data => { if (!controller.signal.aborted) setChoices(data.papers); })
+      .catch(err => { if (!controller.signal.aborted) setChoiceError(err.message || "论文库加载失败"); })
+      .finally(() => { if (!controller.signal.aborted) setChoosing(false); });
+    return () => controller.abort();
+  }, [id, request.seq]);
 
   const openPaper = useCallback((paperId: string) => {
     const from = `/recommend?id=${encodeURIComponent(id)}`;
@@ -34,7 +45,7 @@ export default function RecommendPage() {
   useEffect(() => {
     if (!id) {
       setLoading(false);
-      setError("缺少论文编号");
+      setError("");
       setRecommendations(null);
       setNetwork(null);
       return;
@@ -78,13 +89,22 @@ export default function RecommendPage() {
   }, [id, request]);
 
   const warnings = Array.from(new Set([...(recommendations?.warnings ?? []), ...(network?.warnings ?? [])]));
+  if (!id) return <main className="wrap detail">
+    <div className="page-heading"><div><span className="page-kicker">发现相关研究</span><h1>相似推荐</h1><p>从一篇已入库论文出发，寻找相关工作，区分主题相似与真实引用。</p></div><Link className="text-action" to="/library">管理论文库 →</Link></div>
+    <div className="library-layout"><section><div className="list-heading"><h2>选择一篇起点论文</h2><span className="meta">最近入库，最多展示 20 篇</span></div>
+      {choosing ? <Spin aria-label="正在加载起点论文" /> : null}
+      {choiceError ? <Alert type="error" message={choiceError} action={<Button onClick={() => setRequest(r => ({ ...r, seq: r.seq + 1 }))}>重试</Button>} /> : null}
+      {!choosing && !choiceError && !choices.length ? <Empty description={<span>还没有入库论文，<Link to="/library">先导入一篇论文</Link>即可开始。</span>} /> : null}
+      {choices.map(p => <article className="paper-card recommendation-choice" key={p.local_id ?? p.id}><span className="paper-year">{p.year ?? "年份未知"}</span><h2 className="paper-title"><Link to={`/recommend?id=${encodeURIComponent(p.local_id ?? p.id)}`}>{p.title}</Link></h2><p className="meta">{p.authors.slice(0, 3).join(" · ") || "作者未知"}</p><Link to={`/recommend?id=${encodeURIComponent(p.local_id ?? p.id)}`}>查找相似文献 →</Link></article>)}
+    </section><aside className="surface guide-panel"><span className="page-kicker">如何阅读推荐</span><h2>相似，并不等于引用。</h2><p>推荐列表说明关联原因；关系网络区分有来源的引用记录与算法推算的主题相似。</p><p>数据源不可用时会提示降级，已有缓存仍可复用。</p><Link to="/graph">探索更广的实体关系 →</Link></aside></div>
+  </main>;
   return (
-    <main className="wrap detail">
-      <div className="card-links">
+    <main className="wrap detail recommend-page">
+      <div className="breadcrumbs">
         {id ? <Link to={`/paper?id=${encodeURIComponent(id)}`}>返回论文</Link> : <Link to="/">返回检索</Link>}
         <Link to="/library">本地分析库</Link>
       </div>
-      <h1>相似推荐</h1>
+      <div className="page-heading"><div><span className="page-kicker">发现相关研究</span><h1>相似推荐</h1><p>查看相关论文与关联依据，从已有研究继续探索。</p></div><Link className="text-action" to="/recommend">更换起点论文 →</Link></div>
       {recommendations ? <p className="meta">{recommendations.paper_title}</p> : null}
       {loading ? <div style={{ padding: 32, textAlign: "center" }}><Spin tip="正在计算关联强度" /></div> : null}
       {error ? (
@@ -135,7 +155,7 @@ export default function RecommendPage() {
         </>
       ) : null}
       {id ? (
-        <>
+        <section className="surface recommendation-network">
           <h2>关系网络</h2>
           <div className="legend">
             <span><i className="swatch" />实线箭头：引用（Semantic Scholar 元数据）</span>
@@ -152,7 +172,7 @@ export default function RecommendPage() {
           ) : null}
           {network ? <RelationGraph data={network} onOpen={openPaper} /> : null}
           {network && network.nodes.length <= 1 ? <p className="meta">当前只有这篇论文，没有可连接的候选。</p> : null}
-        </>
+        </section>
       ) : null}
     </main>
   );

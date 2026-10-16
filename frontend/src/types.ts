@@ -19,6 +19,8 @@ export interface Paper {
 }
 
 export interface SearchResponse {
+  pending_sources?: string[];
+  total_is_limited?: boolean;
   query: string;
   page: number;
   page_size: number;

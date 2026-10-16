@@ -33,6 +33,8 @@ class SearchResponse(BaseModel):
     source_warnings: dict[str, str] = Field(default_factory=dict)
     source_cached_at: dict[str, str] = Field(default_factory=dict)
     source_retry_after: dict[str, int] = Field(default_factory=dict)
+    pending_sources: list[str] = Field(default_factory=list)
+    total_is_limited: bool = False
 
 
 class ImportRequest(BaseModel):

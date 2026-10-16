@@ -9,7 +9,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import analysis, analysis_store, library, llm, recommend, knowledge_graph
@@ -17,7 +17,7 @@ from .schemas import (
     AnalyzeRequest, AnalysisResponse, PaperOut, SearchResponse, ImportRequest, ImportResult, LocalPaperOut, LibraryResponse,
     RecommendationResponse, NetworkResponse,
 )
-from .search import SourceFailure, fetch_paper, search_papers, semantic_enabled, semantic_has_key
+from .search import SourceFailure, fetch_paper, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 logging.basicConfig(level=logging.INFO)
@@ -65,6 +65,7 @@ async def search(
     source: str = Query("all", pattern="^(all|arxiv|semantic_scholar)$"),
     year_from: int | None = Query(None, ge=1900, le=2100),
     year_to: int | None = Query(None, ge=1900, le=2100),
+    stream: bool = Query(False),
 ):
     if source == "semantic_scholar" and (page - 1) * page_size >= 1000:
         raise HTTPException(status_code=400, detail="Semantic Scholar 只提供前 1000 条结果，请缩小检索范围")
@@ -75,6 +76,13 @@ async def search(
         raise HTTPException(status_code=400, detail="起始年份不能晚于结束年份")
     query = {"深度学习": "deep learning", "机器学习": "machine learning", "大语言模型": "large language model",
              "知识图谱": "knowledge graph", "检索增强生成": "retrieval augmented generation", "人工智能": "artificial intelligence"}.get(query, query)
+    if stream:
+        async def chunks():
+            async for snapshot in search_papers_stream(query, page, page_size, sort, source, year_from, year_to):
+                yield SearchResponse.model_validate(snapshot).model_dump_json() + "\n"
+        return StreamingResponse(chunks(), media_type="application/x-ndjson", headers={
+            "X-Accel-Buffering": "no", "Cache-Control": "no-cache, no-transform",
+        })
     return await search_papers(query, page, page_size, sort, source, year_from, year_to)
 
 

@@ -18,22 +18,18 @@ export function detailPath(id: string, from: string) {
   return `/paper?${query}`;
 }
 
-export function PaperCard({ paper }: { paper: Paper }) {
+export function PaperCard({ paper, analysisMode = false }: { paper: Paper; analysisMode?: boolean }) {
   const location = useLocation();
-  const href = detailPath(paper.local_id ?? paper.id, location.pathname + location.search);
+  const href = detailPath(paper.local_id ?? paper.id, location.pathname + location.search) + (analysisMode ? "#analysis" : "");
   return (
     <article className="paper-card">
-      <div className="tag-row">
+      <div className="paper-topline"><div className="tag-row">
         {paper.sources.map((source) => (
           <Tag key={source} color={source === "arxiv" ? "blue" : "geekblue"}>
             {SOURCE_LABEL[source] ?? source}
           </Tag>
         ))}
-        <Tag>{paper.year ?? "年份未知"}</Tag>
-        <Tag>引用 {paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</Tag>
-        <Tag>CCF {paper.ccf_rank ?? "未知"}</Tag>
-        <Tag>中科院 {paper.cas_partition ?? "未知"}</Tag>
-      </div>
+      </div><span className="paper-year">{paper.year ?? "年份未知"}</span></div>
       <h2 className="paper-title">
         <Link to={href}>{paper.title}</Link>
       </h2>
@@ -46,8 +42,10 @@ export function PaperCard({ paper }: { paper: Paper }) {
       ) : (
         <Typography.Paragraph type="secondary">摘要缺失</Typography.Paragraph>
       )}
-      <div className="card-links">
-        <Link to={href}>详情</Link>
+      <div className="paper-card-metrics"><span>引用 <b>{paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</b></span><span>CCF <b>{paper.ccf_rank ?? "未知"}</b></span><span>中科院分区 <b>{paper.cas_partition ?? "未知"}</b></span></div>
+      <div className="card-links paper-card-actions">
+        <Link to={href}>阅读与分析 →</Link>
+        <Link to={`/recommend?id=${encodeURIComponent(paper.local_id ?? paper.id)}`}>相似推荐</Link>
         {paper.url ? (
           <a href={paper.url} target="_blank" rel="noopener noreferrer" aria-label="原文（将打开新窗口）" title="将打开新窗口">
             原文

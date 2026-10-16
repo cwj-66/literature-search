@@ -80,9 +80,17 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
       setFailed(true);
       return;
     }
-    graph.render().catch(() => {
+    let rendered = false;
+    graph.render().then(() => { rendered = true; }).catch(() => {
       if (alive) setFailed(true);
     });
+    const resize = new ResizeObserver(() => {
+      if (alive && rendered && container.clientWidth > 0) {
+        graph.resize(container.clientWidth, container.clientHeight);
+        void graph.fitView().catch(() => undefined);
+      }
+    });
+    resize.observe(container);
     graph.on(NodeEvent.CLICK, (event) => {
       const click = event as IElementEvent;
       if (click.targetType !== "node") return;
@@ -91,6 +99,7 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
     });
     return () => {
       alive = false;
+      resize.disconnect();
       graph.destroy();
     };
   }, [data]);

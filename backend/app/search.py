@@ -56,6 +56,7 @@ class SourceResult:
         self.warning = None
         self.cached_at = None
         self.retry_after = 0
+        self.total_limited = False
 
 
 def clean(text: str | None) -> str | None:
@@ -459,7 +460,8 @@ async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int
         papers.sort(key=score, reverse=True)
     state = _CACHE_STATUS.get()
     if state is not None:
-        state["note"] = "Semantic Scholar 使用公开批量检索；相关性按本批候选论文的关键词匹配计算，最多展示 1000 篇"
+        state["note"] = "当前展示 Semantic Scholar 首批候选结果，相关性为批内关键词排序；数量不是全站匹配总数。当前批次最多可浏览 1000 篇，可通过年份或更具体的关键词缩小范围"
+        state["total_limited"] = True
     return papers, len(papers)
 
 
@@ -555,6 +557,7 @@ async def run_source(name: str, fetcher) -> SourceResult:
         papers, total = await fetcher()
         result = SourceResult(name, papers, total, None)
         result.warning = state.get("note")
+        result.total_limited = bool(state.get("total_limited"))
         result.retry_after = state.get("retry_after", 0)
         if state.get("stale"):
             result.cached_at = datetime.fromtimestamp(state["cached_at"], timezone.utc).isoformat()
@@ -621,22 +624,51 @@ async def arxiv_with_index_fallback(client, query, target, sort, year_from, year
         state = _CACHE_STATUS.get()
         if state is not None:
             state["note"] = "arXiv API 暂不可用，以下来自 Semantic Scholar 收录的 arXiv 论文索引；总数仅为本批匹配记录，相关性为本地排序"
+            state["total_limited"] = True
             state["retry_after"] = getattr(exc, "retry_after", 0)
         return papers, len(papers)
 
 
 async def search_papers(query: str, page: int, page_size: int, sort: str, source: str, year_from: int | None, year_to: int | None) -> dict:
+    snapshot = None
+    async for snapshot in search_papers_stream(query, page, page_size, sort, source, year_from, year_to):
+        pass
+    return snapshot
+
+
+async def search_papers_stream(query: str, page: int, page_size: int, sort: str, source: str, year_from: int | None, year_to: int | None):
     offset = (page - 1) * page_size
     target = offset + page_size
     timeout = httpx.Timeout(25.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         jobs = []
+        pending = []
         if source in ("all", "arxiv"):
-            jobs.append(run_source("arxiv", lambda: arxiv_with_index_fallback(client, query, target, sort, year_from, year_to)))
+            pending.append("arxiv")
+            jobs.append(asyncio.create_task(run_source("arxiv", lambda: arxiv_with_index_fallback(client, query, target, sort, year_from, year_to))))
         if source == "semantic_scholar" or (source == "all" and semantic_enabled()):
-            jobs.append(run_source("semantic_scholar", lambda: unique_prefix(
-                lambda start, size: search_semantic_scholar(client, query, start, size, year_from, year_to, sort), target, 1000, year_from, year_to)))
-        results = await asyncio.gather(*jobs)
+            pending.append("semantic_scholar")
+            jobs.append(asyncio.create_task(run_source("semantic_scholar", lambda: unique_prefix(
+                lambda start, size: search_semantic_scholar(client, query, start, size, year_from, year_to, sort), target, 1000, year_from, year_to))))
+        results = []
+        try:
+            yield search_snapshot(query, page, page_size, sort, year_from, year_to, results, pending)
+            for job in asyncio.as_completed(jobs):
+                result = await job
+                results.append(result)
+                pending.remove(result.name)
+                yield search_snapshot(query, page, page_size, sort, year_from, year_to, results, pending)
+        finally:
+            for job in jobs:
+                if not job.done():
+                    job.cancel()
+            await asyncio.gather(*jobs, return_exceptions=True)
+
+
+def search_snapshot(query, page, page_size, sort, year_from, year_to, results, pending):
+    offset = (page - 1) * page_size
+    # Completion order must not change final ranking or metadata precedence.
+    results = sorted(results, key=lambda item: 0 if item.name == "arxiv" else 1)
     papers = merge_papers([item.papers for item in results if not item.error], sort)
     papers = [paper for paper in papers if year_matches(paper, year_from, year_to)]
     # Keep merged metadata identical when navigating from a card to its detail.
@@ -658,6 +690,8 @@ async def search_papers(query: str, page: int, page_size: int, sort: str, source
         "source_warnings": {item.name: item.warning for item in results if item.warning},
         "source_cached_at": {item.name: item.cached_at for item in results if item.cached_at},
         "source_retry_after": {item.name: item.retry_after for item in results if item.retry_after},
+        "pending_sources": list(pending),
+        "total_is_limited": bool(totals) and all(item.total_limited for item in results if not item.error),
     }
 
 
