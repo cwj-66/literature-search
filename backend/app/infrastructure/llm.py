@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import ValidationError
@@ -111,6 +112,10 @@ async def complete(messages: list[dict]) -> str:
         "response_format": {"type": "json_object"},
         "messages": messages,
     }
+    # DashScope counts hidden reasoning against max_tokens. These bounded JSON
+    # tasks need that budget for the structured answer, not a thinking trace.
+    if urlparse(base).hostname in {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"}:
+        payload["enable_thinking"] = False
     timeout = httpx.Timeout(90.0, connect=10.0)
     try:
         async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
@@ -123,11 +128,19 @@ async def complete(messages: list[dict]) -> str:
         log.warning("model request failed: %s", response.status_code)
         raise AnalysisError("模型调用失败")
     try:
-        content = response.json()["choices"][0]["message"]["content"]
+        data = response.json()
+        choice = data["choices"][0]
+        content = choice["message"].get("content")
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise AnalysisError("模型返回的结果无法解析") from exc
+    if choice.get("finish_reason") == "length":
+        usage = data.get("usage") or {}
+        log.warning("model output truncated: model=%s completion_tokens=%s content_chars=%s",
+                    model_name(), usage.get("completion_tokens"), len(content) if isinstance(content, str) else 0)
+        raise AnalysisError("模型输出达到长度上限，未生成完整结果，请重试或使用标准分析")
     if not isinstance(content, str) or not content.strip():
-        raise AnalysisError("模型返回的结果无法解析")
+        log.warning("model returned no answer: model=%s finish_reason=%s", model_name(), choice.get("finish_reason"))
+        raise AnalysisError("模型未返回有效分析内容，请重试")
     return content
 
 
