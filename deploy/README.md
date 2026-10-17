@@ -53,7 +53,7 @@ nginx -t
 
 ## 安全头与静态路由
 
-更新前端、后端以及对应的 Nginx 配置后生效。两份 Nginx 模板均限制 SPA 入口为 `/`、`/paper`、`/library`、`/studio`、`/recommend` 和 `/graph`，其他不存在的资源返回真实 404。研究台子视图通过 `/studio?tab=ask|compare|research` 切换，刷新和直接打开链接均须返回 SPA 入口。API 代理关闭缓冲，读取超时设为 300 秒，以支持渐进检索与耗时较长的调研请求；该超时不代表任务必定在此时间内完成。`/robots.txt` 为真实文件，保留现有禁止索引策略，因此不生成 sitemap，`/sitemap.xml` 明确返回 404。`/favicon.ico` 和 `/favicon.svg` 为真实图标，`/health` 代理后端 `/api/health`，返回 JSON；`/docs`、`/redoc`、`/openapi.json` 关闭并返回 404。
+更新前端、后端以及对应的 Nginx 配置后生效。两份 Nginx 模板均限制 SPA 入口为 `/`、`/search`、`/settings`、`/w/`、`/paper`、`/library`、`/studio`、`/recommend` 和 `/graph`，其他不存在的资源返回真实 404。研究台子视图通过 `/studio?tab=ask|compare|research` 切换，刷新和直接打开链接均须返回 SPA 入口。API 代理关闭缓冲，读取超时设为 300 秒，以支持渐进检索与耗时较长的调研请求；该超时不代表任务必定在此时间内完成。`/robots.txt` 为真实文件，保留现有禁止索引策略，因此不生成 sitemap，`/sitemap.xml` 明确返回 404。`/favicon.ico` 和 `/favicon.svg` 为真实图标，`/health` 代理后端 `/api/health`，返回 JSON；`/docs`、`/redoc`、`/openapi.json` 关闭并返回 404。
 
 安全头集中在 server 级，子 location 不使用 add_header，防止覆盖继承。包含 CSP、DENY、nosniff、Referrer-Policy、Permissions-Policy，HTTPS 模板另加 HSTS。CSP 允许 Ant Design 必需的内联样式，脚本仅允许同源。
 

@@ -38,12 +38,12 @@ export function ExternalLinks({ paper }: { paper: Paper }) {
   </span>;
 }
 
-export function PaperRow({ paper, from, leading, side, abstract = true, selected = false }: { paper: Paper; from: string; leading?: ReactNode; side?: ReactNode; abstract?: boolean; selected?: boolean }) {
+export function PaperRow({ paper, from, href, leading, side, abstract = true, selected = false, onOpen }: { paper: Paper; from: string; href?: string; leading?: ReactNode; side?: ReactNode; abstract?: boolean; selected?: boolean; onOpen?: () => void }) {
   const sources = paper.sources.map(source => SOURCE_LABEL[source] ?? source).join(" · ");
   return <article className={`paper-row${leading ? " has-leading" : ""}${selected ? " is-selected" : ""}`}>
     {leading ? <div className="paper-row-leading">{leading}</div> : null}
     <div className="paper-row-body">
-      <h3 className="paper-title"><Link to={paperLocation(paperKey(paper), from)}>{paper.title}</Link></h3>
+      <h3 className="paper-title"><Link to={href ?? paperLocation(paperKey(paper), from)} onClick={onOpen}>{paper.title}</Link></h3>
       <p className="paper-byline">{formatAuthors(paper.authors)}</p>
       <p className="paper-facts">{paperFacts(paper).map(item => <span key={item}>{item}</span>)}{sources ? <span className="paper-source">{sources}</span> : null}</p>
       {abstract ? <Abstract text={paper.abstract} /> : null}

@@ -12,6 +12,12 @@ const PaperPage = lazy(() => import("./pages/PaperPage"));
 const RecommendPage = lazy(() => import("./pages/RecommendPage"));
 const KnowledgeGraphPage = lazy(() => import("./pages/KnowledgeGraphPage"));
 const StudioPage = lazy(() => import("./pages/StudioPage"));
+const AssistantPage = lazy(() => import("./pages/workspace/AssistantPage"));
+const WorkspacePapersPage = lazy(() => import("./pages/workspace/PapersPage"));
+const WorkspaceComparePage = lazy(() => import("./pages/workspace/ComparePage"));
+const WorkspaceGraphPage = lazy(() => import("./pages/workspace/GraphPage"));
+const PaperReadPage = lazy(() => import("./pages/workspace/PaperReadPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 export default function App() {
   return (
@@ -21,7 +27,13 @@ export default function App() {
           <Suspense fallback={<div className="route-loading" role="status">正在加载页面…</div>}>
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/w/:id" element={<AssistantPage />} />
+              <Route path="/w/:id/library" element={<WorkspacePapersPage />} />
+              <Route path="/w/:id/compare" element={<WorkspaceComparePage />} />
+              <Route path="/w/:id/graph" element={<WorkspaceGraphPage />} />
+              <Route path="/w/:id/p/:paperKey" element={<PaperReadPage />} />
               <Route path="/search" element={<SearchPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/library" element={<LibraryPage />} />
               <Route path="/studio" element={<StudioPage />} />
               <Route path="/paper" element={<PaperPage />} />

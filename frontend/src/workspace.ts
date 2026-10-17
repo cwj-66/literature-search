@@ -15,6 +15,22 @@ export function libraryLocation(params: URLSearchParams): string {
   return origin.startsWith("/library") ? origin : "/library";
 }
 
+export type WorkspaceSection = "assistant" | "library" | "compare" | "graph" | "reading";
+
+export function workspaceContext(pathname: string, search: string): { id: string; section: WorkspaceSection } | null {
+  const params = new URLSearchParams(search);
+  let path = pathname;
+  if (pathname === "/paper" || pathname === "/recommend") {
+    const origin = originOf(params);
+    if (!origin.startsWith("/w/")) return null;
+    path = new URL(origin, "http://local").pathname;
+  }
+  const match = path.match(/^\/w\/([^/]+)(?:\/(library|compare|graph|p)(?:\/([^/]+))?)?\/?$/);
+  if (!match || (match[2] === "p" && !match[3])) return null;
+  const section = match[2] === "p" ? "reading" : match[2] === "library" || match[2] === "compare" || match[2] === "graph" ? match[2] : "assistant";
+  return { id: match[1], section };
+}
+
 export function sectionOf(pathname: string, params: URLSearchParams) {
   if (pathname === "/paper" || pathname === "/recommend") {
     const origin = originOf(params);
@@ -25,18 +41,23 @@ export function sectionOf(pathname: string, params: URLSearchParams) {
   if (pathname.startsWith("/studio")) return "studio";
   if (pathname.startsWith("/graph")) return "graph";
   if (pathname.startsWith("/search")) return "search";
+  if (pathname.startsWith("/settings")) return "settings";
   return "home";
 }
 
 export function returnLabel(from: string) {
   const path = new URL(from, window.location.origin).pathname;
-  if (path === "/") return "工作台";
+  if (path === "/" || path.startsWith("/w/")) return "工作区";
   if (path === "/search") return "检索结果";
   if (path.startsWith("/recommend")) return "相关推荐";
   if (path.startsWith("/paper")) return "上一篇论文";
   if (path.startsWith("/graph")) return "图谱";
   if (path.startsWith("/studio")) return "研究台";
   return "文献库";
+}
+
+export function workspacePaperPath(workspaceId: string, paperKey: string) {
+  return `/w/${workspaceId}/p/${encodeURIComponent(paperKey)}`;
 }
 
 export function paperLocation(id: string, from: string) {

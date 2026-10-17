@@ -1,6 +1,7 @@
 /* Design tokens are injected from src/theme.ts as CSS variables on :root. */
 :root {
-  --header-h: 64px;
+  --header-h: 0px;
+  --side-w: 232px;
   --context-h: 52px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   --fs-sm: 13px; --fs-ui: 14px; --fs-read: 15.5px; --fs-h3: 15px; --fs-h2: 18px; --fs-h1: 24px;
@@ -31,20 +32,20 @@ blockquote { margin: 0; }
 details > summary { cursor: pointer; }
 
 /* Shell */
-.app { min-height: 100vh; display: flex; flex-direction: column; }
+.app { min-height: 100vh; display: flex; flex-direction: row; align-items: stretch; background: #fff; }
 .app-main { flex: 1; min-width: 0; outline: none; }
 .skip-link { position: fixed; top: -60px; left: 16px; z-index: 200; padding: var(--s2) var(--s3); background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-pop); }
 .skip-link:focus { top: 10px; }
 .route-loading { padding: 96px 24px; text-align: center; color: var(--muted); }
-.app-header { position: sticky; top: 0; z-index: 60; height: var(--header-h); background: rgba(255, 255, 255, .96); border-bottom: 1px solid var(--line); backdrop-filter: saturate(1.2) blur(6px); }
-.app-header-inner { max-width: 1344px; height: 100%; margin: 0 auto; padding: 0 var(--page-pad); display: flex; align-items: center; gap: var(--s6); }
-.app-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 650; font-size: 17px; letter-spacing: .02em; white-space: nowrap; }
-.app-brand:hover { color: var(--ink); text-decoration: none; }
-.app-brand svg { width: 28px; height: 28px; color: var(--accent); padding: 3px; border-radius: 5px; background: var(--accent-soft); }
-.app-nav { display: flex; align-self: stretch; gap: var(--s1); }
-.app-nav a { display: flex; align-items: center; padding: 0 var(--s4); color: var(--muted); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: color .16s, background .16s; }
-.app-nav a:hover { color: var(--ink); text-decoration: none; }
-.app-nav a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-soft); }
+.shell-side { position: sticky; top: 0; align-self: flex-start; width: var(--side-w); height: 100vh; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 18px 12px; background: #f3f4f6; border-right: 1px solid var(--line); }
+.shell-brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 14px; color: var(--ink); font-weight: 650; font-size: 16px; }
+.shell-brand:hover { color: var(--ink); text-decoration: none; }
+.shell-brand svg { width: 22px; height: 22px; flex: none; }
+.shell-nav { display: flex; flex-direction: column; gap: 4px; }
+.shell-nav a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; color: var(--ink); font-weight: 500; }
+.shell-nav a:hover { color: var(--ink); text-decoration: none; background: rgba(255, 255, 255, .55); }
+.shell-nav a[aria-current="page"] { background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 0 0 1px rgba(16, 24, 40, .04); }
+.shell-nav .anticon { font-size: 16px; }
 
 /* Page frame */
 .page { width: 100%; margin: 0 auto; padding: var(--s6) var(--page-pad) 96px; }
@@ -141,14 +142,17 @@ details > summary { cursor: pointer; }
 
 @media (max-width: 1024px) {
   :root { --page-pad: 24px; }
-  .app-header-inner { gap: var(--s5); }
+}
+@media (max-width: 800px) {
+  .app { flex-direction: column; }
+  .shell-side { position: sticky; top: 0; z-index: 60; width: auto; height: auto; flex-direction: row; align-items: center; padding: 8px 12px; }
+  .shell-brand { padding: 0 8px 0 0; }
+  .shell-brand span { display: none; }
+  .shell-nav { flex-direction: row; flex: 1; }
+  .shell-nav a { flex: 1; justify-content: center; padding: 8px; font-size: 13px; }
 }
 @media (max-width: 640px) {
-  :root { --page-pad: 16px; --header-h: 52px; --fs-h1: 22px; }
-  .app-header-inner { gap: var(--s3); }
-  .app-brand span { display: none; }
-  .app-nav { flex: 1; justify-content: space-between; gap: 0; }
-  .app-nav a { padding: 0 var(--s2); }
+  :root { --page-pad: 16px; --fs-h1: 22px; }
   .page { padding-top: var(--s5); }
   .page-head { flex-direction: column; align-items: stretch; }
   .paper-row, .paper-row.has-leading { grid-template-columns: minmax(0, 1fr); }
