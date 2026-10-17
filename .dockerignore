@@ -2,6 +2,8 @@
 !backend/
 !backend/requirements.txt
 !backend/app/
-!backend/app/*.py
+!backend/app/**
 !deploy/
 !deploy/Dockerfile
+**/__pycache__
+**/*.pyc
