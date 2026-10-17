@@ -5,3 +5,7 @@ pydantic>=2.9
 python-dotenv>=1.0
 beautifulsoup4>=4.12
 pypdf>=5.0
+ijson>=3.3
+langgraph>=0.2
+langgraph-checkpoint-sqlite>=2.0
+aiosqlite>=0.20

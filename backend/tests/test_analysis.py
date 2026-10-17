@@ -220,8 +220,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
         prepared = PreparedText("accuracy reaches 91.2 percent", "abstract", "abstract", None, "下载超时", {"sections": [], "truncated": False, "char_count": 10})
         async def fake(_messages):
             return fields(analysis_basis="full_text", research_problem="根据全文，本文解决了检索问题", experimental_results="准确率达到 99.2%", innovations=["准确率 88.1% 的新模型"])
-        with patch("app.llm.complete", new=fake):
-            result = await llm.analyze(sample(), prepared)
+        result = llm.ground(AnalysisFields.model_validate(json.loads(await fake([]))), sample(), prepared)
         self.assertEqual(result.analysis_basis, "abstract")
         self.assertEqual(result.research_problem, "论文未明确说明")
         self.assertEqual(result.experimental_results, "论文未明确说明")
@@ -231,10 +230,15 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
         calls = {"n": 0}
         async def repair(_messages):
             calls["n"] += 1
-            return "not-json" if calls["n"] == 1 else fields()
+            if calls["n"] == 1:
+                return "not-json"
+            if calls["n"] == 3:
+                return json.dumps({"reviews": [{"index": 0, "supported": True}]})
+            return json.dumps({"claims": [{"kind": "research_problem", "text": "研究检索增强生成",
+                "evidence": [{"paragraph_id": "P0001", "quote": "introduction introduction"}]}]})
         with patch("app.llm.complete", new=repair), patch("app.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.fulltext.download", new=AsyncMock(return_value=html_paper())):
             task_id = await self.run_new("arxiv:2005.11401")
-        self.assertEqual(calls["n"], 2)
+        self.assertEqual(calls["n"], 3)
         state = store.get_state({"arxiv:2005.11401"}, None)
         self.assertEqual(state[0]["status"], "success")
         self.assertEqual(state[1]["analysis_basis"], "full_text")
@@ -316,7 +320,10 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(library.get_paper("doi:10.1234/merge").local_id, saved.local_id)
 
     async def test_existing_success_is_not_rerun_until_requested(self):
-        with patch("app.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.llm.complete", new=AsyncMock(return_value=fields())), patch("app.fulltext.download", new=AsyncMock(return_value=html_paper())):
+        outputs = [json.dumps({"claims": [{"kind": "research_problem", "text": "研究问题",
+            "evidence": [{"paragraph_id": "P0001", "quote": "introduction introduction"}]}]}),
+            json.dumps({"reviews": [{"index": 0, "supported": True}]})]
+        with patch("app.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.llm.complete", new=AsyncMock(side_effect=outputs)), patch("app.fulltext.download", new=AsyncMock(return_value=html_paper())):
             await self.run_new("arxiv:2005.11401")
             again = await self.post("/api/papers/arxiv:2005.11401/analyze", {})
             self.assertEqual(again.status_code, 200)

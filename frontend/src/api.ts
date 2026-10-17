@@ -1,4 +1,4 @@
-import type { AnalysisState, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork } from "./types";
+import type { AnalysisState, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask } from "./types";
 
 export interface SearchParams {
   q: string;
@@ -88,7 +88,9 @@ export async function importPaper(externalId: string): Promise<ImportResult> {
     body: JSON.stringify({ external_id: externalId }),
   });
   if (!response.ok) throw new Error(await errorMessage(response));
-  return response.json();
+  const result: ImportResult = await response.json();
+  window.dispatchEvent(new Event("library-changed"));
+  return result;
 }
 
 export async function startAnalysis(id: string, reanalyze: boolean): Promise<AnalysisState> {
@@ -123,6 +125,33 @@ export async function fetchNetwork(id: string, refresh: boolean, signal?: AbortS
 
 export async function fetchLibrary(page: number, signal?: AbortSignal): Promise<LibraryResponse> {
   const response = await fetch(`/api/papers?page=${page}&page_size=20`, { signal });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function askLibrary(question: string, paperIds: string[]): Promise<QAResponse> {
+  const response = await fetch("/api/qa", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, paper_ids: paperIds }),
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function compareLibrary(paperIds: string[]) {
+  const response = await fetch("/api/compare", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paper_ids: paperIds }),
+  });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function startResearch(goal: string, autoApprove = false): Promise<ResearchTask> {
+  const response = await fetch("/api/research/tasks", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ goal, auto_approve: autoApprove }),
+  });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }

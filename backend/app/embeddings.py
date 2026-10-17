@@ -25,6 +25,16 @@ def model_name() -> str:
     return os.getenv("EMBEDDING_MODEL", "text-embedding-v3").strip() or "text-embedding-v3"
 
 
+def credentials() -> tuple[str, str]:
+    silicon = os.getenv("SILICONFLOW_API_KEY", "").strip()
+    if silicon:
+        base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
+        return silicon, base
+    key = os.getenv("DASHSCOPE_API_KEY", "").strip()
+    base = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")
+    return key, base
+
+
 def cache_id(model: str, text: str) -> str:
     return hashlib.sha256(f"{model}\n{text}".encode()).hexdigest()
 
@@ -74,10 +84,9 @@ def _vector(row: dict) -> list[float]:
 
 
 async def fetch_vectors(model: str, texts: list[str]) -> dict[str, list[float]]:
-    key = os.getenv("DASHSCOPE_API_KEY", "").strip()
+    key, base = credentials()
     if not key:
-        raise EmbeddingError("未配置大模型密钥，无法计算语义向量")
-    base = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")
+        raise EmbeddingError("未配置向量服务密钥，无法计算语义向量")
     timeout = httpx.Timeout(60.0, connect=10.0)
     found: dict[str, list[float]] = {}
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:

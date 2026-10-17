@@ -16,6 +16,42 @@ export interface Paper {
   semantic_scholar_id: string | null;
   ccf_rank: string | null;
   cas_partition: string | null;
+  ccf_status?: string | null;
+  ccf_catalog_version?: string | null;
+}
+
+export function ccfLabel(paper: Paper) {
+  if (paper.ccf_status === "preprint") return "预印本";
+  if (paper.ccf_status === "pending") return "待核验";
+  if (paper.ccf_rank) return paper.ccf_rank;
+  return "未知";
+}
+
+export interface EvidenceItem {
+  evidence_id: string;
+  paper_id: string;
+  quote: string;
+  section?: string | null;
+}
+
+export interface QAResponse {
+  answer: string;
+  evidence: EvidenceItem[];
+  reviews: { claim_id: string; verdict: string; note: string; evidence_ids: string[] }[];
+  coverage_gap: boolean;
+}
+
+export interface ResearchTask {
+  task_id: string;
+  status: string;
+  goal?: string;
+  queries?: string[];
+  paper_ids?: string[];
+  evidence_ids?: string[];
+  events?: { step: string; reason?: string; query?: string }[];
+  stop_reason?: string | null;
+  interrupt?: { type?: string; plan?: unknown; queries?: string[] } | null;
+  answer?: string | null;
 }
 
 export interface SearchResponse {

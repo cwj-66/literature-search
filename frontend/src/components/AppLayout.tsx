@@ -1,21 +1,64 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { ResearchWorkspace } from "./ResearchWorkspace";
+
+const scrollPositions = new Map<string, number>();
 
 const navigation = [
   { label: "文献检索", href: "/", key: "search" },
-  { label: "论文库", href: "/library", key: "library" },
-  { label: "论文分析", href: "/library?view=analysis", key: "analysis" },
-  { label: "相似推荐", href: "/recommend", key: "recommend" },
-  { label: "知识图谱", href: "/graph", key: "graph" },
+  { label: "我的文献", href: "/library", key: "library" },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const active = location.pathname === "/" ? "search" : location.pathname === "/paper" ? "analysis"
-    : location.pathname === "/library" ? new URLSearchParams(location.search).get("view") === "analysis" ? "analysis" : "library"
-      : location.pathname.slice(1);
-  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [location.pathname, location.search]);
-  return <div className="app-layout">
+  const previousPath = useRef("");
+  const leaving = useRef(false);
+  const active = location.pathname === "/" ? "search" : "library";
+  const inWorkspace = ["/paper", "/recommend", "/graph"].includes(location.pathname);
+  useEffect(() => {
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => { window.history.scrollRestoration = previous; };
+  }, []);
+  useLayoutEffect(() => {
+    leaving.current = false;
+    const key = location.pathname + location.search;
+    const sameGraph = previousPath.current === "/graph" && location.pathname === "/graph";
+    previousPath.current = location.pathname;
+    if (sameGraph) {
+      const save = () => { if (!leaving.current) scrollPositions.set(key, window.scrollY); };
+      window.addEventListener("scroll", save, { passive: true });
+      return () => { window.removeEventListener("scroll", save); };
+    }
+    const target = scrollPositions.get(key) || 0;
+    let restoring = true;
+    const restore = () => { if (restoring && !location.hash) window.scrollTo({ top: target, behavior: "instant" }); };
+    restore();
+    const observer = new ResizeObserver(restore);
+    observer.observe(document.body);
+    const stop = () => { restoring = false; observer.disconnect(); };
+    const timer = window.setTimeout(stop, 4000);
+    const save = () => { if (!restoring && !leaving.current) scrollPositions.set(key, window.scrollY); };
+    window.addEventListener("wheel", stop, { passive: true });
+    window.addEventListener("touchstart", stop, { passive: true });
+    window.addEventListener("keydown", stop);
+    window.addEventListener("scroll", save, { passive: true });
+    return () => {
+      window.clearTimeout(timer); observer.disconnect();
+      window.removeEventListener("wheel", stop); window.removeEventListener("touchstart", stop);
+      window.removeEventListener("keydown", stop); window.removeEventListener("scroll", save);
+    };
+  }, [location.pathname, location.search, location.hash]);
+  return <div className="app-layout" onClickCapture={event => {
+    const anchor = event.target instanceof Element ? event.target.closest("a") : null;
+    if (!anchor || anchor.target === "_blank" || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const next = new URL(anchor.href, window.location.origin);
+    const key = location.pathname + location.search;
+    if (next.origin === window.location.origin && next.pathname + next.search !== key) {
+      scrollPositions.set(key, window.scrollY);
+      leaving.current = true;
+    }
+  }}>
     <a href="#workspace-content" className="skip-link">跳到主要内容</a>
     <header className="app-header"><div className="app-header-inner">
       <Link to="/" className="app-brand" aria-label="文献研读，返回首页">
@@ -23,9 +66,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <span>文献研读<small>检索与分析工作台</small></span>
       </Link>
       <nav aria-label="主要导航">{navigation.map(item => <Link key={item.key} to={item.href} aria-current={active === item.key ? "page" : undefined} className={active === item.key ? "active" : ""}>{item.label}</Link>)}</nav>
-      <span className="app-header-note">从检索到知识探索</span>
+      <span className="app-header-note">找到文献，接续研读</span>
     </div></header>
-    <div id="workspace-content" tabIndex={-1} className="workspace-content">{children}</div>
+    <div id="workspace-content" tabIndex={-1} className="workspace-content">{inWorkspace ? <ResearchWorkspace>{children}</ResearchWorkspace> : children}</div>
     <footer className="app-footer"><span>文献检索与分析平台</span><span>检索 · 阅读 · 分析 · 探索</span></footer>
   </div>;
 }

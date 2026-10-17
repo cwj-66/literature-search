@@ -15,7 +15,7 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
 
   useEffect(() => {
     const container = ref.current;
-    if (!container) return;
+    if (!container || !data.nodes.length) return;
     setFailed(false);
     let alive = true;
     let graph: Graph;
@@ -81,7 +81,14 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
       return;
     }
     let rendered = false;
-    graph.render().then(() => { rendered = true; }).catch(() => {
+    let settled = false;
+    graph.render().then(() => {
+      settled = true;
+      if (!alive) { graph.destroy(); return; }
+      rendered = true;
+    }).catch(() => {
+      settled = true;
+      if (!alive) { graph.destroy(); return; }
       if (alive) setFailed(true);
     });
     const resize = new ResizeObserver(() => {
@@ -100,7 +107,7 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
     return () => {
       alive = false;
       resize.disconnect();
-      graph.destroy();
+      if (settled) graph.destroy();
     };
   }, [data]);
 

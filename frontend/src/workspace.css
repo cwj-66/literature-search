@@ -193,3 +193,17 @@ article.paper-card:hover { border-color: #c6d3eb; }
   .list-heading { flex-wrap: wrap; gap: 8px; }
   .kg-page { padding-top: 24px; }
 }
+
+.search-examples { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; margin-top: 12px; color: #64748b; }
+.search-examples > span, .search-examples > button { flex-shrink: 0; }
+.search-examples .ant-btn { padding-inline: 5px; font-size: 12px; }
+.pager { display: flex; justify-content: center; align-items: center; gap: 16px; }
+
+.pager .ant-pagination { display: flex; justify-content: center; flex-wrap: wrap; row-gap: 12px; }
+@media (max-width: 700px) {
+  .search-examples { flex-wrap: wrap; column-gap: 2px; }
+  .search-examples .ant-btn { font-size: 11px; padding-inline: 3px; }
+  .pager { padding-inline: 0; }
+  .pager .ant-pagination { max-width: 100%; }
+  .pager .ant-pagination-options { margin-inline-start: 0; flex-basis: 100%; text-align: center; }
+}

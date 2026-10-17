@@ -12,10 +12,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import analysis, analysis_store, library, llm, recommend, knowledge_graph
+from . import agent, analysis, analysis_store, attribution, ccf, hybrid, knowledge_graph, library, llm, metadata, recommend
+from .evidence_analysis import UNKNOWN
 from .schemas import (
-    AnalyzeRequest, AnalysisResponse, PaperOut, SearchResponse, ImportRequest, ImportResult, LocalPaperOut, LibraryResponse,
-    RecommendationResponse, NetworkResponse,
+    AnalyzeRequest, AnalysisFields, AnalysisResponse, CompareRequest, ImportRequest, ImportResult,
+    LibraryResponse, LocalPaperOut, NetworkResponse, PaperOut, QARequest, RecommendationResponse,
+    ResearchResume, ResearchStart, SearchResponse,
 )
 from .search import SourceFailure, fetch_paper, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
 
@@ -59,7 +61,7 @@ async def get_knowledge_graph():
 @app.get("/api/papers/search", response_model=SearchResponse)
 async def search(
     q: str = Query(min_length=1, max_length=300),
-    page: int = Query(1, ge=1, le=100),
+    page: int = Query(1, ge=1, le=1000000),
     page_size: int = Query(10, ge=1, le=20),
     sort: str = Query("relevance", pattern="^(relevance|date)$"),
     source: str = Query("all", pattern="^(all|arxiv|semantic_scholar)$"),
@@ -67,8 +69,6 @@ async def search(
     year_to: int | None = Query(None, ge=1900, le=2100),
     stream: bool = Query(False),
 ):
-    if source == "semantic_scholar" and (page - 1) * page_size >= 1000:
-        raise HTTPException(status_code=400, detail="Semantic Scholar 只提供前 1000 条结果，请缩小检索范围")
     query = q.strip()
     if not query:
         raise HTTPException(status_code=400, detail="请输入关键词")
@@ -207,6 +207,104 @@ async def paper_network(paper_id: str, refresh: bool = Query(False)):
         raise _analysis_error(exc) from None
     except (sqlite3.Error, OSError):
         logging.exception("paper network lookup failed")
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+@app.get("/api/ccf")
+async def ccf_info():
+    return ccf.info()
+
+
+@app.post("/api/qa")
+async def project_qa(payload: QARequest):
+    try:
+        papers = await asyncio.to_thread(library.list_recent, 100)
+        allowed = {paper.id: paper for paper in papers}
+        allowed.update({paper.local_id: paper for paper in papers})
+        selected = [allowed[pid] for pid in payload.paper_ids if pid in allowed] if payload.paper_ids else papers
+        if payload.paper_ids and len(selected) != len(payload.paper_ids):
+            raise HTTPException(status_code=400, detail="只能对当前文献库中的论文提问")
+        await asyncio.to_thread(hybrid.index_abstracts, selected)
+        ids = [paper.id for paper in selected]
+        return await attribution.answer_question(payload.question, ids)
+    except llm.AnalysisError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+def _empty_fields() -> AnalysisFields:
+    return AnalysisFields(
+        research_problem=UNKNOWN, main_content=UNKNOWN, technical_method=UNKNOWN,
+        innovations=[UNKNOWN], experimental_results=UNKNOWN, limitations=UNKNOWN,
+        keywords=[UNKNOWN], analysis_basis="abstract", claims=[],
+    )
+
+
+@app.post("/api/compare")
+async def compare_papers(payload: CompareRequest):
+    try:
+        rows = []
+        for paper_id in payload.paper_ids:
+            paper = await asyncio.to_thread(library.get_paper, paper_id)
+            if paper is None:
+                raise HTTPException(status_code=404, detail="对比论文必须先加入文献库")
+            target = await asyncio.to_thread(analysis.resolve_target, paper_id)
+            _, result = await asyncio.to_thread(analysis_store.get_state, target.aliases, target.local_id)
+            fields = AnalysisFields.model_validate(result) if result else _empty_fields()
+            rows.append((paper, fields))
+        return attribution.comparison_table(rows, payload.dimensions)
+    except analysis.ResolveError as exc:
+        raise _analysis_error(exc) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+@app.post("/api/research/tasks")
+async def start_research(payload: ResearchStart):
+    if payload.year_from and payload.year_to and payload.year_from > payload.year_to:
+        raise HTTPException(status_code=400, detail="起始年份不能晚于结束年份")
+    try:
+        return await agent.run(payload.goal, payload.year_from, payload.year_to, payload.auto_approve)
+    except llm.AnalysisError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+
+
+@app.post("/api/research/tasks/{task_id}/resume")
+async def resume_research(task_id: str, payload: ResearchResume = Body(default_factory=ResearchResume)):
+    current = await asyncio.to_thread(agent.get_task, task_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="没有找到该调研任务")
+    resume = {key: value for key, value in {"plan": payload.plan, "queries": payload.queries}.items() if value is not None}
+    try:
+        return await agent.run(current.get("goal") or "", resume=resume or {"plan": current.get("plan"), "queries": current.get("queries")}, task_id=task_id)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+
+
+@app.get("/api/research/tasks/{task_id}")
+async def research_task(task_id: str):
+    current = await asyncio.to_thread(agent.get_task, task_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="没有找到该调研任务")
+    return current
+
+
+@app.post("/api/papers/{paper_id:path}/metadata")
+async def enrich_paper(paper_id: str):
+    try:
+        paper = await asyncio.to_thread(library.get_paper, paper_id)
+        if paper is None:
+            paper = await fetch_paper(paper_id)
+        if paper is None:
+            raise HTTPException(status_code=404, detail="没有找到这篇论文")
+        enriched, extras = await metadata.enrich(paper)
+        return {"paper": enriched, **extras}
+    except SourceFailure as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from exc
+    except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
 
 

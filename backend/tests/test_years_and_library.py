@@ -59,7 +59,7 @@ class YearsAndLibraryTests(unittest.IsolatedAsyncioTestCase):
             return ([paper(f"2401.{i:05}", 2025) for i in range(size)] if offset == 0
                     else [paper(f"2201.{i:05}", 2022) for i in range(size)]), 200
         rows, total = await provider.unique_prefix(fetch, 20, 1000, 2022, 2023)
-        self.assertEqual(len(rows), 100)
+        self.assertEqual(len(rows), 20)
         self.assertTrue(all(row.year == 2022 for row in rows))
 
     def test_reference_normalization_and_untrusted_urls(self):

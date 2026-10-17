@@ -1,0 +1,51 @@
+{
+  "checked_at": "2026-10-17",
+  "copy_policy": "Only MIT, Apache-2.0 or BSD source may be copied. Unlicensed and AGPL repositories are design references.",
+  "repositories": [
+    {
+      "url": "https://github.com/garg-tejas/arxiv-scout",
+      "license": null,
+      "decision": "design-only"
+    },
+    {
+      "url": "https://github.com/abhid1234/research-agent",
+      "license": null,
+      "decision": "design-only"
+    },
+    {
+      "url": "https://github.com/littlelelephant/literature-review-agent",
+      "license": "AGPL-3.0",
+      "decision": "design-only"
+    },
+    {
+      "url": "https://github.com/peng1z/ResearchPilot",
+      "license": "MIT",
+      "decision": "optional later; OpenAlex is not P0"
+    },
+    {
+      "url": "https://github.com/langchain-ai/langgraph",
+      "license": "MIT",
+      "decision": "use checkpoint-sqlite and StateGraph"
+    },
+    {
+      "url": "https://github.com/langchain-ai/open_deep_research",
+      "license": "MIT",
+      "decision": "graph shape only; no web search backend"
+    },
+    {
+      "url": "https://github.com/allenai/ai2-scholarqa-lib",
+      "license": "Apache-2.0",
+      "decision": "reimplement per-paper aggregation, quote location and comparison locally"
+    },
+    {
+      "url": "https://github.com/Future-House/paper-qa",
+      "license": "Apache-2.0",
+      "decision": "thin Crossref and Unpaywall clients behind provider cache; do not import paperqa"
+    },
+    {
+      "url": "https://github.com/ccfddl/ccf-deadlines",
+      "license": "MIT",
+      "decision": "compile conference YAML rank.ccf into ccf_catalog.json"
+    }
+  ]
+}

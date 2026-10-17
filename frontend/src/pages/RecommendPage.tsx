@@ -4,6 +4,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { fetchLibrary, fetchNetwork, fetchRecommendations } from "../api";
 import { RelationGraph } from "../components/RelationGraph";
 import type { Paper, PaperNetwork, Recommendations } from "../types";
+import { PaperViews } from "../components/ResearchWorkspace";
+import { paperLocation, safeReturn } from "../workspace";
 
 function scoreText(value: number | null) {
   return value == null ? "暂无" : value.toFixed(2);
@@ -13,6 +15,8 @@ export default function RecommendPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const id = params.get("id")?.trim() ?? "";
+  const from = safeReturn(params.get("from"));
+  const current = `/recommend?${params}`;
   const [request, setRequest] = useState({ seq: 0, refresh: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,9 +36,8 @@ export default function RecommendPage() {
   }, [id, request.seq]);
 
   const openPaper = useCallback((paperId: string) => {
-    const from = `/recommend?id=${encodeURIComponent(id)}`;
-    navigate(`/paper?${new URLSearchParams({ id: paperId, from })}`);
-  }, [id, navigate]);
+    navigate(paperLocation(paperId, current));
+  }, [current, navigate]);
 
   useEffect(() => {
     document.title = recommendations
@@ -101,12 +104,11 @@ export default function RecommendPage() {
   return (
     <main className="wrap detail recommend-page">
       <div className="breadcrumbs">
-        {id ? <Link to={`/paper?id=${encodeURIComponent(id)}`}>返回论文</Link> : <Link to="/">返回检索</Link>}
-        <Link to="/library">本地分析库</Link>
+        <Link to={from}>{from.startsWith("/library") ? "返回文献列表" : "返回研读来源"}</Link>
       </div>
-      <div className="page-heading"><div><span className="page-kicker">发现相关研究</span><h1>相似推荐</h1><p>查看相关论文与关联依据，从已有研究继续探索。</p></div><Link className="text-action" to="/recommend">更换起点论文 →</Link></div>
-      {recommendations ? <p className="meta">{recommendations.paper_title}</p> : null}
-      {loading ? <div style={{ padding: 32, textAlign: "center" }}><Spin tip="正在计算关联强度" /></div> : null}
+      <PaperViews id={id} from={from} title={recommendations?.paper_title} />
+      <div className="page-heading"><div><h1>相关推荐</h1><p>以当前论文为起点，查看相关研究与推荐依据。打开候选论文后可返回这里。</p></div></div>
+      {loading ? <Spin tip="正在计算关联强度"><div style={{ height: 100 }} /></Spin> : null}
       {error ? (
         <Alert
           style={{ marginTop: 16 }}
@@ -140,7 +142,7 @@ export default function RecommendPage() {
                 {!item.relations.length ? <Tag>弱关联</Tag> : null}
               </div>
               <h2 className="paper-title">
-                <Link to={`/paper?${new URLSearchParams({ id: item.id, from: `/recommend?id=${encodeURIComponent(id)}` })}`}>{item.title}</Link>
+                <Link to={paperLocation(item.id, current)}>{item.title}</Link>
               </h2>
               <div className="strength">关联强度 {item.strength}</div>
               <div className="meta">
@@ -148,7 +150,7 @@ export default function RecommendPage() {
               </div>
               {item.reasons.map((reason) => <p key={reason.type} className="meta">{reason.text}</p>)}
               <div className="card-links">
-                <Link to={`/paper?${new URLSearchParams({ id: item.id, from: `/recommend?id=${encodeURIComponent(id)}` })}`}>详情</Link>
+                <Link to={paperLocation(item.id, current)}>打开研读 →</Link>
               </div>
             </article>
           ))}
@@ -170,7 +172,7 @@ export default function RecommendPage() {
               action={<Button size="small" onClick={() => setRequest((current) => ({ seq: current.seq + 1, refresh: false }))}>重试</Button>}
             />
           ) : null}
-          {network ? <RelationGraph data={network} onOpen={openPaper} /> : null}
+          {network?.nodes.length ? <RelationGraph data={network} onOpen={openPaper} /> : null}
           {network && network.nodes.length <= 1 ? <p className="meta">当前只有这篇论文，没有可连接的候选。</p> : null}
         </section>
       ) : null}

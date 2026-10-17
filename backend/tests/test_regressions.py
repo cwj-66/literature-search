@@ -1,5 +1,7 @@
 import asyncio
 import os
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import AsyncMock, patch
 import xml.etree.ElementTree as ET
@@ -16,6 +18,11 @@ def paper(n, **values):
 
 class RegressionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.env = patch.dict(os.environ, {"PAPER_DB_PATH": str(Path(self.temp.name) / "papers.sqlite3")})
+        self.env.start()
+        self.addCleanup(self.temp.cleanup)
+        self.addCleanup(self.env.stop)
         for cache in (provider._CACHE, provider._PAPERS, provider._GATES, provider._NEXT, provider._COOLDOWN):
             cache.clear()
 
@@ -24,7 +31,7 @@ class RegressionTests(unittest.IsolatedAsyncioTestCase):
         async def handler(request):
             nonlocal count
             count += 1
-            return httpx.Response(200, json={"data": []})
+            return httpx.Response(200, content=b'<feed xmlns="http://www.w3.org/2005/Atom" />')
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             await asyncio.gather(*[provider.request(client, "https://test/query", {"q": "deep learning"}, {}, "arXiv") for _ in range(5)])
         self.assertEqual(count, 1)
@@ -41,17 +48,17 @@ class RegressionTests(unittest.IsolatedAsyncioTestCase):
                     await provider.request(client, "https://test/query", {"q": q}, {}, "arXiv")
         self.assertEqual(count, 1)
 
-    async def test_exponential_backoff_then_success(self):
-        responses = iter([429, 429, 200])
+    async def test_rate_limit_does_not_burst_retry_and_exposes_wait(self):
+        calls = 0
         def handler(request):
-            return httpx.Response(next(responses), json={})
-        with patch.object(provider.asyncio, "sleep", new_callable=AsyncMock) as sleep:
-            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-                response = await provider.request(client, "https://test", {}, {}, "arXiv")
-            self.assertEqual(response.status_code, 200)
-            waits = [call.args[0] for call in sleep.await_args_list]
-            self.assertIn(2, waits)
-            self.assertIn(4, waits)
+            nonlocal calls
+            calls += 1
+            return httpx.Response(429)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with self.assertRaises(provider.SourceFailure) as error:
+                await provider.request(client, "https://test", {}, {}, "arXiv")
+            self.assertEqual(error.exception.retry_after, 60)
+            self.assertEqual(calls, 1)
 
     async def test_no_key_all_attempts_s2_and_admin_can_disable(self):
         with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_API_KEY": "", "SEMANTIC_SCHOLAR_ENABLED": "true"}), patch.object(provider, "search_arxiv", new=AsyncMock(return_value=([paper(1)], 1))), patch.object(provider, "search_semantic_scholar", new=AsyncMock(return_value=([paper(2)], 1))) as s2:

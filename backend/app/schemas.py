@@ -19,6 +19,8 @@ class PaperOut(BaseModel):
     semantic_scholar_id: str | None = None
     ccf_rank: str | None = None
     cas_partition: str | None = None
+    ccf_status: str | None = None
+    ccf_catalog_version: str | None = None
 
 
 class SearchResponse(BaseModel):
@@ -77,6 +79,28 @@ class LibraryResponse(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     reanalyze: bool = False
+
+
+class ResearchStart(BaseModel):
+    goal: str = Field(min_length=1, max_length=2000)
+    year_from: int | None = Field(None, ge=1900, le=2100)
+    year_to: int | None = Field(None, ge=1900, le=2100)
+    auto_approve: bool = False
+
+
+class ResearchResume(BaseModel):
+    plan: list[dict] | None = None
+    queries: list[str] | None = None
+
+
+class QARequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    paper_ids: list[str] = Field(default_factory=list, max_length=40)
+
+
+class CompareRequest(BaseModel):
+    paper_ids: list[str] = Field(min_length=3, max_length=5)
+    dimensions: list[str] | None = None
 
 
 class EvidenceReference(BaseModel):

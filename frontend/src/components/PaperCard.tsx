@@ -1,6 +1,7 @@
 import { Tag, Typography } from "antd";
 import { Link, useLocation } from "react-router-dom";
 import type { Paper } from "../types";
+import { ccfLabel } from "../types";
 
 const SOURCE_LABEL: Record<string, string> = {
   arxiv: "arXiv",
@@ -42,10 +43,10 @@ export function PaperCard({ paper, analysisMode = false }: { paper: Paper; analy
       ) : (
         <Typography.Paragraph type="secondary">摘要缺失</Typography.Paragraph>
       )}
-      <div className="paper-card-metrics"><span>引用 <b>{paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</b></span><span>CCF <b>{paper.ccf_rank ?? "未知"}</b></span><span>中科院分区 <b>{paper.cas_partition ?? "未知"}</b></span></div>
+      <div className="paper-card-metrics"><span>引用 <b>{paper.citation_count != null ? paper.citation_count.toLocaleString("zh-CN") : "未知"}</b></span><span>CCF <b>{ccfLabel(paper)}</b></span><span>中科院分区 <b>{paper.cas_partition ?? "未知"}</b></span></div>
       <div className="card-links paper-card-actions">
         <Link to={href}>阅读与分析 →</Link>
-        <Link to={`/recommend?id=${encodeURIComponent(paper.local_id ?? paper.id)}`}>相似推荐</Link>
+        <Link to={`/recommend?${new URLSearchParams({ id: paper.local_id ?? paper.id, from: location.pathname + location.search })}`}>相关推荐</Link>
         {paper.url ? (
           <a href={paper.url} target="_blank" rel="noopener noreferrer" aria-label="原文（将打开新窗口）" title="将打开新窗口">
             原文

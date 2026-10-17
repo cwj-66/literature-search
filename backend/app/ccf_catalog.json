@@ -1,0 +1,4016 @@
+{
+  "source": "https://github.com/ccfddl/ccf-deadlines",
+  "license": "MIT",
+  "note": "会议别名种子，来自 CCFDDL 的 rank.ccf 字段。不是中国计算机学会官方目录全文，期刊覆盖不全。匹配失败标为待核验或未匹配。",
+  "imported_at": "2026-10-17",
+  "catalog_version": "ccfddl-conference-aliases",
+  "venues": [
+    {
+      "abbr": "AAAI",
+      "name": "AAAI Conference on Artificial Intelligence",
+      "rank": "A",
+      "dblp": "aaai",
+      "sub": "AI",
+      "aliases": [
+        "AAAI",
+        "AAAI Conference on Artificial Intelligence",
+        "aaai"
+      ]
+    },
+    {
+      "abbr": "AAMAS",
+      "name": "International Conference on Autonomous Agents and Multiagent Systems",
+      "rank": "B",
+      "dblp": "ifaamas",
+      "sub": "AI",
+      "aliases": [
+        "AAMAS",
+        "International Conference on Autonomous Agents and Multiagent Systems",
+        "ifaamas"
+      ]
+    },
+    {
+      "abbr": "ACCV",
+      "name": "Asian Conference on Computer Vision",
+      "rank": "C",
+      "dblp": "accv",
+      "sub": "AI",
+      "aliases": [
+        "ACCV",
+        "Asian Conference on Computer Vision",
+        "accv"
+      ]
+    },
+    {
+      "abbr": "ACL",
+      "name": "Annual Meeting of the Association for Computational Linguistics",
+      "rank": "A",
+      "dblp": "acl",
+      "sub": "AI",
+      "aliases": [
+        "ACL",
+        "Annual Meeting of the Association for Computational Linguistics",
+        "acl"
+      ]
+    },
+    {
+      "abbr": "ACML",
+      "name": "Asian Conference on Machine Learning",
+      "rank": "C",
+      "dblp": "acml",
+      "sub": "AI",
+      "aliases": [
+        "ACML",
+        "Asian Conference on Machine Learning",
+        "acml"
+      ]
+    },
+    {
+      "abbr": "AISTATS",
+      "name": "International Conference on Artificial Intelligence and Statistics",
+      "rank": "C",
+      "dblp": "aistats",
+      "sub": "AI",
+      "aliases": [
+        "AISTATS",
+        "International Conference on Artificial Intelligence and Statistics",
+        "aistats"
+      ]
+    },
+    {
+      "abbr": "ALT",
+      "name": "International Conference on Algorithmic Learning Theory",
+      "rank": "C",
+      "dblp": "alt",
+      "sub": "AI",
+      "aliases": [
+        "ALT",
+        "International Conference on Algorithmic Learning Theory",
+        "alt"
+      ]
+    },
+    {
+      "abbr": "BMVC",
+      "name": "British Machine Vision Conference",
+      "rank": "C",
+      "dblp": "bmvc",
+      "sub": "AI",
+      "aliases": [
+        "BMVC",
+        "British Machine Vision Conference",
+        "bmvc"
+      ]
+    },
+    {
+      "abbr": "IEEE CEC",
+      "name": "IEEE Congress on Evolutionary Computation",
+      "rank": "C",
+      "dblp": "cec",
+      "sub": "AI",
+      "aliases": [
+        "IEEE CEC",
+        "IEEE Congress on Evolutionary Computation",
+        "cec"
+      ]
+    },
+    {
+      "abbr": "COLING",
+      "name": "International Conference on Computational Linguistics",
+      "rank": "B",
+      "dblp": "coling",
+      "sub": "AI",
+      "aliases": [
+        "COLING",
+        "International Conference on Computational Linguistics",
+        "coling"
+      ]
+    },
+    {
+      "abbr": "COLT",
+      "name": "Annual Conference on Learning Theory",
+      "rank": "B",
+      "dblp": "colt",
+      "sub": "AI",
+      "aliases": [
+        "COLT",
+        "Annual Conference on Learning Theory",
+        "colt"
+      ]
+    },
+    {
+      "abbr": "CoNLL",
+      "name": "Conference on Computational Natural Language Learning",
+      "rank": "C",
+      "dblp": "conll",
+      "sub": "AI",
+      "aliases": [
+        "CoNLL",
+        "Conference on Computational Natural Language Learning",
+        "conll"
+      ]
+    },
+    {
+      "abbr": "CVPR",
+      "name": "IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "rank": "A",
+      "dblp": "cvpr",
+      "sub": "AI",
+      "aliases": [
+        "CVPR",
+        "IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+        "cvpr"
+      ]
+    },
+    {
+      "abbr": "DAI",
+      "name": "International Conference on Distributed Artificial Intelligence",
+      "rank": "C",
+      "dblp": "dai2",
+      "sub": "AI",
+      "aliases": [
+        "DAI",
+        "International Conference on Distributed Artificial Intelligence",
+        "dai2"
+      ]
+    },
+    {
+      "abbr": "ECAI",
+      "name": "European Conference on Artificial Intelligence",
+      "rank": "B",
+      "dblp": "ecai",
+      "sub": "AI",
+      "aliases": [
+        "ECAI",
+        "European Conference on Artificial Intelligence",
+        "ecai"
+      ]
+    },
+    {
+      "abbr": "ECCV",
+      "name": "European Conference on Computer Vision",
+      "rank": "B",
+      "dblp": "eccv",
+      "sub": "AI",
+      "aliases": [
+        "ECCV",
+        "European Conference on Computer Vision",
+        "eccv"
+      ]
+    },
+    {
+      "abbr": "EMNLP",
+      "name": "The annual Conference on Empirical Methods in Natural Language Processing",
+      "rank": "B",
+      "dblp": "emnlp",
+      "sub": "AI",
+      "aliases": [
+        "EMNLP",
+        "The annual Conference on Empirical Methods in Natural Language Processing",
+        "emnlp"
+      ]
+    },
+    {
+      "abbr": "FG",
+      "name": "International Conference on Automatic Face and Gesture Recognition",
+      "rank": "C",
+      "dblp": "fg",
+      "sub": "AI",
+      "aliases": [
+        "FG",
+        "International Conference on Automatic Face and Gesture Recognition",
+        "fg"
+      ]
+    },
+    {
+      "abbr": "GECCO",
+      "name": "Genetic and Evolutionary Computation Conference",
+      "rank": "C",
+      "dblp": "gecco",
+      "sub": "AI",
+      "aliases": [
+        "GECCO",
+        "Genetic and Evolutionary Computation Conference",
+        "gecco"
+      ]
+    },
+    {
+      "abbr": "ICANN",
+      "name": "International Conference on Artificial Neural Networks",
+      "rank": "C",
+      "dblp": "icann",
+      "sub": "AI",
+      "aliases": [
+        "ICANN",
+        "International Conference on Artificial Neural Networks",
+        "icann"
+      ]
+    },
+    {
+      "abbr": "ICAPS",
+      "name": "International Conference on Automated Planning and Scheduling",
+      "rank": "B",
+      "dblp": "icaps",
+      "sub": "AI",
+      "aliases": [
+        "ICAPS",
+        "International Conference on Automated Planning and Scheduling",
+        "icaps"
+      ]
+    },
+    {
+      "abbr": "ICCBR",
+      "name": "International Conference on Case-Based Reasoning",
+      "rank": "B",
+      "dblp": "iccbr",
+      "sub": "AI",
+      "aliases": [
+        "ICCBR",
+        "International Conference on Case-Based Reasoning",
+        "iccbr"
+      ]
+    },
+    {
+      "abbr": "ICCV",
+      "name": "IEEE International Conference on Computer Vision",
+      "rank": "A",
+      "dblp": "iccv",
+      "sub": "AI",
+      "aliases": [
+        "ICCV",
+        "IEEE International Conference on Computer Vision",
+        "iccv"
+      ]
+    },
+    {
+      "abbr": "ICDAR",
+      "name": "International Conference on Document Analysis and Recognition",
+      "rank": "C",
+      "dblp": "icdar",
+      "sub": "AI",
+      "aliases": [
+        "ICDAR",
+        "International Conference on Document Analysis and Recognition",
+        "icdar"
+      ]
+    },
+    {
+      "abbr": "ICLR",
+      "name": "International Conference on Learning Representations",
+      "rank": "A",
+      "dblp": "iclr",
+      "sub": "AI",
+      "aliases": [
+        "ICLR",
+        "International Conference on Learning Representations",
+        "iclr"
+      ]
+    },
+    {
+      "abbr": "ICML",
+      "name": "International Conference on Machine Learning",
+      "rank": "A",
+      "dblp": "icml",
+      "sub": "AI",
+      "aliases": [
+        "ICML",
+        "International Conference on Machine Learning",
+        "icml"
+      ]
+    },
+    {
+      "abbr": "ICONIP",
+      "name": "International Conference on Neural Information Processing",
+      "rank": "C",
+      "dblp": "iconip",
+      "sub": "AI",
+      "aliases": [
+        "ICONIP",
+        "International Conference on Neural Information Processing",
+        "iconip"
+      ]
+    },
+    {
+      "abbr": "ICPR",
+      "name": "International Conference on Pattern Recognition",
+      "rank": "C",
+      "dblp": "icpr",
+      "sub": "AI",
+      "aliases": [
+        "ICPR",
+        "International Conference on Pattern Recognition",
+        "icpr"
+      ]
+    },
+    {
+      "abbr": "ICRA",
+      "name": "IEEE International Conference on Robotics and Automation",
+      "rank": "B",
+      "dblp": "icra",
+      "sub": "AI",
+      "aliases": [
+        "ICRA",
+        "IEEE International Conference on Robotics and Automation",
+        "icra"
+      ]
+    },
+    {
+      "abbr": "ICTAI",
+      "name": "International Conference on Tools with Artificial Intellignce",
+      "rank": "C",
+      "dblp": "ictai",
+      "sub": "AI",
+      "aliases": [
+        "ICTAI",
+        "International Conference on Tools with Artificial Intellignce",
+        "ictai"
+      ]
+    },
+    {
+      "abbr": "IJCAI",
+      "name": "International Joint Conference on Artificial Intelligence",
+      "rank": "B",
+      "dblp": "ijcai",
+      "sub": "AI",
+      "aliases": [
+        "IJCAI",
+        "International Joint Conference on Artificial Intelligence",
+        "ijcai"
+      ]
+    },
+    {
+      "abbr": "IJCB",
+      "name": "International Joint Conference on Biometrics",
+      "rank": "C",
+      "dblp": "icb",
+      "sub": "AI",
+      "aliases": [
+        "IJCB",
+        "International Joint Conference on Biometrics",
+        "icb"
+      ]
+    },
+    {
+      "abbr": "IJCNN",
+      "name": "International Joint Conference on Neural Networks",
+      "rank": "C",
+      "dblp": "ijcnn",
+      "sub": "AI",
+      "aliases": [
+        "IJCNN",
+        "International Joint Conference on Neural Networks",
+        "ijcnn"
+      ]
+    },
+    {
+      "abbr": "IROS",
+      "name": "IEEE/RSJ International Conference on Intelligent Robots and Systems",
+      "rank": "C",
+      "dblp": "iros",
+      "sub": "AI",
+      "aliases": [
+        "IROS",
+        "IEEE/RSJ International Conference on Intelligent Robots and Systems",
+        "iros"
+      ]
+    },
+    {
+      "abbr": "KR",
+      "name": "International Conference on Principles of Knowledge Representation and Reasoning",
+      "rank": "B",
+      "dblp": "kr",
+      "sub": "AI",
+      "aliases": [
+        "KR",
+        "International Conference on Principles of Knowledge Representation and Reasoning",
+        "kr"
+      ]
+    },
+    {
+      "abbr": "KSEM",
+      "name": "International Conference on Knowledge Science, Engineering and Management",
+      "rank": "C",
+      "dblp": "ksem",
+      "sub": "AI",
+      "aliases": [
+        "KSEM",
+        "International Conference on Knowledge Science, Engineering and Management",
+        "ksem"
+      ]
+    },
+    {
+      "abbr": "NAACL",
+      "name": "The Annual Conference of the North American Chapter of the Association for Computational Linguistics",
+      "rank": "B",
+      "dblp": "naacl",
+      "sub": "AI",
+      "aliases": [
+        "NAACL",
+        "The Annual Conference of the North American Chapter of the Association for Computational Linguistics",
+        "naacl"
+      ]
+    },
+    {
+      "abbr": "NeurIPS",
+      "name": "Conference on Neural Information Processing Systems",
+      "rank": "A",
+      "dblp": "nips",
+      "sub": "AI",
+      "aliases": [
+        "NeurIPS",
+        "Conference on Neural Information Processing Systems",
+        "nips"
+      ]
+    },
+    {
+      "abbr": "NLPCC",
+      "name": "CCF International Conference on Natural Language Processing and Chinese Computing",
+      "rank": "C",
+      "dblp": "nlpcc",
+      "sub": "AI",
+      "aliases": [
+        "NLPCC",
+        "CCF International Conference on Natural Language Processing and Chinese Computing",
+        "nlpcc"
+      ]
+    },
+    {
+      "abbr": "PPSN",
+      "name": "International Conference on Parallel Problem Solving From Nature",
+      "rank": "B",
+      "dblp": "ppsn",
+      "sub": "AI",
+      "aliases": [
+        "PPSN",
+        "International Conference on Parallel Problem Solving From Nature",
+        "ppsn"
+      ]
+    },
+    {
+      "abbr": "PRICAI",
+      "name": "Pacific Rim International Conference on Artificial Intelligence",
+      "rank": "C",
+      "dblp": "pricai",
+      "sub": "AI",
+      "aliases": [
+        "PRICAI",
+        "Pacific Rim International Conference on Artificial Intelligence",
+        "pricai"
+      ]
+    },
+    {
+      "abbr": "UAI",
+      "name": "Conference on Uncertainty in Artificial Intelligence",
+      "rank": "B",
+      "dblp": "uai",
+      "sub": "AI",
+      "aliases": [
+        "UAI",
+        "Conference on Uncertainty in Artificial Intelligence",
+        "uai"
+      ]
+    },
+    {
+      "abbr": "3DV",
+      "name": "International Conference on 3D Vision",
+      "rank": "C",
+      "dblp": "3dim",
+      "sub": "CG",
+      "aliases": [
+        "3DV",
+        "International Conference on 3D Vision",
+        "3dim"
+      ]
+    },
+    {
+      "abbr": "CASA",
+      "name": "International Conference on Computer Animation and Social Agents",
+      "rank": "C",
+      "dblp": "ca",
+      "sub": "CG",
+      "aliases": [
+        "CASA",
+        "International Conference on Computer Animation and Social Agents",
+        "ca"
+      ]
+    },
+    {
+      "abbr": "CGI",
+      "name": "Computer Graphics International",
+      "rank": "C",
+      "dblp": "cgi",
+      "sub": "CG",
+      "aliases": [
+        "CGI",
+        "Computer Graphics International",
+        "cgi"
+      ]
+    },
+    {
+      "abbr": "CVM",
+      "name": "The international conference on Computational Visual Media",
+      "rank": "C",
+      "dblp": "cvm",
+      "sub": "CG",
+      "aliases": [
+        "CVM",
+        "The international conference on Computational Visual Media",
+        "cvm"
+      ]
+    },
+    {
+      "abbr": "DCC",
+      "name": "Data Compression Conference",
+      "rank": "B",
+      "dblp": "dcc",
+      "sub": "CG",
+      "aliases": [
+        "DCC",
+        "Data Compression Conference",
+        "dcc"
+      ]
+    },
+    {
+      "abbr": "Eurographics",
+      "name": "Eurographics",
+      "rank": "B",
+      "dblp": "eurographics",
+      "sub": "CG",
+      "aliases": [
+        "Eurographics",
+        "eurographics"
+      ]
+    },
+    {
+      "abbr": "EGSR",
+      "name": "Eurographics Symposium on Rendering",
+      "rank": "B",
+      "dblp": "rt",
+      "sub": "CG",
+      "aliases": [
+        "EGSR",
+        "Eurographics Symposium on Rendering",
+        "rt"
+      ]
+    },
+    {
+      "abbr": "EuroVis",
+      "name": "Eurographics Conference on Visualization",
+      "rank": "B",
+      "dblp": "vissym",
+      "sub": "CG",
+      "aliases": [
+        "EuroVis",
+        "Eurographics Conference on Visualization",
+        "vissym"
+      ]
+    },
+    {
+      "abbr": "GMP",
+      "name": "International Conference on Geometric Modeling and Processing",
+      "rank": "C",
+      "dblp": "gmp",
+      "sub": "CG",
+      "aliases": [
+        "GMP",
+        "International Conference on Geometric Modeling and Processing",
+        "gmp"
+      ]
+    },
+    {
+      "abbr": "ICASSP",
+      "name": "IEEE International Conference on Acoustics, Speech, and Signal Processing",
+      "rank": "B",
+      "dblp": "icassp",
+      "sub": "CG",
+      "aliases": [
+        "ICASSP",
+        "IEEE International Conference on Acoustics, Speech, and Signal Processing",
+        "icassp"
+      ]
+    },
+    {
+      "abbr": "ICIP",
+      "name": "The IEEE International Conference on Image Processing",
+      "rank": "C",
+      "dblp": "icip",
+      "sub": "CG",
+      "aliases": [
+        "ICIP",
+        "The IEEE International Conference on Image Processing",
+        "icip"
+      ]
+    },
+    {
+      "abbr": "ICME",
+      "name": "The IEEE International Conference on Multimedia & Expo",
+      "rank": "B",
+      "dblp": "icme",
+      "sub": "CG",
+      "aliases": [
+        "ICME",
+        "The IEEE International Conference on Multimedia & Expo",
+        "icme"
+      ]
+    },
+    {
+      "abbr": "ICMR",
+      "name": "ACM SIGMM International Conference on Multimedia Retrieval",
+      "rank": "B",
+      "dblp": "mir",
+      "sub": "CG",
+      "aliases": [
+        "ICMR",
+        "ACM SIGMM International Conference on Multimedia Retrieval",
+        "mir"
+      ]
+    },
+    {
+      "abbr": "InterSpeech",
+      "name": "Conference of the International Speech Communication Association",
+      "rank": "B",
+      "dblp": "interspeech",
+      "sub": "CG",
+      "aliases": [
+        "InterSpeech",
+        "Conference of the International Speech Communication Association",
+        "interspeech"
+      ]
+    },
+    {
+      "abbr": "ISMAR",
+      "name": "International Symposium on Mixed and Augmented Reality",
+      "rank": "B",
+      "dblp": "ismar",
+      "sub": "CG",
+      "aliases": [
+        "ISMAR",
+        "International Symposium on Mixed and Augmented Reality",
+        "ismar"
+      ]
+    },
+    {
+      "abbr": "ACM MM",
+      "name": "ACM International Conference on Multimedia",
+      "rank": "A",
+      "dblp": "mm",
+      "sub": "CG",
+      "aliases": [
+        "ACM MM",
+        "ACM International Conference on Multimedia",
+        "mm"
+      ]
+    },
+    {
+      "abbr": "MMAsia",
+      "name": "ACM Multimedia Asia",
+      "rank": "C",
+      "dblp": "mmasia",
+      "sub": "CG",
+      "aliases": [
+        "MMAsia",
+        "ACM Multimedia Asia",
+        "mmasia"
+      ]
+    },
+    {
+      "abbr": "MMM",
+      "name": "International Conference on Multimedia Modeling",
+      "rank": "C",
+      "dblp": "mmm",
+      "sub": "CG",
+      "aliases": [
+        "MMM",
+        "International Conference on Multimedia Modeling",
+        "mmm"
+      ]
+    },
+    {
+      "abbr": "NCMMSC",
+      "name": "National Conference on Man-Machine Speech Communication",
+      "rank": "C",
+      "dblp": "ncmmsc",
+      "sub": "CG",
+      "aliases": [
+        "NCMMSC",
+        "National Conference on Man-Machine Speech Communication",
+        "ncmmsc"
+      ]
+    },
+    {
+      "abbr": "PacificVis",
+      "name": "IEEE Pacific Visualization Symposium",
+      "rank": "C",
+      "dblp": "pacificvis",
+      "sub": "CG",
+      "aliases": [
+        "PacificVis",
+        "IEEE Pacific Visualization Symposium",
+        "pacificvis"
+      ]
+    },
+    {
+      "abbr": "PG",
+      "name": "Pacific Graphics, The Pacific Conference on Computer Graphics and Applications",
+      "rank": "B",
+      "dblp": "pg",
+      "sub": "CG",
+      "aliases": [
+        "PG",
+        "Pacific Graphics, The Pacific Conference on Computer Graphics and Applications",
+        "pg"
+      ]
+    },
+    {
+      "abbr": "PRCV",
+      "name": "Chinese Conference on Pattern Recognition and Computer Vision",
+      "rank": "C",
+      "dblp": "prcv",
+      "sub": "CG",
+      "aliases": [
+        "PRCV",
+        "Chinese Conference on Pattern Recognition and Computer Vision",
+        "prcv"
+      ]
+    },
+    {
+      "abbr": "SCA",
+      "name": "ACM SIGGRAPH/Eurographics Symposium on Computer Animation",
+      "rank": "B",
+      "dblp": "sca",
+      "sub": "CG",
+      "aliases": [
+        "SCA",
+        "ACM SIGGRAPH/Eurographics Symposium on Computer Animation",
+        "sca"
+      ]
+    },
+    {
+      "abbr": "SGP",
+      "name": "Eurographics Symposium on Geometry Processing",
+      "rank": "B",
+      "dblp": "sgp",
+      "sub": "CG",
+      "aliases": [
+        "SGP",
+        "Eurographics Symposium on Geometry Processing",
+        "sgp"
+      ]
+    },
+    {
+      "abbr": "ACM SIGGRAPH",
+      "name": "ACM SIGGRAPH Annual Conference",
+      "rank": "A",
+      "dblp": "siggraph",
+      "sub": "CG",
+      "aliases": [
+        "ACM SIGGRAPH",
+        "ACM SIGGRAPH Annual Conference",
+        "siggraph"
+      ]
+    },
+    {
+      "abbr": "SLT",
+      "name": "IEEE Spoken Language Technology (SLT) Workshop",
+      "rank": "C",
+      "dblp": "slt",
+      "sub": "CG",
+      "aliases": [
+        "SLT",
+        "IEEE Spoken Language Technology (SLT) Workshop",
+        "slt"
+      ]
+    },
+    {
+      "abbr": "SMI",
+      "name": "Shape Modeling International",
+      "rank": "C",
+      "dblp": "smi",
+      "sub": "CG",
+      "aliases": [
+        "SMI",
+        "Shape Modeling International",
+        "smi"
+      ]
+    },
+    {
+      "abbr": "SPM",
+      "name": "Symposium on Solid and Physical Modeling",
+      "rank": "B",
+      "dblp": "sma",
+      "sub": "CG",
+      "aliases": [
+        "SPM",
+        "Symposium on Solid and Physical Modeling",
+        "sma"
+      ]
+    },
+    {
+      "abbr": "IEEE VIS",
+      "name": "IEEE Visualization Conference",
+      "rank": "A",
+      "dblp": "visualization",
+      "sub": "CG",
+      "aliases": [
+        "IEEE VIS",
+        "IEEE Visualization Conference",
+        "visualization"
+      ]
+    },
+    {
+      "abbr": "IEEE VR",
+      "name": "IEEE Virtual Reality",
+      "rank": "A",
+      "dblp": "vr",
+      "sub": "CG",
+      "aliases": [
+        "IEEE VR",
+        "IEEE Virtual Reality",
+        "vr"
+      ]
+    },
+    {
+      "abbr": "CADE",
+      "name": "The Conference on Automated Deduction",
+      "rank": "B",
+      "dblp": "cade",
+      "sub": "CT",
+      "aliases": [
+        "CADE",
+        "The Conference on Automated Deduction",
+        "cade"
+      ]
+    },
+    {
+      "abbr": "CAV",
+      "name": "International Conference on Computer-Aided Verification",
+      "rank": "A",
+      "dblp": "cav",
+      "sub": "CT",
+      "aliases": [
+        "CAV",
+        "International Conference on Computer-Aided Verification",
+        "cav"
+      ]
+    },
+    {
+      "abbr": "CCC",
+      "name": "Computational Complexity Conference",
+      "rank": "B",
+      "dblp": "coco",
+      "sub": "CT",
+      "aliases": [
+        "CCC",
+        "Computational Complexity Conference",
+        "coco"
+      ]
+    },
+    {
+      "abbr": "COCOON",
+      "name": "International Computing and Combinatorics Conference",
+      "rank": "B",
+      "dblp": "cocoon",
+      "sub": "CT",
+      "aliases": [
+        "COCOON",
+        "International Computing and Combinatorics Conference",
+        "cocoon"
+      ]
+    },
+    {
+      "abbr": "CONCUR",
+      "name": "International Conference on Concurrency Theory",
+      "rank": "B",
+      "dblp": "concur",
+      "sub": "CT",
+      "aliases": [
+        "CONCUR",
+        "International Conference on Concurrency Theory",
+        "concur"
+      ]
+    },
+    {
+      "abbr": "ESA",
+      "name": "European Symposium on Algorithms",
+      "rank": "B",
+      "dblp": "esa",
+      "sub": "CT",
+      "aliases": [
+        "ESA",
+        "European Symposium on Algorithms",
+        "esa"
+      ]
+    },
+    {
+      "abbr": "FMCAD",
+      "name": "Formal Methods in Computer-Aided Design",
+      "rank": "B",
+      "dblp": "fmcad",
+      "sub": "CT",
+      "aliases": [
+        "FMCAD",
+        "Formal Methods in Computer-Aided Design",
+        "fmcad"
+      ]
+    },
+    {
+      "abbr": "FOCS",
+      "name": "IEEE Symposium on Foundations of Computer Science",
+      "rank": "A",
+      "dblp": "focs",
+      "sub": "CT",
+      "aliases": [
+        "FOCS",
+        "IEEE Symposium on Foundations of Computer Science",
+        "focs"
+      ]
+    },
+    {
+      "abbr": "FSCD",
+      "name": "International Conference on Formal Structures for Computation and Deduction",
+      "rank": "C",
+      "dblp": "fscd",
+      "sub": "CT",
+      "aliases": [
+        "FSCD",
+        "International Conference on Formal Structures for Computation and Deduction",
+        "fscd"
+      ]
+    },
+    {
+      "abbr": "HSCC",
+      "name": "International Conference on Hybrid Systems: Computation and Control",
+      "rank": "B",
+      "dblp": "hybrid",
+      "sub": "CT",
+      "aliases": [
+        "HSCC",
+        "International Conference on Hybrid Systems: Computation and Control",
+        "hybrid"
+      ]
+    },
+    {
+      "abbr": "ICALP",
+      "name": "EATCS International Colloquium on Automata, Languages, and Programming",
+      "rank": "B",
+      "dblp": "icalp",
+      "sub": "CT",
+      "aliases": [
+        "ICALP",
+        "EATCS International Colloquium on Automata, Languages, and Programming",
+        "icalp"
+      ]
+    },
+    {
+      "abbr": "IJCAR",
+      "name": "International Joint Conference on Automated Reasoning",
+      "rank": "B",
+      "dblp": "ijcar",
+      "sub": "CT",
+      "aliases": [
+        "IJCAR",
+        "International Joint Conference on Automated Reasoning",
+        "ijcar"
+      ]
+    },
+    {
+      "abbr": "ISAAC",
+      "name": "International Symposium on Algorithms and Computation",
+      "rank": "C",
+      "dblp": "isaac",
+      "sub": "CT",
+      "aliases": [
+        "ISAAC",
+        "International Symposium on Algorithms and Computation",
+        "isaac"
+      ]
+    },
+    {
+      "abbr": "LICS",
+      "name": "IEEE Symposium on Logic in Computer Science",
+      "rank": "A",
+      "dblp": "lics",
+      "sub": "CT",
+      "aliases": [
+        "LICS",
+        "IEEE Symposium on Logic in Computer Science",
+        "lics"
+      ]
+    },
+    {
+      "abbr": "SAT",
+      "name": "International Conference on Theory and Applications of Satisfiability Testing",
+      "rank": "B",
+      "dblp": "sat",
+      "sub": "CT",
+      "aliases": [
+        "SAT",
+        "International Conference on Theory and Applications of Satisfiability Testing",
+        "sat"
+      ]
+    },
+    {
+      "abbr": "SETTA",
+      "name": "Symposium on Dependable Software Engineering: Theories, Tools and Applications",
+      "rank": "C",
+      "dblp": "setta",
+      "sub": "CT",
+      "aliases": [
+        "SETTA",
+        "Symposium on Dependable Software Engineering: Theories, Tools and Applications",
+        "setta"
+      ]
+    },
+    {
+      "abbr": "SOCG",
+      "name": "International Symposium on Computational Geometry",
+      "rank": "B",
+      "dblp": "compgeom",
+      "sub": "CT",
+      "aliases": [
+        "SOCG",
+        "International Symposium on Computational Geometry",
+        "compgeom"
+      ]
+    },
+    {
+      "abbr": "SODA",
+      "name": "ACM-SIAM Symposium on Discrete Algorithms",
+      "rank": "A",
+      "dblp": "soda",
+      "sub": "CT",
+      "aliases": [
+        "SODA",
+        "ACM-SIAM Symposium on Discrete Algorithms",
+        "soda"
+      ]
+    },
+    {
+      "abbr": "STOC",
+      "name": "ACM Symposium on the Theory of Computing",
+      "rank": "A",
+      "dblp": "stoc",
+      "sub": "CT",
+      "aliases": [
+        "STOC",
+        "ACM Symposium on the Theory of Computing",
+        "stoc"
+      ]
+    },
+    {
+      "abbr": "ADMA",
+      "name": "The International Conference on Advanced Data Mining and Applications",
+      "rank": "C",
+      "dblp": "adma",
+      "sub": "DB",
+      "aliases": [
+        "ADMA",
+        "The International Conference on Advanced Data Mining and Applications",
+        "adma"
+      ]
+    },
+    {
+      "abbr": "APWeb-WAIM",
+      "name": "APWeb-WAIM joint international conference on Web and Big Data",
+      "rank": "C",
+      "dblp": "APWeb",
+      "sub": "DB",
+      "aliases": [
+        "APWeb-WAIM",
+        "APWeb-WAIM joint international conference on Web and Big Data",
+        "APWeb"
+      ]
+    },
+    {
+      "abbr": "CIDR",
+      "name": "International Conference on Innovative Data Systems Research",
+      "rank": "B",
+      "dblp": "cidr",
+      "sub": "DB",
+      "aliases": [
+        "CIDR",
+        "International Conference on Innovative Data Systems Research",
+        "cidr"
+      ]
+    },
+    {
+      "abbr": "CIKM",
+      "name": "ACM International Conference on Information and Knowledge Management",
+      "rank": "B",
+      "dblp": "cikm",
+      "sub": "DB",
+      "aliases": [
+        "CIKM",
+        "ACM International Conference on Information and Knowledge Management",
+        "cikm"
+      ]
+    },
+    {
+      "abbr": "DASFAA",
+      "name": "Database Systems for Advanced Applications",
+      "rank": "B",
+      "dblp": "dasfaa",
+      "sub": "DB",
+      "aliases": [
+        "DASFAA",
+        "Database Systems for Advanced Applications",
+        "dasfaa"
+      ]
+    },
+    {
+      "abbr": "DEXA",
+      "name": "International Conference on Database and Expert Systems Applications",
+      "rank": "C",
+      "dblp": "dexa",
+      "sub": "DB",
+      "aliases": [
+        "DEXA",
+        "International Conference on Database and Expert Systems Applications",
+        "dexa"
+      ]
+    },
+    {
+      "abbr": "ECIR",
+      "name": "European Conference on Information Retrieval",
+      "rank": "C",
+      "dblp": "ecir",
+      "sub": "DB",
+      "aliases": [
+        "ECIR",
+        "European Conference on Information Retrieval",
+        "ecir"
+      ]
+    },
+    {
+      "abbr": "EDBT",
+      "name": "International Conference on Extending Database Technology",
+      "rank": "B",
+      "dblp": "edbt",
+      "sub": "DB",
+      "aliases": [
+        "EDBT",
+        "International Conference on Extending Database Technology",
+        "edbt"
+      ]
+    },
+    {
+      "abbr": "ER",
+      "name": "International Conference on Conceptual Modeling",
+      "rank": "C",
+      "dblp": "er",
+      "sub": "DB",
+      "aliases": [
+        "ER",
+        "International Conference on Conceptual Modeling",
+        "er"
+      ]
+    },
+    {
+      "abbr": "ESWC",
+      "name": "European Semantic Web Conference",
+      "rank": "C",
+      "dblp": "esws",
+      "sub": "DB",
+      "aliases": [
+        "ESWC",
+        "European Semantic Web Conference",
+        "esws"
+      ]
+    },
+    {
+      "abbr": "ICDE",
+      "name": "IEEE International Conference on Data Engineering",
+      "rank": "A",
+      "dblp": "icde",
+      "sub": "DB",
+      "aliases": [
+        "ICDE",
+        "IEEE International Conference on Data Engineering",
+        "icde"
+      ]
+    },
+    {
+      "abbr": "ICDM",
+      "name": "IEEE International Conference on Data Mining",
+      "rank": "B",
+      "dblp": "icdm",
+      "sub": "DB",
+      "aliases": [
+        "ICDM",
+        "IEEE International Conference on Data Mining",
+        "icdm"
+      ]
+    },
+    {
+      "abbr": "ICDT",
+      "name": "International Conference on Database Theory",
+      "rank": "B",
+      "dblp": "icdt",
+      "sub": "DB",
+      "aliases": [
+        "ICDT",
+        "International Conference on Database Theory",
+        "icdt"
+      ]
+    },
+    {
+      "abbr": "ISWC",
+      "name": "International Semantic Web Conference",
+      "rank": "B",
+      "dblp": "semweb",
+      "sub": "DB",
+      "aliases": [
+        "ISWC",
+        "International Semantic Web Conference",
+        "semweb"
+      ]
+    },
+    {
+      "abbr": "PAKDD",
+      "name": "Pacific-Asia Conference on Knowledge Discovery and Data Mining",
+      "rank": "C",
+      "dblp": "pakdd",
+      "sub": "DB",
+      "aliases": [
+        "PAKDD",
+        "Pacific-Asia Conference on Knowledge Discovery and Data Mining",
+        "pakdd"
+      ]
+    },
+    {
+      "abbr": "ECML-PKDD",
+      "name": "European Conference on Machine Learning and 25th Principles and Practice of Knowledge Discovery in Databases",
+      "rank": "B",
+      "dblp": "pkdd",
+      "sub": "DB",
+      "aliases": [
+        "ECML-PKDD",
+        "European Conference on Machine Learning and 25th Principles and Practice of Knowledge Discovery in Databases",
+        "pkdd"
+      ]
+    },
+    {
+      "abbr": "PODS",
+      "name": "ACM Symposium on Principles of Database Systems",
+      "rank": "B",
+      "dblp": "pods",
+      "sub": "DB",
+      "aliases": [
+        "PODS",
+        "ACM Symposium on Principles of Database Systems",
+        "pods"
+      ]
+    },
+    {
+      "abbr": "RecSys",
+      "name": "ACM Conference on Recommender Systems",
+      "rank": "B",
+      "dblp": "recsys",
+      "sub": "DB",
+      "aliases": [
+        "RecSys",
+        "ACM Conference on Recommender Systems",
+        "recsys"
+      ]
+    },
+    {
+      "abbr": "SDM",
+      "name": "SIAM International Conference on Data Mining",
+      "rank": "B",
+      "dblp": "sdm",
+      "sub": "DB",
+      "aliases": [
+        "SDM",
+        "SIAM International Conference on Data Mining",
+        "sdm"
+      ]
+    },
+    {
+      "abbr": "SIGIR",
+      "name": "International Conference on Research on Development in Information Retrieval",
+      "rank": "A",
+      "dblp": "sigir",
+      "sub": "DB",
+      "aliases": [
+        "SIGIR",
+        "International Conference on Research on Development in Information Retrieval",
+        "sigir"
+      ]
+    },
+    {
+      "abbr": "SIGKDD",
+      "name": "ACM Knowledge Discovery and Data Mining",
+      "rank": "A",
+      "dblp": "kdd",
+      "sub": "DB",
+      "aliases": [
+        "SIGKDD",
+        "ACM Knowledge Discovery and Data Mining",
+        "kdd"
+      ]
+    },
+    {
+      "abbr": "SIGMOD",
+      "name": "ACM Conference on Management of Data",
+      "rank": "A",
+      "dblp": "sigmod",
+      "sub": "DB",
+      "aliases": [
+        "SIGMOD",
+        "ACM Conference on Management of Data",
+        "sigmod"
+      ]
+    },
+    {
+      "abbr": "VLDB",
+      "name": "International Conference on Very Large Data Bases",
+      "rank": "A",
+      "dblp": "vldb",
+      "sub": "DB",
+      "aliases": [
+        "VLDB",
+        "International Conference on Very Large Data Bases",
+        "vldb"
+      ]
+    },
+    {
+      "abbr": "WISA",
+      "name": "Web Information Systems and Applications",
+      "rank": "C",
+      "dblp": "wisa",
+      "sub": "DB",
+      "aliases": [
+        "WISA",
+        "Web Information Systems and Applications",
+        "wisa"
+      ]
+    },
+    {
+      "abbr": "WISE",
+      "name": "International Conference on Web Information Systems Engineering",
+      "rank": "B",
+      "dblp": "wise",
+      "sub": "DB",
+      "aliases": [
+        "WISE",
+        "International Conference on Web Information Systems Engineering",
+        "wise"
+      ]
+    },
+    {
+      "abbr": "WSDM",
+      "name": "International Conference on Web Search and Data Mining",
+      "rank": "B",
+      "dblp": "wsdm",
+      "sub": "DB",
+      "aliases": [
+        "WSDM",
+        "International Conference on Web Search and Data Mining",
+        "wsdm"
+      ]
+    },
+    {
+      "abbr": "APPT",
+      "name": "International Symposium on Advanced Parallel Programming Technologies",
+      "rank": "C",
+      "dblp": "appt",
+      "sub": "DS",
+      "aliases": [
+        "APPT",
+        "International Symposium on Advanced Parallel Programming Technologies",
+        "appt"
+      ]
+    },
+    {
+      "abbr": "ASAP",
+      "name": "IEEE International Conference on Application-Specific Systems, Architectures, and Processors",
+      "rank": "C",
+      "dblp": "asap",
+      "sub": "DS",
+      "aliases": [
+        "ASAP",
+        "IEEE International Conference on Application-Specific Systems, Architectures, and Processors",
+        "asap"
+      ]
+    },
+    {
+      "abbr": "ASP-DAC",
+      "name": "Asia and South Pacific Design Automation Conference",
+      "rank": "C",
+      "dblp": "aspdac",
+      "sub": "DS",
+      "aliases": [
+        "ASP-DAC",
+        "Asia and South Pacific Design Automation Conference",
+        "aspdac"
+      ]
+    },
+    {
+      "abbr": "ASPLOS",
+      "name": "International Conference on Architectural Support for Programming Languages and Operating Systems",
+      "rank": "A",
+      "dblp": "asplos",
+      "sub": "DS",
+      "aliases": [
+        "ASPLOS",
+        "International Conference on Architectural Support for Programming Languages and Operating Systems",
+        "asplos"
+      ]
+    },
+    {
+      "abbr": "SIGOPS ATC",
+      "name": "ACM SIGOPS Annual Technical Conference",
+      "rank": "A",
+      "dblp": "usenix",
+      "sub": "DS",
+      "aliases": [
+        "SIGOPS ATC",
+        "ACM SIGOPS Annual Technical Conference",
+        "usenix"
+      ]
+    },
+    {
+      "abbr": "ATS",
+      "name": "IEEE Asian Test Symposium",
+      "rank": "C",
+      "dblp": "ats",
+      "sub": "DS",
+      "aliases": [
+        "ATS",
+        "IEEE Asian Test Symposium",
+        "ats"
+      ]
+    },
+    {
+      "abbr": "CCGRID",
+      "name": "IEEE International Symposium on Cluster, Cloud and Internet Computing",
+      "rank": "C",
+      "dblp": "ccgrid",
+      "sub": "DS",
+      "aliases": [
+        "CCGRID",
+        "IEEE International Symposium on Cluster, Cloud and Internet Computing",
+        "ccgrid"
+      ]
+    },
+    {
+      "abbr": "CF",
+      "name": "ACM International Conference on Computing Frontiers",
+      "rank": "C",
+      "dblp": "cf",
+      "sub": "DS",
+      "aliases": [
+        "CF",
+        "ACM International Conference on Computing Frontiers",
+        "cf"
+      ]
+    },
+    {
+      "abbr": "IEEE/ACM CGO",
+      "name": "The International Symposium on Code Generation and Optimization",
+      "rank": "B",
+      "dblp": "cgo",
+      "sub": "DS",
+      "aliases": [
+        "IEEE/ACM CGO",
+        "The International Symposium on Code Generation and Optimization",
+        "cgo"
+      ]
+    },
+    {
+      "abbr": "CLUSTER",
+      "name": "IEEE International Conference on Cluster Computing",
+      "rank": "B",
+      "dblp": "cluster",
+      "sub": "DS",
+      "aliases": [
+        "CLUSTER",
+        "IEEE International Conference on Cluster Computing",
+        "cluster"
+      ]
+    },
+    {
+      "abbr": "CODES+ISSS",
+      "name": "International Conference on Hardware/Software Co-design and System Synthesis",
+      "rank": "B",
+      "dblp": "codes",
+      "sub": "DS",
+      "aliases": [
+        "CODES+ISSS",
+        "International Conference on Hardware/Software Co-design and System Synthesis",
+        "codes"
+      ]
+    },
+    {
+      "abbr": "DAC",
+      "name": "Design Automation Conference",
+      "rank": "A",
+      "dblp": "dac",
+      "sub": "DS",
+      "aliases": [
+        "DAC",
+        "Design Automation Conference",
+        "dac"
+      ]
+    },
+    {
+      "abbr": "DATE",
+      "name": "Design, Automation & Test in Europe",
+      "rank": "B",
+      "dblp": "date",
+      "sub": "DS",
+      "aliases": [
+        "DATE",
+        "Design, Automation & Test in Europe",
+        "date"
+      ]
+    },
+    {
+      "abbr": "ETS",
+      "name": "IEEE European Test Symposium",
+      "rank": "C",
+      "dblp": "ets",
+      "sub": "DS",
+      "aliases": [
+        "ETS",
+        "IEEE European Test Symposium",
+        "ets"
+      ]
+    },
+    {
+      "abbr": "Euro-Par",
+      "name": "European Conference on Parallel and Distributed Computing",
+      "rank": "B",
+      "dblp": "europar",
+      "sub": "DS",
+      "aliases": [
+        "Euro-Par",
+        "European Conference on Parallel and Distributed Computing",
+        "europar"
+      ]
+    },
+    {
+      "abbr": "EuroSys",
+      "name": "European Conference on Computer Systems",
+      "rank": "A",
+      "dblp": "eurosys",
+      "sub": "DS",
+      "aliases": [
+        "EuroSys",
+        "European Conference on Computer Systems",
+        "eurosys"
+      ]
+    },
+    {
+      "abbr": "FAST",
+      "name": "USENIX Conference on File and Storage Technologies",
+      "rank": "A",
+      "dblp": "fast",
+      "sub": "DS",
+      "aliases": [
+        "FAST",
+        "USENIX Conference on File and Storage Technologies",
+        "fast"
+      ]
+    },
+    {
+      "abbr": "FCCM",
+      "name": "IEEE Symposium on Field-Programmable Custom Computing Machines",
+      "rank": "C",
+      "dblp": "fccm",
+      "sub": "DS",
+      "aliases": [
+        "FCCM",
+        "IEEE Symposium on Field-Programmable Custom Computing Machines",
+        "fccm"
+      ]
+    },
+    {
+      "abbr": "FPGA",
+      "name": "ACM/SIGDA International Symposium on Field-Programmable Gate Arrays",
+      "rank": "B",
+      "dblp": "fpga",
+      "sub": "DS",
+      "aliases": [
+        "FPGA",
+        "ACM/SIGDA International Symposium on Field-Programmable Gate Arrays",
+        "fpga"
+      ]
+    },
+    {
+      "abbr": "FPT",
+      "name": "International Conference on Field Programmable Technology",
+      "rank": "C",
+      "dblp": "fpt",
+      "sub": "DS",
+      "aliases": [
+        "FPT",
+        "International Conference on Field Programmable Technology",
+        "fpt"
+      ]
+    },
+    {
+      "abbr": "GLSVLSI",
+      "name": "Great Lakes Symposium on VLSI",
+      "rank": "C",
+      "dblp": "glvlsi",
+      "sub": "DS",
+      "aliases": [
+        "GLSVLSI",
+        "Great Lakes Symposium on VLSI",
+        "glvlsi"
+      ]
+    },
+    {
+      "abbr": "HiPEAC",
+      "name": "International Conference on High Performance and Embedded Architectures and Compilers",
+      "rank": "B",
+      "dblp": "hipeac",
+      "sub": "DS",
+      "aliases": [
+        "HiPEAC",
+        "International Conference on High Performance and Embedded Architectures and Compilers",
+        "hipeac"
+      ]
+    },
+    {
+      "abbr": "Hot Chips",
+      "name": "Hot Chips: A Symposium on High Performance Chips",
+      "rank": "B",
+      "dblp": "hotchips",
+      "sub": "DS",
+      "aliases": [
+        "Hot Chips",
+        "Hot Chips: A Symposium on High Performance Chips",
+        "hotchips"
+      ]
+    },
+    {
+      "abbr": "HotStorage",
+      "name": "ACM Workshop on Hot Topics in Storage and File Systems",
+      "rank": "C",
+      "dblp": "hotstorage",
+      "sub": "DS",
+      "aliases": [
+        "HotStorage",
+        "ACM Workshop on Hot Topics in Storage and File Systems",
+        "hotstorage"
+      ]
+    },
+    {
+      "abbr": "HPCA",
+      "name": "IEEE International Symposium on High-Performance Computer Architecture",
+      "rank": "A",
+      "dblp": "hpca",
+      "sub": "DS",
+      "aliases": [
+        "HPCA",
+        "IEEE International Symposium on High-Performance Computer Architecture",
+        "hpca"
+      ]
+    },
+    {
+      "abbr": "HPCC",
+      "name": "IEEE International Conference on High Performance Computing and Communications",
+      "rank": "C",
+      "dblp": "hpcc",
+      "sub": "DS",
+      "aliases": [
+        "HPCC",
+        "IEEE International Conference on High Performance Computing and Communications",
+        "hpcc"
+      ]
+    },
+    {
+      "abbr": "HPDC",
+      "name": "ACM Symposium on High-Performance Parallel and Distributed Computing",
+      "rank": "A",
+      "dblp": "hpdc",
+      "sub": "DS",
+      "aliases": [
+        "HPDC",
+        "ACM Symposium on High-Performance Parallel and Distributed Computing",
+        "hpdc"
+      ]
+    },
+    {
+      "abbr": "ICA3PP",
+      "name": "International Conference on Algorithms and Architectures for Parallel Processing",
+      "rank": "C",
+      "dblp": "ica3pp",
+      "sub": "DS",
+      "aliases": [
+        "ICA3PP",
+        "International Conference on Algorithms and Architectures for Parallel Processing",
+        "ica3pp"
+      ]
+    },
+    {
+      "abbr": "ICCAD",
+      "name": "IEEE/ACM International Conference on Computer-Aided Design",
+      "rank": "B",
+      "dblp": "iccad",
+      "sub": "DS",
+      "aliases": [
+        "ICCAD",
+        "IEEE/ACM International Conference on Computer-Aided Design",
+        "iccad"
+      ]
+    },
+    {
+      "abbr": "ICCD",
+      "name": "International Conference on Computer Design",
+      "rank": "B",
+      "dblp": "iccd",
+      "sub": "DS",
+      "aliases": [
+        "ICCD",
+        "International Conference on Computer Design",
+        "iccd"
+      ]
+    },
+    {
+      "abbr": "ICDCS",
+      "name": "IEEE International Conference on Distributed Computing Systems",
+      "rank": "B",
+      "dblp": "icdcs",
+      "sub": "DS",
+      "aliases": [
+        "ICDCS",
+        "IEEE International Conference on Distributed Computing Systems",
+        "icdcs"
+      ]
+    },
+    {
+      "abbr": "ICPADS",
+      "name": "IEEE International Conference on Parallel and Distributed Systems",
+      "rank": "C",
+      "dblp": "icpads",
+      "sub": "DS",
+      "aliases": [
+        "ICPADS",
+        "IEEE International Conference on Parallel and Distributed Systems",
+        "icpads"
+      ]
+    },
+    {
+      "abbr": "ICPP",
+      "name": "International Conference on Parallel Processing",
+      "rank": "B",
+      "dblp": "icpp",
+      "sub": "DS",
+      "aliases": [
+        "ICPP",
+        "International Conference on Parallel Processing",
+        "icpp"
+      ]
+    },
+    {
+      "abbr": "ICS",
+      "name": "ACM International Conference on Supercomputing",
+      "rank": "B",
+      "dblp": "ics",
+      "sub": "DS",
+      "aliases": [
+        "ICS",
+        "ACM International Conference on Supercomputing",
+        "ics"
+      ]
+    },
+    {
+      "abbr": "IPDPS",
+      "name": "IEEE International Parallel and Distributed Processing Symposium",
+      "rank": "B",
+      "dblp": "ipps",
+      "sub": "DS",
+      "aliases": [
+        "IPDPS",
+        "IEEE International Parallel and Distributed Processing Symposium",
+        "ipps"
+      ]
+    },
+    {
+      "abbr": "ISCA",
+      "name": "International Symposium on Computer Architecture",
+      "rank": "A",
+      "dblp": "isca",
+      "sub": "DS",
+      "aliases": [
+        "ISCA",
+        "International Symposium on Computer Architecture",
+        "isca"
+      ]
+    },
+    {
+      "abbr": "ISCAS",
+      "name": "IEEE International Symposium on Circuits and Systems",
+      "rank": "B",
+      "dblp": "iscas",
+      "sub": "DS",
+      "aliases": [
+        "ISCAS",
+        "IEEE International Symposium on Circuits and Systems",
+        "iscas"
+      ]
+    },
+    {
+      "abbr": "ISPA",
+      "name": "IEEE International Symposium on Parallel and Distributed Processing with Applications",
+      "rank": "C",
+      "dblp": "ispa",
+      "sub": "DS",
+      "aliases": [
+        "ISPA",
+        "IEEE International Symposium on Parallel and Distributed Processing with Applications",
+        "ispa"
+      ]
+    },
+    {
+      "abbr": "ISPD",
+      "name": "International Symposium on Physical Design",
+      "rank": "C",
+      "dblp": "ispd",
+      "sub": "DS",
+      "aliases": [
+        "ISPD",
+        "International Symposium on Physical Design",
+        "ispd"
+      ]
+    },
+    {
+      "abbr": "ITC-Asia",
+      "name": "IEEE International Test Conference in Asia",
+      "rank": "C",
+      "dblp": "itc-asia",
+      "sub": "DS",
+      "aliases": [
+        "ITC-Asia",
+        "IEEE International Test Conference in Asia",
+        "itc-asia"
+      ]
+    },
+    {
+      "abbr": "ITC",
+      "name": "International Test Conference",
+      "rank": "B",
+      "dblp": "itc",
+      "sub": "DS",
+      "aliases": [
+        "ITC",
+        "International Test Conference",
+        "itc"
+      ]
+    },
+    {
+      "abbr": "JCC",
+      "name": "International Conference on JointCloud Computing",
+      "rank": "C",
+      "dblp": "N",
+      "sub": "DS",
+      "aliases": [
+        "JCC",
+        "International Conference on JointCloud Computing",
+        "N"
+      ]
+    },
+    {
+      "abbr": "LISA",
+      "name": "Large Installation System Administration Conference",
+      "rank": "B",
+      "dblp": "lisa",
+      "sub": "DS",
+      "aliases": [
+        "LISA",
+        "Large Installation System Administration Conference",
+        "lisa"
+      ]
+    },
+    {
+      "abbr": "MICRO",
+      "name": "IEEE/ACM International Symposium on Microarchitecture",
+      "rank": "A",
+      "dblp": "micro",
+      "sub": "DS",
+      "aliases": [
+        "MICRO",
+        "IEEE/ACM International Symposium on Microarchitecture",
+        "micro"
+      ]
+    },
+    {
+      "abbr": "MSST",
+      "name": "International Conference on Massive Storage Systems and Technology",
+      "rank": "B",
+      "dblp": "mss",
+      "sub": "DS",
+      "aliases": [
+        "MSST",
+        "International Conference on Massive Storage Systems and Technology",
+        "mss"
+      ]
+    },
+    {
+      "abbr": "PACT",
+      "name": "International Conference on Parallel Architectures and Compilation Techniques",
+      "rank": "B",
+      "dblp": "pact",
+      "sub": "DS",
+      "aliases": [
+        "PACT",
+        "International Conference on Parallel Architectures and Compilation Techniques",
+        "pact"
+      ]
+    },
+    {
+      "abbr": "Performance",
+      "name": "International Symposium on Computer Performance, Modeling, Measurements and Evaluation",
+      "rank": "B",
+      "dblp": "performance",
+      "sub": "DS",
+      "aliases": [
+        "Performance",
+        "International Symposium on Computer Performance, Modeling, Measurements and Evaluation",
+        "performance"
+      ]
+    },
+    {
+      "abbr": "PODC",
+      "name": "ACM Symposium on Principles of Distributed Computing",
+      "rank": "B",
+      "dblp": "podc",
+      "sub": "DS",
+      "aliases": [
+        "PODC",
+        "ACM Symposium on Principles of Distributed Computing",
+        "podc"
+      ]
+    },
+    {
+      "abbr": "PPoPP",
+      "name": "ACM SIGPLAN Symposium on Principles & Practice of Parallel Programming",
+      "rank": "A",
+      "dblp": "ppopp",
+      "sub": "DS",
+      "aliases": [
+        "PPoPP",
+        "ACM SIGPLAN Symposium on Principles & Practice of Parallel Programming",
+        "ppopp"
+      ]
+    },
+    {
+      "abbr": "RTAS",
+      "name": "IEEE Real-Time and Embedded Technology and Applications Symposium",
+      "rank": "B",
+      "dblp": "rtas",
+      "sub": "DS",
+      "aliases": [
+        "RTAS",
+        "IEEE Real-Time and Embedded Technology and Applications Symposium",
+        "rtas"
+      ]
+    },
+    {
+      "abbr": "SC",
+      "name": "International Conference for High Performance Computing, Networking, Storage, and Analysis",
+      "rank": "A",
+      "dblp": "sc",
+      "sub": "DS",
+      "aliases": [
+        "SC",
+        "International Conference for High Performance Computing, Networking, Storage, and Analysis",
+        "sc"
+      ]
+    },
+    {
+      "abbr": "SEC",
+      "name": "ACM/IEEE Symposium on Edge Computing",
+      "rank": "C",
+      "dblp": "ieeesec",
+      "sub": "DS",
+      "aliases": [
+        "SEC",
+        "ACM/IEEE Symposium on Edge Computing",
+        "ieeesec"
+      ]
+    },
+    {
+      "abbr": "SIGMETRICS",
+      "name": "ACM Special Interest Group on Measurement and Evaluation",
+      "rank": "B",
+      "dblp": "sigmetrics",
+      "sub": "DS",
+      "aliases": [
+        "SIGMETRICS",
+        "ACM Special Interest Group on Measurement and Evaluation",
+        "sigmetrics"
+      ]
+    },
+    {
+      "abbr": "SoCC",
+      "name": "ACM Symposium on Cloud Computing",
+      "rank": "B",
+      "dblp": "cloud",
+      "sub": "DS",
+      "aliases": [
+        "SoCC",
+        "ACM Symposium on Cloud Computing",
+        "cloud"
+      ]
+    },
+    {
+      "abbr": "SPAA",
+      "name": "ACM Symposium on Parallelism in Algorithms and Architectures",
+      "rank": "B",
+      "dblp": "spaa",
+      "sub": "DS",
+      "aliases": [
+        "SPAA",
+        "ACM Symposium on Parallelism in Algorithms and Architectures",
+        "spaa"
+      ]
+    },
+    {
+      "abbr": "SYSTOR",
+      "name": "The ACM International Systems and Storage Conference",
+      "rank": "C",
+      "dblp": "systor",
+      "sub": "DS",
+      "aliases": [
+        "SYSTOR",
+        "The ACM International Systems and Storage Conference",
+        "systor"
+      ]
+    },
+    {
+      "abbr": "VEE",
+      "name": "Virtual Execution Environments",
+      "rank": "B",
+      "dblp": "vee",
+      "sub": "DS",
+      "aliases": [
+        "VEE",
+        "Virtual Execution Environments",
+        "vee"
+      ]
+    },
+    {
+      "abbr": "ASSETS",
+      "name": "ACM SIGACCESS Conference on Computers and Accessibility",
+      "rank": "C",
+      "dblp": "assets",
+      "sub": "HI",
+      "aliases": [
+        "ASSETS",
+        "ACM SIGACCESS Conference on Computers and Accessibility",
+        "assets"
+      ]
+    },
+    {
+      "abbr": "CHI",
+      "name": "ACM Conference on Human Factors in Computing Systems",
+      "rank": "A",
+      "dblp": "chi",
+      "sub": "HI",
+      "aliases": [
+        "CHI",
+        "ACM Conference on Human Factors in Computing Systems",
+        "chi"
+      ]
+    },
+    {
+      "abbr": "CollaborateCom",
+      "name": "International Conference on Collaborative Computing: Networking, Applications and Worksharing",
+      "rank": "C",
+      "dblp": "colcom",
+      "sub": "HI",
+      "aliases": [
+        "CollaborateCom",
+        "International Conference on Collaborative Computing: Networking, Applications and Worksharing",
+        "colcom"
+      ]
+    },
+    {
+      "abbr": "CSCW",
+      "name": "ACM Conference on Computer Supported Cooperative Work and Social Computing",
+      "rank": "A",
+      "dblp": "cscw",
+      "sub": "HI",
+      "aliases": [
+        "CSCW",
+        "ACM Conference on Computer Supported Cooperative Work and Social Computing",
+        "cscw"
+      ]
+    },
+    {
+      "abbr": "CSCWD",
+      "name": "International Conference on Computer Supported Cooperative Work in Design",
+      "rank": "C",
+      "dblp": "cscwd",
+      "sub": "HI",
+      "aliases": [
+        "CSCWD",
+        "International Conference on Computer Supported Cooperative Work in Design",
+        "cscwd"
+      ]
+    },
+    {
+      "abbr": "DIS",
+      "name": "ACM Conference on Designing Interactive Systems",
+      "rank": "C",
+      "dblp": "ACMdis",
+      "sub": "HI",
+      "aliases": [
+        "DIS",
+        "ACM Conference on Designing Interactive Systems",
+        "ACMdis"
+      ]
+    },
+    {
+      "abbr": "ECSCW",
+      "name": "European Conference on Computer Supported Cooperative Work",
+      "rank": "B",
+      "dblp": "ecscw",
+      "sub": "HI",
+      "aliases": [
+        "ECSCW",
+        "European Conference on Computer Supported Cooperative Work",
+        "ecscw"
+      ]
+    },
+    {
+      "abbr": "GI",
+      "name": "Graphics Interface",
+      "rank": "C",
+      "dblp": "graphicsinterface",
+      "sub": "HI",
+      "aliases": [
+        "GI",
+        "Graphics Interface",
+        "graphicsinterface"
+      ]
+    },
+    {
+      "abbr": "GROUP",
+      "name": "ACM International Conference on Supporting Group Work",
+      "rank": "B",
+      "dblp": "group",
+      "sub": "HI",
+      "aliases": [
+        "GROUP",
+        "ACM International Conference on Supporting Group Work",
+        "group"
+      ]
+    },
+    {
+      "abbr": "ICMI",
+      "name": "ACM International Conference on Multimodal Interaction",
+      "rank": "C",
+      "dblp": "icmi",
+      "sub": "HI",
+      "aliases": [
+        "ICMI",
+        "ACM International Conference on Multimodal Interaction",
+        "icmi"
+      ]
+    },
+    {
+      "abbr": "ICWSM",
+      "name": "The International AAAI Conference on Web and Social Media",
+      "rank": "B",
+      "dblp": "icwsm",
+      "sub": "HI",
+      "aliases": [
+        "ICWSM",
+        "The International AAAI Conference on Web and Social Media",
+        "icwsm"
+      ]
+    },
+    {
+      "abbr": "IDC",
+      "name": "ACM Interaction Design and Children Conference",
+      "rank": "C",
+      "dblp": "acmidc",
+      "sub": "HI",
+      "aliases": [
+        "IDC",
+        "ACM Interaction Design and Children Conference",
+        "acmidc"
+      ]
+    },
+    {
+      "abbr": "INTERACT",
+      "name": "IFIP TC13 International Conference on Human-Computer Interaction",
+      "rank": "C",
+      "dblp": "interact",
+      "sub": "HI",
+      "aliases": [
+        "INTERACT",
+        "IFIP TC13 International Conference on Human-Computer Interaction",
+        "interact"
+      ]
+    },
+    {
+      "abbr": "ISS",
+      "name": "ACM International Conference on Interactive Surfaces and Spaces",
+      "rank": "B",
+      "dblp": "tabletop",
+      "sub": "HI",
+      "aliases": [
+        "ISS",
+        "ACM International Conference on Interactive Surfaces and Spaces",
+        "tabletop"
+      ]
+    },
+    {
+      "abbr": "IUI",
+      "name": "ACM Conference on Intelligent User Interfaces",
+      "rank": "B",
+      "dblp": "iui",
+      "sub": "HI",
+      "aliases": [
+        "IUI",
+        "ACM Conference on Intelligent User Interfaces",
+        "iui"
+      ]
+    },
+    {
+      "abbr": "MobileHCI",
+      "name": "ACM International Conference on Mobile Human-Computer Interaction",
+      "rank": "B",
+      "dblp": "mhci",
+      "sub": "HI",
+      "aliases": [
+        "MobileHCI",
+        "ACM International Conference on Mobile Human-Computer Interaction",
+        "mhci"
+      ]
+    },
+    {
+      "abbr": "PerCom",
+      "name": "IEEE International Conference on Pervasive Computing and Communications",
+      "rank": "B",
+      "dblp": "percom",
+      "sub": "HI",
+      "aliases": [
+        "PerCom",
+        "IEEE International Conference on Pervasive Computing and Communications",
+        "percom"
+      ]
+    },
+    {
+      "abbr": "UbiComp/ISWC",
+      "name": "ACM International Joint Conference on Pervasive and Ubiquitous Computing",
+      "rank": "A",
+      "dblp": "huc",
+      "sub": "HI",
+      "aliases": [
+        "UbiComp/ISWC",
+        "ACM International Joint Conference on Pervasive and Ubiquitous Computing",
+        "huc"
+      ]
+    },
+    {
+      "abbr": "UIC",
+      "name": "IEEE International Conference on Ubiquitous Intelligence and Computing",
+      "rank": "C",
+      "dblp": "uic",
+      "sub": "HI",
+      "aliases": [
+        "UIC",
+        "IEEE International Conference on Ubiquitous Intelligence and Computing",
+        "uic"
+      ]
+    },
+    {
+      "abbr": "UIST",
+      "name": "ACM Symposium on User Interface Software and Technology",
+      "rank": "A",
+      "dblp": "uist",
+      "sub": "HI",
+      "aliases": [
+        "UIST",
+        "ACM Symposium on User Interface Software and Technology",
+        "uist"
+      ]
+    },
+    {
+      "abbr": "WHC",
+      "name": "IEEE World Haptics Conference",
+      "rank": "C",
+      "dblp": "haptics",
+      "sub": "HI",
+      "aliases": [
+        "WHC",
+        "IEEE World Haptics Conference",
+        "haptics"
+      ]
+    },
+    {
+      "abbr": "AFT",
+      "name": "Advances in Financial Technologies",
+      "rank": "C",
+      "dblp": "aft",
+      "sub": "MX",
+      "aliases": [
+        "AFT",
+        "Advances in Financial Technologies",
+        "aft"
+      ]
+    },
+    {
+      "abbr": "APBC",
+      "name": "Asia Pacific Bioinformatics Conference",
+      "rank": "C",
+      "dblp": "apbc",
+      "sub": "MX",
+      "aliases": [
+        "APBC",
+        "Asia Pacific Bioinformatics Conference",
+        "apbc"
+      ]
+    },
+    {
+      "abbr": "BIBM",
+      "name": "IEEE International Conference on Bioinformatics and Biomedicine",
+      "rank": "B",
+      "dblp": "bibm",
+      "sub": "MX",
+      "aliases": [
+        "BIBM",
+        "IEEE International Conference on Bioinformatics and Biomedicine",
+        "bibm"
+      ]
+    },
+    {
+      "abbr": "BigData",
+      "name": "IEEE International Conference on Big Data",
+      "rank": "C",
+      "dblp": "bigdataconf",
+      "sub": "MX",
+      "aliases": [
+        "BigData",
+        "IEEE International Conference on Big Data",
+        "bigdataconf"
+      ]
+    },
+    {
+      "abbr": "Cloud",
+      "name": "IEEE International Conference on Cloud Computing",
+      "rank": "C",
+      "dblp": "IEEEcloud",
+      "sub": "MX",
+      "aliases": [
+        "Cloud",
+        "IEEE International Conference on Cloud Computing",
+        "IEEEcloud"
+      ]
+    },
+    {
+      "abbr": "CogSci",
+      "name": "Annual Meeting of the Cognitive Science Society",
+      "rank": "B",
+      "dblp": "cogsci",
+      "sub": "MX",
+      "aliases": [
+        "CogSci",
+        "Annual Meeting of the Cognitive Science Society",
+        "cogsci"
+      ]
+    },
+    {
+      "abbr": "EMSOFT",
+      "name": "International Conference on Embedded Software",
+      "rank": "B",
+      "dblp": "emsoft",
+      "sub": "MX",
+      "aliases": [
+        "EMSOFT",
+        "International Conference on Embedded Software",
+        "emsoft"
+      ]
+    },
+    {
+      "abbr": "ICIC",
+      "name": "International Conference on Intelligent Computing",
+      "rank": "C",
+      "dblp": "icic",
+      "sub": "MX",
+      "aliases": [
+        "ICIC",
+        "International Conference on Intelligent Computing",
+        "icic"
+      ]
+    },
+    {
+      "abbr": "ISBRA",
+      "name": "International Symposium on Bioinformatics Research and Applications",
+      "rank": "C",
+      "dblp": "isbra",
+      "sub": "MX",
+      "aliases": [
+        "ISBRA",
+        "International Symposium on Bioinformatics Research and Applications",
+        "isbra"
+      ]
+    },
+    {
+      "abbr": "ISMB",
+      "name": "International Conference on Intelligent Systems for Molecular Biology",
+      "rank": "B",
+      "dblp": "ismb",
+      "sub": "MX",
+      "aliases": [
+        "ISMB",
+        "International Conference on Intelligent Systems for Molecular Biology",
+        "ismb"
+      ]
+    },
+    {
+      "abbr": "MICCAI",
+      "name": "International Conference on Medical Image Computing and Computer Assisted Intervention",
+      "rank": "B",
+      "dblp": "miccai",
+      "sub": "MX",
+      "aliases": [
+        "MICCAI",
+        "International Conference on Medical Image Computing and Computer Assisted Intervention",
+        "miccai"
+      ]
+    },
+    {
+      "abbr": "RECOMB",
+      "name": "International Conference on Research inComputational Molecular Biology",
+      "rank": "B",
+      "dblp": "recomb",
+      "sub": "MX",
+      "aliases": [
+        "RECOMB",
+        "International Conference on Research inComputational Molecular Biology",
+        "recomb"
+      ]
+    },
+    {
+      "abbr": "RTSS",
+      "name": "The IEEE Real-Time Systems Symposium",
+      "rank": "A",
+      "dblp": "rtss",
+      "sub": "MX",
+      "aliases": [
+        "RTSS",
+        "The IEEE Real-Time Systems Symposium",
+        "rtss"
+      ]
+    },
+    {
+      "abbr": "SIGSPATIAL",
+      "name": "ACM SIGSPATIAL International Conference on Advances in Geographic Information Systems",
+      "rank": "C",
+      "dblp": "sigspatial",
+      "sub": "MX",
+      "aliases": [
+        "SIGSPATIAL",
+        "ACM SIGSPATIAL International Conference on Advances in Geographic Information Systems",
+        "sigspatial"
+      ]
+    },
+    {
+      "abbr": "SMC",
+      "name": "IEEE International Conference on Systems, Man, and Cybernetics",
+      "rank": "C",
+      "dblp": "smc",
+      "sub": "MX",
+      "aliases": [
+        "SMC",
+        "IEEE International Conference on Systems, Man, and Cybernetics",
+        "smc"
+      ]
+    },
+    {
+      "abbr": "WINE",
+      "name": "Conference on Web and Internet Economics",
+      "rank": "B",
+      "dblp": "wine",
+      "sub": "MX",
+      "aliases": [
+        "WINE",
+        "Conference on Web and Internet Economics",
+        "wine"
+      ]
+    },
+    {
+      "abbr": "WWW",
+      "name": "International World Wide Web Conferences",
+      "rank": "A",
+      "dblp": "www",
+      "sub": "MX",
+      "aliases": [
+        "WWW",
+        "International World Wide Web Conferences",
+        "www"
+      ]
+    },
+    {
+      "abbr": "APNet",
+      "name": "Asia-Pacific Workshop on Networking",
+      "rank": "C",
+      "dblp": "apnet",
+      "sub": "NW",
+      "aliases": [
+        "APNet",
+        "Asia-Pacific Workshop on Networking",
+        "apnet"
+      ]
+    },
+    {
+      "abbr": "CoNEXT",
+      "name": "International Conference on Emerging Networking Experiments and Technologies",
+      "rank": "B",
+      "dblp": "conext",
+      "sub": "NW",
+      "aliases": [
+        "CoNEXT",
+        "International Conference on Emerging Networking Experiments and Technologies",
+        "conext"
+      ]
+    },
+    {
+      "abbr": "FORTE",
+      "name": "International Conference on Formal Techniques for (Networked and) Distributed Systems",
+      "rank": "C",
+      "dblp": "forte",
+      "sub": "NW",
+      "aliases": [
+        "FORTE",
+        "International Conference on Formal Techniques for (Networked and) Distributed Systems",
+        "forte"
+      ]
+    },
+    {
+      "abbr": "GLOBECOM",
+      "name": "IEEE Global Communications Conference",
+      "rank": "C",
+      "dblp": "globecom",
+      "sub": "NW",
+      "aliases": [
+        "GLOBECOM",
+        "IEEE Global Communications Conference",
+        "globecom"
+      ]
+    },
+    {
+      "abbr": "HotNets",
+      "name": "ACM Workshop on Hot Topics in Networks",
+      "rank": "C",
+      "dblp": "hotnets",
+      "sub": "NW",
+      "aliases": [
+        "HotNets",
+        "ACM Workshop on Hot Topics in Networks",
+        "hotnets"
+      ]
+    },
+    {
+      "abbr": "ICC",
+      "name": "IEEE International Conference on Communications",
+      "rank": "C",
+      "dblp": "icc",
+      "sub": "NW",
+      "aliases": [
+        "ICC",
+        "IEEE International Conference on Communications",
+        "icc"
+      ]
+    },
+    {
+      "abbr": "ICCCN",
+      "name": "IEEE International Conference on Computer Communications and Networks",
+      "rank": "C",
+      "dblp": "icccn",
+      "sub": "NW",
+      "aliases": [
+        "ICCCN",
+        "IEEE International Conference on Computer Communications and Networks",
+        "icccn"
+      ]
+    },
+    {
+      "abbr": "ICNP",
+      "name": "IEEE International Conference on Network Protocols",
+      "rank": "B",
+      "dblp": "icnp",
+      "sub": "NW",
+      "aliases": [
+        "ICNP",
+        "IEEE International Conference on Network Protocols",
+        "icnp"
+      ]
+    },
+    {
+      "abbr": "IMC",
+      "name": "ACM Internet Measurement Conference",
+      "rank": "B",
+      "dblp": "imc",
+      "sub": "NW",
+      "aliases": [
+        "IMC",
+        "ACM Internet Measurement Conference",
+        "imc"
+      ]
+    },
+    {
+      "abbr": "INFOCOM",
+      "name": "IEEE International Conference on Computer Communications",
+      "rank": "A",
+      "dblp": "infocom",
+      "sub": "NW",
+      "aliases": [
+        "INFOCOM",
+        "IEEE International Conference on Computer Communications",
+        "infocom"
+      ]
+    },
+    {
+      "abbr": "IPSN",
+      "name": "ACM/IEEE International Conference on Information Processing in Sensor Networks",
+      "rank": "B",
+      "dblp": "ipsn",
+      "sub": "NW",
+      "aliases": [
+        "IPSN",
+        "ACM/IEEE International Conference on Information Processing in Sensor Networks",
+        "ipsn"
+      ]
+    },
+    {
+      "abbr": "ISCC",
+      "name": "IEEE Symposium on Computers and Communications",
+      "rank": "C",
+      "dblp": "iscc",
+      "sub": "NW",
+      "aliases": [
+        "ISCC",
+        "IEEE Symposium on Computers and Communications",
+        "iscc"
+      ]
+    },
+    {
+      "abbr": "IWQoS",
+      "name": "IEEE/ACM International Symposium on Quality of Service",
+      "rank": "B",
+      "dblp": "iwqos",
+      "sub": "NW",
+      "aliases": [
+        "IWQoS",
+        "IEEE/ACM International Symposium on Quality of Service",
+        "iwqos"
+      ]
+    },
+    {
+      "abbr": "LCN",
+      "name": "IEEE Conference on Local Computer Networks",
+      "rank": "C",
+      "dblp": "lcn",
+      "sub": "NW",
+      "aliases": [
+        "LCN",
+        "IEEE Conference on Local Computer Networks",
+        "lcn"
+      ]
+    },
+    {
+      "abbr": "MobiCom",
+      "name": "ACM Annual International Conference On Mobile Computing And Networking",
+      "rank": "A",
+      "dblp": "mobicom",
+      "sub": "NW",
+      "aliases": [
+        "MobiCom",
+        "ACM Annual International Conference On Mobile Computing And Networking",
+        "mobicom"
+      ]
+    },
+    {
+      "abbr": "MobiHoc",
+      "name": "International Symposium on Mobile Ad Hoc Networking and Computing",
+      "rank": "B",
+      "dblp": "mobihoc",
+      "sub": "NW",
+      "aliases": [
+        "MobiHoc",
+        "International Symposium on Mobile Ad Hoc Networking and Computing",
+        "mobihoc"
+      ]
+    },
+    {
+      "abbr": "MobiSys",
+      "name": "ACM International Conference on Mobile Systems, Applications, and Services",
+      "rank": "B",
+      "dblp": "mobisys",
+      "sub": "NW",
+      "aliases": [
+        "MobiSys",
+        "ACM International Conference on Mobile Systems, Applications, and Services",
+        "mobisys"
+      ]
+    },
+    {
+      "abbr": "MSN",
+      "name": "International Conference on Mobility, Sensing and Networking",
+      "rank": "C",
+      "dblp": "msn",
+      "sub": "NW",
+      "aliases": [
+        "MSN",
+        "International Conference on Mobility, Sensing and Networking",
+        "msn"
+      ]
+    },
+    {
+      "abbr": "MSWiM",
+      "name": "International Conference on Modeling, Analysis and Simulation of Wireless and Mobile Systems",
+      "rank": "C",
+      "dblp": "mswim",
+      "sub": "NW",
+      "aliases": [
+        "MSWiM",
+        "International Conference on Modeling, Analysis and Simulation of Wireless and Mobile Systems",
+        "mswim"
+      ]
+    },
+    {
+      "abbr": "Networking",
+      "name": "IFIP International Conference on Networking",
+      "rank": "C",
+      "dblp": "networking",
+      "sub": "NW",
+      "aliases": [
+        "Networking",
+        "IFIP International Conference on Networking",
+        "networking"
+      ]
+    },
+    {
+      "abbr": "NOSSDAV",
+      "name": "International Workshop on Network and Operating System Support for Digital Audio and Video",
+      "rank": "B",
+      "dblp": "nossdav",
+      "sub": "NW",
+      "aliases": [
+        "NOSSDAV",
+        "International Workshop on Network and Operating System Support for Digital Audio and Video",
+        "nossdav"
+      ]
+    },
+    {
+      "abbr": "NSDI",
+      "name": "USENIX Symposium on Networked Systems Design and Implementation",
+      "rank": "A",
+      "dblp": "nsdi",
+      "sub": "NW",
+      "aliases": [
+        "NSDI",
+        "USENIX Symposium on Networked Systems Design and Implementation",
+        "nsdi"
+      ]
+    },
+    {
+      "abbr": "SECON",
+      "name": "IEEE International Conference on Sensing, Communication, and Networking",
+      "rank": "B",
+      "dblp": "secon",
+      "sub": "NW",
+      "aliases": [
+        "SECON",
+        "IEEE International Conference on Sensing, Communication, and Networking",
+        "secon"
+      ]
+    },
+    {
+      "abbr": "SenSys",
+      "name": "ACM Conference on Embedded Networked Sensor Systems",
+      "rank": "B",
+      "dblp": "sensys",
+      "sub": "NW",
+      "aliases": [
+        "SenSys",
+        "ACM Conference on Embedded Networked Sensor Systems",
+        "sensys"
+      ]
+    },
+    {
+      "abbr": "SIGCOMM",
+      "name": "ACM International Conference on Applications, Technologies, Architectures, and Protocols for Computer Communication",
+      "rank": "A",
+      "dblp": "sigcomm",
+      "sub": "NW",
+      "aliases": [
+        "SIGCOMM",
+        "ACM International Conference on Applications, Technologies, Architectures, and Protocols for Computer Communication",
+        "sigcomm"
+      ]
+    },
+    {
+      "abbr": "WASA",
+      "name": "International Conference on Wireless Algorithms, Systems, and Applications",
+      "rank": "C",
+      "dblp": "wasa",
+      "sub": "NW",
+      "aliases": [
+        "WASA",
+        "International Conference on Wireless Algorithms, Systems, and Applications",
+        "wasa"
+      ]
+    },
+    {
+      "abbr": "WCNC",
+      "name": "IEEE Wireless Communications and Networking Conference",
+      "rank": "C",
+      "dblp": "wcnc",
+      "sub": "NW",
+      "aliases": [
+        "WCNC",
+        "IEEE Wireless Communications and Networking Conference",
+        "wcnc"
+      ]
+    },
+    {
+      "abbr": "WoWMoM",
+      "name": "IEEE International Symposium on a World of Wireless, Mobile and Multimedia Networks",
+      "rank": "C",
+      "dblp": "wowmom",
+      "sub": "NW",
+      "aliases": [
+        "WoWMoM",
+        "IEEE International Symposium on a World of Wireless, Mobile and Multimedia Networks",
+        "wowmom"
+      ]
+    },
+    {
+      "abbr": "ACISP",
+      "name": "Australasia Conference on Information Security and Privacy",
+      "rank": "C",
+      "dblp": "acisp",
+      "sub": "SC",
+      "aliases": [
+        "ACISP",
+        "Australasia Conference on Information Security and Privacy",
+        "acisp"
+      ]
+    },
+    {
+      "abbr": "ACNS",
+      "name": "Applied Cryptography and Network Security",
+      "rank": "C",
+      "dblp": "acns",
+      "sub": "SC",
+      "aliases": [
+        "ACNS",
+        "Applied Cryptography and Network Security",
+        "acns"
+      ]
+    },
+    {
+      "abbr": "ACSAC",
+      "name": "Annual Computer Security Applications Conference",
+      "rank": "B",
+      "dblp": "acsac",
+      "sub": "SC",
+      "aliases": [
+        "ACSAC",
+        "Annual Computer Security Applications Conference",
+        "acsac"
+      ]
+    },
+    {
+      "abbr": "AsiaCCS",
+      "name": "Asia Conference on Computer and Communications Security",
+      "rank": "C",
+      "dblp": "ccs",
+      "sub": "SC",
+      "aliases": [
+        "AsiaCCS",
+        "Asia Conference on Computer and Communications Security",
+        "ccs"
+      ]
+    },
+    {
+      "abbr": "ASIACRYPT",
+      "name": "International Conference on the Theory and Application of Cryptology and Information Security",
+      "rank": "B",
+      "dblp": "asiacrypt",
+      "sub": "SC",
+      "aliases": [
+        "ASIACRYPT",
+        "International Conference on the Theory and Application of Cryptology and Information Security",
+        "asiacrypt"
+      ]
+    },
+    {
+      "abbr": "BlockSys",
+      "name": "International Conference on Blockchain, Artificial Intelligence, and Trustworthy Systems",
+      "rank": "C",
+      "dblp": "blocksys",
+      "sub": "SC",
+      "aliases": [
+        "BlockSys",
+        "International Conference on Blockchain, Artificial Intelligence, and Trustworthy Systems",
+        "blocksys"
+      ]
+    },
+    {
+      "abbr": "CCS",
+      "name": "ACM Conference on Computer and Communications Security",
+      "rank": "A",
+      "dblp": "ccs",
+      "sub": "SC",
+      "aliases": [
+        "CCS",
+        "ACM Conference on Computer and Communications Security",
+        "ccs"
+      ]
+    },
+    {
+      "abbr": "CHES",
+      "name": "International Conference on Cryptographic Hardware and Embedded Systems",
+      "rank": "B",
+      "dblp": "ches",
+      "sub": "SC",
+      "aliases": [
+        "CHES",
+        "International Conference on Cryptographic Hardware and Embedded Systems",
+        "ches"
+      ]
+    },
+    {
+      "abbr": "CODASPY",
+      "name": "ACM Conference on Data and Application Security and Privacy",
+      "rank": "C",
+      "dblp": "codaspy",
+      "sub": "SC",
+      "aliases": [
+        "CODASPY",
+        "ACM Conference on Data and Application Security and Privacy",
+        "codaspy"
+      ]
+    },
+    {
+      "abbr": "CRYPTO",
+      "name": "International Cryptology Conference",
+      "rank": "A",
+      "dblp": "crypto",
+      "sub": "SC",
+      "aliases": [
+        "CRYPTO",
+        "International Cryptology Conference",
+        "crypto"
+      ]
+    },
+    {
+      "abbr": "CSCloud",
+      "name": "IEEE International Conference on Cyber Security and Cloud Computing",
+      "rank": "C",
+      "dblp": "cscloud",
+      "sub": "SC",
+      "aliases": [
+        "CSCloud",
+        "IEEE International Conference on Cyber Security and Cloud Computing",
+        "cscloud"
+      ]
+    },
+    {
+      "abbr": "CSFW",
+      "name": "IEEE Computer Security Foundations Symposium",
+      "rank": "B",
+      "dblp": "csfw",
+      "sub": "SC",
+      "aliases": [
+        "CSFW",
+        "IEEE Computer Security Foundations Symposium",
+        "csfw"
+      ]
+    },
+    {
+      "abbr": "CT-RSA",
+      "name": "Cryptographer's Track at RSA Conference",
+      "rank": "C",
+      "dblp": "ctrsa",
+      "sub": "SC",
+      "aliases": [
+        "CT-RSA",
+        "Cryptographer's Track at RSA Conference",
+        "ctrsa"
+      ]
+    },
+    {
+      "abbr": "DFRWS APAC",
+      "name": "Digital Forensic Research Workshop Asia Pacific",
+      "rank": "C",
+      "dblp": "di",
+      "sub": "SC",
+      "aliases": [
+        "DFRWS APAC",
+        "Digital Forensic Research Workshop Asia Pacific",
+        "di"
+      ]
+    },
+    {
+      "abbr": "DFRWS",
+      "name": "Digital Forensic Research Workshop",
+      "rank": "C",
+      "dblp": "dfrws",
+      "sub": "SC",
+      "aliases": [
+        "DFRWS",
+        "Digital Forensic Research Workshop",
+        "dfrws"
+      ]
+    },
+    {
+      "abbr": "DIMVA",
+      "name": "Detection of Intrusions and Malware & Vulnerability Assessment",
+      "rank": "C",
+      "dblp": "dimva",
+      "sub": "SC",
+      "aliases": [
+        "DIMVA",
+        "Detection of Intrusions and Malware & Vulnerability Assessment",
+        "dimva"
+      ]
+    },
+    {
+      "abbr": "DSN",
+      "name": "International Conference on Dependable Systems and Networks",
+      "rank": "B",
+      "dblp": "dsn",
+      "sub": "SC",
+      "aliases": [
+        "DSN",
+        "International Conference on Dependable Systems and Networks",
+        "dsn"
+      ]
+    },
+    {
+      "abbr": "ESORICS",
+      "name": "European Symposium on Research in Computer Security",
+      "rank": "B",
+      "dblp": "esorics",
+      "sub": "SC",
+      "aliases": [
+        "ESORICS",
+        "European Symposium on Research in Computer Security",
+        "esorics"
+      ]
+    },
+    {
+      "abbr": "EUROCRYPT",
+      "name": "European Cryptology Conference",
+      "rank": "A",
+      "dblp": "eurocrypt",
+      "sub": "SC",
+      "aliases": [
+        "EUROCRYPT",
+        "European Cryptology Conference",
+        "eurocrypt"
+      ]
+    },
+    {
+      "abbr": "EuroS&P",
+      "name": "IEEE European Symposium on Security and Privacy",
+      "rank": "C",
+      "dblp": "eurosp",
+      "sub": "SC",
+      "aliases": [
+        "EuroS&P",
+        "IEEE European Symposium on Security and Privacy",
+        "eurosp"
+      ]
+    },
+    {
+      "abbr": "FC",
+      "name": "Financial Cryptography and Data Security",
+      "rank": "C",
+      "dblp": "fc",
+      "sub": "SC",
+      "aliases": [
+        "FC",
+        "Financial Cryptography and Data Security",
+        "fc"
+      ]
+    },
+    {
+      "abbr": "FSE",
+      "name": "Fast Software Encryption",
+      "rank": "B",
+      "dblp": "fse",
+      "sub": "SC",
+      "aliases": [
+        "FSE",
+        "Fast Software Encryption",
+        "fse"
+      ]
+    },
+    {
+      "abbr": "HotSec",
+      "name": "USENIX Workshop on Hot Topics in Security",
+      "rank": "C",
+      "dblp": "events",
+      "sub": "SC",
+      "aliases": [
+        "HotSec",
+        "USENIX Workshop on Hot Topics in Security",
+        "events"
+      ]
+    },
+    {
+      "abbr": "ICDF2C",
+      "name": "International Conference on Digital Forensics & Cyber Crime",
+      "rank": "C",
+      "dblp": "icdf2c",
+      "sub": "SC",
+      "aliases": [
+        "ICDF2C",
+        "International Conference on Digital Forensics & Cyber Crime",
+        "icdf2c"
+      ]
+    },
+    {
+      "abbr": "ICICS",
+      "name": "International Conference on Information and Communications Security",
+      "rank": "C",
+      "dblp": "icics",
+      "sub": "SC",
+      "aliases": [
+        "ICICS",
+        "International Conference on Information and Communications Security",
+        "icics"
+      ]
+    },
+    {
+      "abbr": "IFIP WG 11.9",
+      "name": "IFIP WG 11.9 International Conference on Digital Forensics",
+      "rank": "C",
+      "dblp": "NO DBLP",
+      "sub": "SC",
+      "aliases": [
+        "IFIP WG 11.9",
+        "IFIP WG 11.9 International Conference on Digital Forensics",
+        "NO DBLP"
+      ]
+    },
+    {
+      "abbr": "IH&MMSec",
+      "name": "ACM Workshop on Information Hiding and Multimedia Security",
+      "rank": "C",
+      "dblp": "ih",
+      "sub": "SC",
+      "aliases": [
+        "IH&MMSec",
+        "ACM Workshop on Information Hiding and Multimedia Security",
+        "ih"
+      ]
+    },
+    {
+      "abbr": "INSCRYPT",
+      "name": "International Conference on Information Security and Cryptology",
+      "rank": "C",
+      "dblp": "cisc",
+      "sub": "SC",
+      "aliases": [
+        "INSCRYPT",
+        "International Conference on Information Security and Cryptology",
+        "cisc"
+      ]
+    },
+    {
+      "abbr": "ISC",
+      "name": "Information Security Conference",
+      "rank": "C",
+      "dblp": "isw",
+      "sub": "SC",
+      "aliases": [
+        "ISC",
+        "Information Security Conference",
+        "isw"
+      ]
+    },
+    {
+      "abbr": "NDSS",
+      "name": "Network and Distributed System Security (NDSS) Symposium",
+      "rank": "A",
+      "dblp": "ndss",
+      "sub": "SC",
+      "aliases": [
+        "NDSS",
+        "Network and Distributed System Security (NDSS) Symposium",
+        "ndss"
+      ]
+    },
+    {
+      "abbr": "NSPW",
+      "name": "New Security Paradigms Workshop",
+      "rank": "C",
+      "dblp": "nspw",
+      "sub": "SC",
+      "aliases": [
+        "NSPW",
+        "New Security Paradigms Workshop",
+        "nspw"
+      ]
+    },
+    {
+      "abbr": "PAM",
+      "name": "Passive and Active Measurement Conference",
+      "rank": "C",
+      "dblp": "pam",
+      "sub": "SC",
+      "aliases": [
+        "PAM",
+        "Passive and Active Measurement Conference",
+        "pam"
+      ]
+    },
+    {
+      "abbr": "PETS",
+      "name": "Privacy Enhancing Technologies Symposium",
+      "rank": "C",
+      "dblp": "pet",
+      "sub": "SC",
+      "aliases": [
+        "PETS",
+        "Privacy Enhancing Technologies Symposium",
+        "pet"
+      ]
+    },
+    {
+      "abbr": "PKC",
+      "name": "International Conference on Practice and Theory of Public-Key Cryptography",
+      "rank": "B",
+      "dblp": "pkc",
+      "sub": "SC",
+      "aliases": [
+        "PKC",
+        "International Conference on Practice and Theory of Public-Key Cryptography",
+        "pkc"
+      ]
+    },
+    {
+      "abbr": "RAID",
+      "name": "International Symposium on Recent Advances in Intrusion Detection",
+      "rank": "B",
+      "dblp": "raid",
+      "sub": "SC",
+      "aliases": [
+        "RAID",
+        "International Symposium on Recent Advances in Intrusion Detection",
+        "raid"
+      ]
+    },
+    {
+      "abbr": "SAC",
+      "name": "Selected Areas in Cryptography",
+      "rank": "C",
+      "dblp": "sacrypt",
+      "sub": "SC",
+      "aliases": [
+        "SAC",
+        "Selected Areas in Cryptography",
+        "sacrypt"
+      ]
+    },
+    {
+      "abbr": "SACMAT",
+      "name": "ACM Symposium on Access Control Models and Technologies",
+      "rank": "C",
+      "dblp": "sacmat",
+      "sub": "SC",
+      "aliases": [
+        "SACMAT",
+        "ACM Symposium on Access Control Models and Technologies",
+        "sacmat"
+      ]
+    },
+    {
+      "abbr": "SEC",
+      "name": "IFIP International Information Security Conference",
+      "rank": "C",
+      "dblp": "sec",
+      "sub": "SC",
+      "aliases": [
+        "SEC",
+        "IFIP International Information Security Conference",
+        "sec"
+      ]
+    },
+    {
+      "abbr": "SecureComm",
+      "name": "International Conference on Security and Privacy in Communication Networks",
+      "rank": "C",
+      "dblp": "securecomm",
+      "sub": "SC",
+      "aliases": [
+        "SecureComm",
+        "International Conference on Security and Privacy in Communication Networks",
+        "securecomm"
+      ]
+    },
+    {
+      "abbr": "SOUPS",
+      "name": "Symposium On Usable Privacy and Security",
+      "rank": "C",
+      "dblp": "soups",
+      "sub": "SC",
+      "aliases": [
+        "SOUPS",
+        "Symposium On Usable Privacy and Security",
+        "soups"
+      ]
+    },
+    {
+      "abbr": "S&P",
+      "name": "IEEE Symposium on Security and Privacy",
+      "rank": "A",
+      "dblp": "sp",
+      "sub": "SC",
+      "aliases": [
+        "S&P",
+        "IEEE Symposium on Security and Privacy",
+        "sp"
+      ]
+    },
+    {
+      "abbr": "SRDS",
+      "name": "IEEE International Symposium on Reliable Distributed Systems",
+      "rank": "B",
+      "dblp": "srds",
+      "sub": "SC",
+      "aliases": [
+        "SRDS",
+        "IEEE International Symposium on Reliable Distributed Systems",
+        "srds"
+      ]
+    },
+    {
+      "abbr": "TCC",
+      "name": "Theory of Cryptography Conference",
+      "rank": "B",
+      "dblp": "tcc",
+      "sub": "SC",
+      "aliases": [
+        "TCC",
+        "Theory of Cryptography Conference",
+        "tcc"
+      ]
+    },
+    {
+      "abbr": "TrustCom",
+      "name": "IEEE International Conference on Trust, Security and Privacy in Computing and Communications",
+      "rank": "C",
+      "dblp": "trustcom",
+      "sub": "SC",
+      "aliases": [
+        "TrustCom",
+        "IEEE International Conference on Trust, Security and Privacy in Computing and Communications",
+        "trustcom"
+      ]
+    },
+    {
+      "abbr": "USENIX Security",
+      "name": "USENIX Security Symposium",
+      "rank": "A",
+      "dblp": "uss",
+      "sub": "SC",
+      "aliases": [
+        "USENIX Security",
+        "USENIX Security Symposium",
+        "uss"
+      ]
+    },
+    {
+      "abbr": "WiSec",
+      "name": "ACM Conference on Security and Privacy in Wireless and Mobile Networks",
+      "rank": "C",
+      "dblp": "wisec",
+      "sub": "SC",
+      "aliases": [
+        "WiSec",
+        "ACM Conference on Security and Privacy in Wireless and Mobile Networks",
+        "wisec"
+      ]
+    },
+    {
+      "abbr": "APLAS",
+      "name": "Asian Symposium on Programming Languages and Systems",
+      "rank": "C",
+      "dblp": "aplas",
+      "sub": "SE",
+      "aliases": [
+        "APLAS",
+        "Asian Symposium on Programming Languages and Systems",
+        "aplas"
+      ]
+    },
+    {
+      "abbr": "APSEC",
+      "name": "Asia-Pacific Software Engineering Conference",
+      "rank": "C",
+      "dblp": "apsec",
+      "sub": "SE",
+      "aliases": [
+        "APSEC",
+        "Asia-Pacific Software Engineering Conference",
+        "apsec"
+      ]
+    },
+    {
+      "abbr": "ASE",
+      "name": "International Conference on Automated Software Engineering",
+      "rank": "A",
+      "dblp": "kbse",
+      "sub": "SE",
+      "aliases": [
+        "ASE",
+        "International Conference on Automated Software Engineering",
+        "kbse"
+      ]
+    },
+    {
+      "abbr": "ATVA",
+      "name": "International Symposium on Automated Technology for Verification and Analysis",
+      "rank": "C",
+      "dblp": "atva",
+      "sub": "SE",
+      "aliases": [
+        "ATVA",
+        "International Symposium on Automated Technology for Verification and Analysis",
+        "atva"
+      ]
+    },
+    {
+      "abbr": "CAiSE",
+      "name": "International Conference on Advanced Information Systems Engineering",
+      "rank": "B",
+      "dblp": "caise",
+      "sub": "SE",
+      "aliases": [
+        "CAiSE",
+        "International Conference on Advanced Information Systems Engineering",
+        "caise"
+      ]
+    },
+    {
+      "abbr": "COMPSAC",
+      "name": "International Computer Software and Applications Conference",
+      "rank": "C",
+      "dblp": "compsac",
+      "sub": "SE",
+      "aliases": [
+        "COMPSAC",
+        "International Computer Software and Applications Conference",
+        "compsac"
+      ]
+    },
+    {
+      "abbr": "CP",
+      "name": "International Conference on Principles and Practice of Constraint Programming",
+      "rank": "B",
+      "dblp": "cp",
+      "sub": "SE",
+      "aliases": [
+        "CP",
+        "International Conference on Principles and Practice of Constraint Programming",
+        "cp"
+      ]
+    },
+    {
+      "abbr": "EASE",
+      "name": "International Conference on Evaluation and Assessment in Software Engineering",
+      "rank": "C",
+      "dblp": "ease",
+      "sub": "SE",
+      "aliases": [
+        "EASE",
+        "International Conference on Evaluation and Assessment in Software Engineering",
+        "ease"
+      ]
+    },
+    {
+      "abbr": "ECOOP",
+      "name": "European Conference on Object-Oriented Programming",
+      "rank": "B",
+      "dblp": "ecoop",
+      "sub": "SE",
+      "aliases": [
+        "ECOOP",
+        "European Conference on Object-Oriented Programming",
+        "ecoop"
+      ]
+    },
+    {
+      "abbr": "ESEM",
+      "name": "International Symposium on Empirical Software Engineering and Measurement",
+      "rank": "B",
+      "dblp": "esem",
+      "sub": "SE",
+      "aliases": [
+        "ESEM",
+        "International Symposium on Empirical Software Engineering and Measurement",
+        "esem"
+      ]
+    },
+    {
+      "abbr": "ETAPS",
+      "name": "European Joint Conferences on Theory and Practice of Software",
+      "rank": "B",
+      "dblp": "etaps",
+      "sub": "SE",
+      "aliases": [
+        "ETAPS",
+        "European Joint Conferences on Theory and Practice of Software",
+        "etaps"
+      ]
+    },
+    {
+      "abbr": "FM",
+      "name": "International Symposium on Formal Methods",
+      "rank": "A",
+      "dblp": "fm",
+      "sub": "SE",
+      "aliases": [
+        "FM",
+        "International Symposium on Formal Methods",
+        "fm"
+      ]
+    },
+    {
+      "abbr": "FSE",
+      "name": "ACM International Conference on the Foundations of Software Engineering",
+      "rank": "A",
+      "dblp": "sigsoft",
+      "sub": "SE",
+      "aliases": [
+        "FSE",
+        "ACM International Conference on the Foundations of Software Engineering",
+        "sigsoft"
+      ]
+    },
+    {
+      "abbr": "HotOS",
+      "name": "USENIX Workshop on Hot Topics in Operating Systems",
+      "rank": "B",
+      "dblp": "hotos",
+      "sub": "SE",
+      "aliases": [
+        "HotOS",
+        "USENIX Workshop on Hot Topics in Operating Systems",
+        "hotos"
+      ]
+    },
+    {
+      "abbr": "ICECCS",
+      "name": "International Conference on Engineering of Complex Computer Systems",
+      "rank": "C",
+      "dblp": "iceccs",
+      "sub": "SE",
+      "aliases": [
+        "ICECCS",
+        "International Conference on Engineering of Complex Computer Systems",
+        "iceccs"
+      ]
+    },
+    {
+      "abbr": "ICFEM",
+      "name": "International Conference on Formal Engineering Methods",
+      "rank": "C",
+      "dblp": "icfem",
+      "sub": "SE",
+      "aliases": [
+        "ICFEM",
+        "International Conference on Formal Engineering Methods",
+        "icfem"
+      ]
+    },
+    {
+      "abbr": "ICFP",
+      "name": "International Conference on Function Programming",
+      "rank": "B",
+      "dblp": "icfp",
+      "sub": "SE",
+      "aliases": [
+        "ICFP",
+        "International Conference on Function Programming",
+        "icfp"
+      ]
+    },
+    {
+      "abbr": "ICPC",
+      "name": "IEEE International Conference on Program Comprehension",
+      "rank": "B",
+      "dblp": "icpc",
+      "sub": "SE",
+      "aliases": [
+        "ICPC",
+        "IEEE International Conference on Program Comprehension",
+        "icpc"
+      ]
+    },
+    {
+      "abbr": "ICSE",
+      "name": "International Conference on Software Engineering",
+      "rank": "A",
+      "dblp": "icse",
+      "sub": "SE",
+      "aliases": [
+        "ICSE",
+        "International Conference on Software Engineering",
+        "icse"
+      ]
+    },
+    {
+      "abbr": "ICSME",
+      "name": "International Conference on Software Maintenance and Evolution",
+      "rank": "B",
+      "dblp": "icsm",
+      "sub": "SE",
+      "aliases": [
+        "ICSME",
+        "International Conference on Software Maintenance and Evolution",
+        "icsm"
+      ]
+    },
+    {
+      "abbr": "ICSOC",
+      "name": "International Conference on Service Oriented Computing",
+      "rank": "B",
+      "dblp": "icsoc",
+      "sub": "SE",
+      "aliases": [
+        "ICSOC",
+        "International Conference on Service Oriented Computing",
+        "icsoc"
+      ]
+    },
+    {
+      "abbr": "ICST",
+      "name": "IEEE International Conference on Software Testing, Verification and Validation",
+      "rank": "C",
+      "dblp": "icst",
+      "sub": "SE",
+      "aliases": [
+        "ICST",
+        "IEEE International Conference on Software Testing, Verification and Validation",
+        "icst"
+      ]
+    },
+    {
+      "abbr": "ICWS",
+      "name": "IEEE International Conference on Web Services (Research Track)",
+      "rank": "B",
+      "dblp": "icws",
+      "sub": "SE",
+      "aliases": [
+        "ICWS",
+        "IEEE International Conference on Web Services (Research Track)",
+        "icws"
+      ]
+    },
+    {
+      "abbr": "Internetware",
+      "name": "Asia-Pacific Symposium on Internetware",
+      "rank": "C",
+      "dblp": "internetware",
+      "sub": "SE",
+      "aliases": [
+        "Internetware",
+        "Asia-Pacific Symposium on Internetware",
+        "internetware"
+      ]
+    },
+    {
+      "abbr": "ISPASS",
+      "name": "International Symposium on Performance Analysis of Systems and Software",
+      "rank": "C",
+      "dblp": "ispass",
+      "sub": "SE",
+      "aliases": [
+        "ISPASS",
+        "International Symposium on Performance Analysis of Systems and Software",
+        "ispass"
+      ]
+    },
+    {
+      "abbr": "ISSRE",
+      "name": "International Symposium on Software Reliability Engineering",
+      "rank": "B",
+      "dblp": "issre",
+      "sub": "SE",
+      "aliases": [
+        "ISSRE",
+        "International Symposium on Software Reliability Engineering",
+        "issre"
+      ]
+    },
+    {
+      "abbr": "ISSTA",
+      "name": "ACM SIGSOFT International Symposium on Software Testing and Analysis",
+      "rank": "A",
+      "dblp": "issta",
+      "sub": "SE",
+      "aliases": [
+        "ISSTA",
+        "ACM SIGSOFT International Symposium on Software Testing and Analysis",
+        "issta"
+      ]
+    },
+    {
+      "abbr": "LCTES",
+      "name": "International Conference on Languages, Compilers and Tools for Embedded Systems",
+      "rank": "B",
+      "dblp": "lctrts",
+      "sub": "SE",
+      "aliases": [
+        "LCTES",
+        "International Conference on Languages, Compilers and Tools for Embedded Systems",
+        "lctrts"
+      ]
+    },
+    {
+      "abbr": "Middleware",
+      "name": "International Middleware Conference",
+      "rank": "B",
+      "dblp": "middleware",
+      "sub": "SE",
+      "aliases": [
+        "Middleware",
+        "International Middleware Conference",
+        "middleware"
+      ]
+    },
+    {
+      "abbr": "MoDELS",
+      "name": "International Conference on Model Driven Engineering Languages and Systems",
+      "rank": "B",
+      "dblp": "models",
+      "sub": "SE",
+      "aliases": [
+        "MoDELS",
+        "International Conference on Model Driven Engineering Languages and Systems",
+        "models"
+      ]
+    },
+    {
+      "abbr": "MSR",
+      "name": "International Conference on Mining Software Repositories",
+      "rank": "C",
+      "dblp": "msr",
+      "sub": "SE",
+      "aliases": [
+        "MSR",
+        "International Conference on Mining Software Repositories",
+        "msr"
+      ]
+    },
+    {
+      "abbr": "OOPSLA",
+      "name": "Conference on Object-Oriented Programming Systems, Languages, and Applications",
+      "rank": "A",
+      "dblp": "oopsla",
+      "sub": "SE",
+      "aliases": [
+        "OOPSLA",
+        "Conference on Object-Oriented Programming Systems, Languages, and Applications",
+        "oopsla"
+      ]
+    },
+    {
+      "abbr": "OSDI",
+      "name": "USENIX Symposium on Operating Systems Design and Implementation",
+      "rank": "A",
+      "dblp": "osdi",
+      "sub": "SE",
+      "aliases": [
+        "OSDI",
+        "USENIX Symposium on Operating Systems Design and Implementation",
+        "osdi"
+      ]
+    },
+    {
+      "abbr": "PEPM",
+      "name": "ACM SIGPLAN Workshop on Partial Evaluation and Program Manipulation",
+      "rank": "C",
+      "dblp": "pepm",
+      "sub": "SE",
+      "aliases": [
+        "PEPM",
+        "ACM SIGPLAN Workshop on Partial Evaluation and Program Manipulation",
+        "pepm"
+      ]
+    },
+    {
+      "abbr": "PLDI",
+      "name": "ACM SIGPLAN Conference on Programming Language Design & Implementation",
+      "rank": "A",
+      "dblp": "pldi",
+      "sub": "SE",
+      "aliases": [
+        "PLDI",
+        "ACM SIGPLAN Conference on Programming Language Design & Implementation",
+        "pldi"
+      ]
+    },
+    {
+      "abbr": "POPL",
+      "name": "ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages",
+      "rank": "A",
+      "dblp": "popl",
+      "sub": "SE",
+      "aliases": [
+        "POPL",
+        "ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages",
+        "popl"
+      ]
+    },
+    {
+      "abbr": "QRS",
+      "name": "IEEE International Conference on Software Quality, Reliability and Security",
+      "rank": "C",
+      "dblp": "qrs",
+      "sub": "SE",
+      "aliases": [
+        "QRS",
+        "IEEE International Conference on Software Quality, Reliability and Security",
+        "qrs"
+      ]
+    },
+    {
+      "abbr": "RE",
+      "name": "IEEE International Requirements Engineering Conference",
+      "rank": "B",
+      "dblp": "re",
+      "sub": "SE",
+      "aliases": [
+        "RE",
+        "IEEE International Requirements Engineering Conference",
+        "re"
+      ]
+    },
+    {
+      "abbr": "REFSQ",
+      "name": "Requirements Engineering: Foundation for Software Quality",
+      "rank": "C",
+      "dblp": "refsq",
+      "sub": "SE",
+      "aliases": [
+        "REFSQ",
+        "Requirements Engineering: Foundation for Software Quality",
+        "refsq"
+      ]
+    },
+    {
+      "abbr": "RV",
+      "name": "International Conference on Runtime Verification",
+      "rank": "C",
+      "dblp": "rv",
+      "sub": "SE",
+      "aliases": [
+        "RV",
+        "International Conference on Runtime Verification",
+        "rv"
+      ]
+    },
+    {
+      "abbr": "SANER",
+      "name": "IEEE International Conference on Software Analysis, Evolution and Reengineering",
+      "rank": "B",
+      "dblp": "wcre",
+      "sub": "SE",
+      "aliases": [
+        "SANER",
+        "IEEE International Conference on Software Analysis, Evolution and Reengineering",
+        "wcre"
+      ]
+    },
+    {
+      "abbr": "SAS",
+      "name": "International Static Analysis Symposium",
+      "rank": "B",
+      "dblp": "sas",
+      "sub": "SE",
+      "aliases": [
+        "SAS",
+        "International Static Analysis Symposium",
+        "sas"
+      ]
+    },
+    {
+      "abbr": "SCAM",
+      "name": "IEEE International Working Conference on Source Code Analysis and Manipulation",
+      "rank": "C",
+      "dblp": "scam",
+      "sub": "SE",
+      "aliases": [
+        "SCAM",
+        "IEEE International Working Conference on Source Code Analysis and Manipulation",
+        "scam"
+      ]
+    },
+    {
+      "abbr": "SEKE",
+      "name": "International Conference on Software Engineering and Knowledge Engineering",
+      "rank": "C",
+      "dblp": "seke",
+      "sub": "SE",
+      "aliases": [
+        "SEKE",
+        "International Conference on Software Engineering and Knowledge Engineering",
+        "seke"
+      ]
+    },
+    {
+      "abbr": "SOSP",
+      "name": "ACM Symposium on Operating Systems Principles",
+      "rank": "A",
+      "dblp": "sosp",
+      "sub": "SE",
+      "aliases": [
+        "SOSP",
+        "ACM Symposium on Operating Systems Principles",
+        "sosp"
+      ]
+    },
+    {
+      "abbr": "SSE",
+      "name": "IEEE International Conference on Software Services Engineering",
+      "rank": "C",
+      "dblp": "IEEEscc",
+      "sub": "SE",
+      "aliases": [
+        "SSE",
+        "IEEE International Conference on Software Services Engineering",
+        "IEEEscc"
+      ]
+    },
+    {
+      "abbr": "TASE",
+      "name": "Theoretical Aspects of Software Engineering",
+      "rank": "C",
+      "dblp": "tase",
+      "sub": "SE",
+      "aliases": [
+        "TASE",
+        "Theoretical Aspects of Software Engineering",
+        "tase"
+      ]
+    },
+    {
+      "abbr": "VMCAI",
+      "name": "International Conference on Verification, Model Checking, and Abstract Interpretation",
+      "rank": "B",
+      "dblp": "vmcai",
+      "sub": "SE",
+      "aliases": [
+        "VMCAI",
+        "International Conference on Verification, Model Checking, and Abstract Interpretation",
+        "vmcai"
+      ]
+    }
+  ]
+}

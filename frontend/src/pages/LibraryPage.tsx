@@ -3,18 +3,21 @@ import { Alert, Button, Empty, Pagination, Spin } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchLibrary } from "../api";
 import { ImportPanel } from "../components/ImportPaper";
+import { ResearchDesk } from "../components/ResearchDesk";
 import { PaperCard } from "../components/PaperCard";
 import type { LibraryResponse } from "../types";
+import { graphLocation } from "../workspace";
 
 export default function LibraryPage() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const analysisMode = params.get("view") === "analysis";
-  const [page, setPage] = useState(1);
+  const page = Math.max(1, Math.floor(Number(params.get("page")) || 1));
+  const setPage = (value: number) => setParams(current => { const next = new URLSearchParams(current); next.set("page", String(value)); next.delete("view"); return next; });
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState<LibraryResponse | null>(null);
-  useEffect(() => { document.title = `${analysisMode ? "论文分析" : "论文库"} - 文献研读`; }, [analysisMode]);
+  useEffect(() => { document.title = "我的文献 - 文献研读"; }, []);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError(""); setData(null);
@@ -26,7 +29,8 @@ export default function LibraryPage() {
     return () => controller.abort();
   }, [page, retry]);
   return <main className="wrap detail">
-    <div className="page-heading"><div><span className="page-kicker">{analysisMode ? "阅读与提取" : "我的研究材料"}</span><h1>{analysisMode ? "论文分析" : "论文库"}</h1><p>{analysisMode ? "选择一篇论文，阅读摘要、提取研究内容，并逐条核对原文依据。" : "集中管理已入库论文，让阅读、分析与知识探索接续进行。"}</p></div><Link className="text-action" to={analysisMode ? "/library" : "/graph"}>{analysisMode ? "管理论文库 →" : "查看知识图谱 →"}</Link></div>
+    <div className="page-heading"><div><span className="page-kicker">我的研究材料</span><h1>我的文献</h1><p>选一篇开始研读，在同一工作空间查看分析、发现相关推荐。</p></div><Link className="text-action" to="/">＋ 检索更多文献</Link></div>
+    <nav className="collection-tools library-views" aria-label="文献集合视图"><Link aria-current="page" to={`/library?${params}`}>文献列表</Link><Link to={graphLocation(`/library?${params}`)}>集合关系图谱 →</Link><span className="meta">从已入库文献探索关系</span></nav>
     <div className="library-layout"><section className="library-content" aria-label="已入库论文">
     {loading ? <Spin aria-label="正在加载本地分析库" /> : null}
     {error ? <Alert type="error" message={error} showIcon action={<Button onClick={() => setRetry((value) => value + 1)}>重试</Button>} /> : null}
@@ -37,7 +41,8 @@ export default function LibraryPage() {
       {data.total > 20 ? <Pagination current={page} pageSize={20} total={data.total} showSizeChanger={false} onChange={setPage} /> : null}
     </> : null}
     </section><aside className="library-sidebar"><ImportPanel onImported={() => { setPage(1); setRetry((value) => value + 1); }} />
-      <section className="surface guide-panel"><span className="page-kicker">下一步</span><h2>先阅读，再判断。</h2><p>在论文详情中触发 AI 分析，查看研究问题、技术步骤和作者贡献。重要结论可展开原文核对。</p><Link to="/recommend">从论文出发找相似文献 →</Link><Link to="/graph">在知识图谱中查看主题联系 →</Link></section>
+      {data ? <ResearchDesk papers={data.papers} /> : null}
+      <section className="surface guide-panel"><span className="page-kicker">开始研读</span><h2>从一篇文献出发</h2><p>打开文献后，可在阅读与分析、相关推荐之间切换。左侧保留文献列表，随时继续阅读其他论文。</p><Link to={graphLocation(`/library?${params}`)}>查看这批文献的关系 →</Link><Link to="/graph?mode=example">体验 RAG 示例图谱 →</Link></section>
     </aside></div>
   </main>;
 }

@@ -6,15 +6,17 @@ import time
 import math
 import sqlite3
 from contextvars import ContextVar
+from contextlib import suppress
 from datetime import datetime, timezone
 from collections import OrderedDict
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote
 
 import httpx
+import ijson
 
 from .schemas import PaperOut
-from . import provider_cache
+from . import ccf, provider_cache
 
 logger = logging.getLogger(__name__)
 
@@ -237,26 +239,39 @@ def combine(left: PaperOut, right: PaperOut) -> PaperOut:
         arxiv_id=arxiv_id,
         doi=doi,
         semantic_scholar_id=s2_id,
+        ccf_rank=left.ccf_rank or right.ccf_rank,
+        cas_partition=left.cas_partition or right.cas_partition,
+        ccf_status=left.ccf_status or right.ccf_status,
+        ccf_catalog_version=left.ccf_catalog_version or right.ccf_catalog_version,
     )
 
 
 def merge_papers(groups: list[list[PaperOut]], sort: str) -> list[PaperOut]:
-    buckets: list[list[tuple[PaperOut, int]]] = []
+    # Index identity keys instead of scanning every earlier paper. Large cursor
+    # pages must not turn deduplication into a quadratic operation.
+    buckets = {}
+    by_key = {}
     for papers in groups:
         for rank, paper in enumerate(papers):
             keys = identity_keys(paper)
-            bucket = next((item for item in buckets if any(keys & identity_keys(old) for old, _ in item)), None)
-            if bucket is None:
-                buckets.append([(paper, rank)])
+            matches = sorted({by_key[key] for key in keys if key in by_key})
+            if matches:
+                bucket_id = matches[0]
+                old, old_rank, old_keys = buckets[bucket_id]
+                for other_id in matches[1:]:
+                    other, other_rank, other_keys = buckets.pop(other_id)
+                    old = combine(old, other)
+                    old_rank = min(old_rank, other_rank)
+                    old_keys |= other_keys
+                paper = combine(old, paper)
+                rank = min(old_rank, rank)
+                keys |= old_keys
             else:
-                bucket.append((paper, rank))
-    merged: list[tuple[PaperOut, int]] = []
-    for bucket in buckets:
-        paper, rank = bucket[0]
-        for other, other_rank in bucket[1:]:
-            paper = combine(paper, other)
-            rank = min(rank, other_rank)
-        merged.append((paper, rank))
+                bucket_id = len(by_key)
+            buckets[bucket_id] = (paper, rank, keys)
+            for key in keys:
+                by_key[key] = bucket_id
+    merged = [(paper, rank) for paper, rank, _ in buckets.values()]
     if sort == "date":
         merged.sort(key=lambda item: item[0].year or 0, reverse=True)
     else:
@@ -303,6 +318,7 @@ def semantic_has_key() -> bool:
 
 
 _CACHE_STATUS: ContextVar[dict | None] = ContextVar("provider_cache_status", default=None)
+_PROGRESS: ContextVar[object] = ContextVar("search_progress", default=None)
 
 
 async def cache_operation(function, *args, default=None):
@@ -324,7 +340,7 @@ def record_cache(response: httpx.Response, stale: bool = False, retry_after: int
     return response
 
 
-async def request(client: httpx.AsyncClient, url: str, params: dict, headers: dict | None, label: str, allow_not_found: bool = False) -> httpx.Response:
+async def request(client: httpx.AsyncClient, url: str, params: dict, headers: dict | None, label: str, allow_not_found: bool = False, on_items=None, accept=None) -> httpx.Response:
     cache_key = (url, tuple(sorted(params.items())))
     disk_key = provider_cache.key(url, params)
     async with _GATES.setdefault(label, asyncio.Lock()):
@@ -355,7 +371,32 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
         await asyncio.sleep(max(0, _NEXT.get(label, 0) - time.monotonic()))
         interval = 1.1 if label == "Semantic Scholar" else 3.1
         try:
-            response = await client.get(url, params=params, headers=headers)
+            if on_items is None:
+                response = await client.get(url, params=params, headers=headers)
+            else:
+                # Parse complete paper objects as bytes arrive, without waiting
+                # for the upstream bulk response (up to 1000 papers) to finish.
+                async with client.stream("GET", url, params=params, headers=headers) as upstream:
+                    body = bytearray()
+                    items = ijson.sendable_list()
+                    parser = ijson.items_coro(items, "data.item", use_float=True)
+                    try:
+                        async for chunk in upstream.aiter_bytes():
+                            body.extend(chunk)
+                            if upstream.status_code == 200:
+                                parser.send(chunk)
+                                if items:
+                                    await on_items(list(items))
+                                    del items[:]
+                        if upstream.status_code == 200:
+                            parser.close()
+                    finally:
+                        with suppress(Exception):
+                            parser.close()
+                    response = httpx.Response(upstream.status_code, headers={
+                        key: value for key, value in upstream.headers.items()
+                        if key.lower() not in ("content-encoding", "content-length")
+                    }, content=bytes(body))
         except httpx.HTTPError:
             if stale is not None:
                 return record_cache(stale, True)
@@ -388,7 +429,10 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
             raise SourceFailure(f"{label} 返回错误（{response.status_code}）")
         # Only persist parseable provider payloads, never HTML error shells.
         try:
-            if label == "arXiv":
+            if accept is not None:
+                if not accept(response):
+                    raise ValueError("Rejected payload")
+            elif label == "arXiv":
                 import xml.etree.ElementTree as ET
                 root = ET.fromstring(response.content)
                 if root.tag.rsplit("}", 1)[-1] != "feed":
@@ -436,9 +480,22 @@ async def search_arxiv(client: httpx.AsyncClient, query: str, offset: int, limit
     return papers, total
 
 
-async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int | None, sort: str):
-    # Public bulk search has different ordering semantics from relevance search.
-    # Match literal keywords and rank this bounded candidate batch locally.
+def rank_bulk(papers, words, sort):
+    if sort == "relevance":
+        def score(paper):
+            title = paper.title.casefold()
+            text = title + " " + (paper.abstract or "").casefold()
+            return sum(3 * title.count(word.casefold()) + text.count(word.casefold()) for word in words)
+        return sorted(papers, key=score, reverse=True)
+    return papers
+
+
+async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int | None, sort: str, target: int = 20):
+    """Follow provider tokens on demand. Cached batches are reused across pages.
+
+    Relevance is local within each upstream batch; completed batches keep their
+    positions when subsequent batches arrive. No global relevance is implied.
+    """
     words = re.findall(r"[\w]+", query, flags=re.UNICODE)
     if not words:
         raise SourceFailure("请输入有效的检索关键词")
@@ -447,44 +504,66 @@ async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int
     year = s2_year(year_from, year_to)
     if year:
         params["year"] = year
-    response = await request(client, f"{S2_API}/search/bulk", params, s2_headers(), "Semantic Scholar")
-    payload = response.json()
-    if not isinstance(payload.get("data"), list):
-        raise SourceFailure("Semantic Scholar 批量检索返回了无法解析的内容")
-    papers = [paper for item in payload["data"] if (paper := map_s2_paper(item)) and year_matches(paper, year_from, year_to)]
-    if sort == "relevance":
-        def score(paper):
-            title = paper.title.casefold()
-            text = title + " " + (paper.abstract or "").casefold()
-            return sum(3 * title.count(word.casefold()) + text.count(word.casefold()) for word in words)
-        papers.sort(key=score, reverse=True)
     state = _CACHE_STATUS.get()
     if state is not None:
-        state["note"] = "当前展示 Semantic Scholar 首批候选结果，相关性为批内关键词排序；数量不是全站匹配总数。当前批次最多可浏览 1000 篇，可通过年份或更具体的关键词缩小范围"
-        state["total_limited"] = True
-    return papers, len(papers)
+        state["note"] = "相关性为每批候选的关键词排序，后续结果按需继续获取"
+    papers = []
+    seen = set()
+    tokens = set()
+    total = 0
+    while True:
+        batch = []
+        last_sent = 0
+        async def received(items):
+            nonlocal last_sent
+            for item in items:
+                paper = map_s2_paper(item)
+                if paper and year_matches(paper, year_from, year_to):
+                    batch.append(paper)
+            publish = _PROGRESS.get()
+            if publish and len(papers) + len(batch) >= target and (not last_sent or time.monotonic() - last_sent > .1):
+                preview = deduplicate(papers + rank_bulk(batch, words, sort))
+                await publish(SourceResult("semantic_scholar", preview, max(total, len(preview)), None))
+                last_sent = time.monotonic()
+        response = await request(client, f"{S2_API}/search/bulk", params, s2_headers(), "Semantic Scholar", on_items=received if _PROGRESS.get() else None)
+        payload = response.json()
+        if not isinstance(payload.get("data"), list):
+            raise SourceFailure("Semantic Scholar 批量检索返回了无法解析的内容")
+        batch = [paper for item in payload["data"] if (paper := map_s2_paper(item)) and year_matches(paper, year_from, year_to)]
+        for paper in rank_bulk(batch, words, sort):
+            keys = identity_keys(paper)
+            if not keys & seen:
+                papers.append(paper)
+                seen.update(keys)
+        estimate = payload.get("total")
+        total = max(len(papers), estimate if isinstance(estimate, int) else 0)
+        token = payload.get("token")
+        if not token:
+            return papers, len(papers)
+        if len(papers) >= target:
+            return papers, total
+        if token in tokens:
+            raise SourceFailure("Semantic Scholar 返回了重复的分页游标，请稍后重试")
+        tokens.add(token)
+        params["token"] = token
+
+
+def deduplicate(papers):
+    seen = set()
+    result = []
+    for paper in papers:
+        keys = identity_keys(paper)
+        if not keys & seen:
+            seen.update(keys)
+            result.append(paper)
+    return result
 
 
 async def search_semantic_scholar(client: httpx.AsyncClient, query: str, offset: int, limit: int, year_from: int | None, year_to: int | None, sort: str = "relevance") -> tuple[list[PaperOut], int]:
-    if not semantic_has_key():
-        papers, total = await search_s2_bulk(client, query, year_from, year_to, sort)
-        return papers[offset:offset + limit], total
-    if offset + limit > 1000:
-        raise SourceFailure("Semantic Scholar 只提供前 1000 条结果，请缩小范围")
-    params: dict[str, str | int] = {"query": re.sub(r"[-–—]+", " ", query), "offset": offset, "limit": limit, "fields": S2_FIELDS}
-    year = s2_year(year_from, year_to)
-    if year:
-        params["year"] = year
-    response = await request(client, f"{S2_API}/search", params, s2_headers(), "Semantic Scholar")
-    payload = response.json()
-    if "data" not in payload:
-        message = payload.get("message") or payload.get("error") or "查询失败"
-        if not isinstance(message, str):
-            message = "查询失败"
-        raise SourceFailure(f"Semantic Scholar {message}")
-    papers = [paper for item in payload.get("data") or [] if (paper := map_s2_paper(item))]
-    total = payload.get("total")
-    return papers, total if isinstance(total, int) else len(papers)
+    # Bulk supports continuation beyond the relevance endpoint's 1000-hit cap,
+    # with or without an API key. Request only enough batches for this page.
+    papers, total = await search_s2_bulk(client, query, year_from, year_to, sort, offset + limit)
+    return papers[offset:offset + limit], total
 
 
 async def fetch_s2_paper(client: httpx.AsyncClient, paper_ref: str) -> PaperOut | None:
@@ -589,16 +668,12 @@ def year_matches(paper: PaperOut, year_from: int | None, year_to: int | None) ->
 
 
 async def unique_prefix(fetcher, target: int, maximum: int, year_from: int | None = None, year_to: int | None = None) -> tuple[list[PaperOut], int]:
-    """Fetch fixed cached batches until enough unique records exist for slicing.
-
-    S2 accepts at most 100 records per request and only its first 1000 hits.
-    Fixed batch boundaries reuse the provider cache while users change pages.
-    """
+    """Fetch enough unique eligible records for the requested page."""
     papers: list[PaperOut] = []
     raw_offset = 0
     total = 0
     while len(papers) < target and raw_offset < maximum:
-        size = min(100, maximum - raw_offset)
+        size = min(100, target - len(papers), maximum - raw_offset)
         batch, total = await fetcher(raw_offset, size)
         eligible = [paper for paper in batch if year_matches(paper, year_from, year_to)]
         papers = merge_papers([papers + eligible], "relevance")
@@ -643,21 +718,35 @@ async def search_papers_stream(query: str, page: int, page_size: int, sort: str,
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         jobs = []
         pending = []
+        updates = asyncio.Queue(maxsize=8)
+        async def progress(result):
+            await updates.put((result, False))
+        async def worker(name, fetcher):
+            token = _PROGRESS.set(progress if name == "semantic_scholar" else None)
+            try:
+                await updates.put((await run_source(name, fetcher), True))
+            finally:
+                _PROGRESS.reset(token)
         if source in ("all", "arxiv"):
             pending.append("arxiv")
-            jobs.append(asyncio.create_task(run_source("arxiv", lambda: arxiv_with_index_fallback(client, query, target, sort, year_from, year_to))))
+            jobs.append(asyncio.create_task(worker("arxiv", lambda: arxiv_with_index_fallback(client, query, target, sort, year_from, year_to))))
         if source == "semantic_scholar" or (source == "all" and semantic_enabled()):
             pending.append("semantic_scholar")
-            jobs.append(asyncio.create_task(run_source("semantic_scholar", lambda: unique_prefix(
-                lambda start, size: search_semantic_scholar(client, query, start, size, year_from, year_to, sort), target, 1000, year_from, year_to))))
-        results = []
+            jobs.append(asyncio.create_task(worker("semantic_scholar", lambda: search_semantic_scholar(
+                client, query, 0, target, year_from, year_to, sort))))
+        results = {}
         try:
-            yield search_snapshot(query, page, page_size, sort, year_from, year_to, results, pending)
-            for job in asyncio.as_completed(jobs):
-                result = await job
-                results.append(result)
-                pending.remove(result.name)
-                yield search_snapshot(query, page, page_size, sort, year_from, year_to, results, pending)
+            yield search_snapshot(query, page, page_size, sort, year_from, year_to, list(results.values()), pending)
+            while pending:
+                result, complete = await updates.get()
+                previous = results.get(result.name)
+                if result.error and previous:
+                    result.papers = previous.papers
+                    result.total = previous.total
+                results[result.name] = result
+                if complete:
+                    pending.remove(result.name)
+                yield search_snapshot(query, page, page_size, sort, year_from, year_to, list(results.values()), pending)
         finally:
             for job in jobs:
                 if not job.done():
@@ -669,15 +758,15 @@ def search_snapshot(query, page, page_size, sort, year_from, year_to, results, p
     offset = (page - 1) * page_size
     # Completion order must not change final ranking or metadata precedence.
     results = sorted(results, key=lambda item: 0 if item.name == "arxiv" else 1)
-    papers = merge_papers([item.papers for item in results if not item.error], sort)
-    papers = [paper for paper in papers if year_matches(paper, year_from, year_to)]
+    papers = merge_papers([item.papers for item in results if item.papers], sort)
+    papers = [ccf.annotate(paper) for paper in papers if year_matches(paper, year_from, year_to)]
     # Keep merged metadata identical when navigating from a card to its detail.
     for paper in papers:
         _PAPERS[paper.id] = (time.monotonic() + 600, paper)
         _PAPERS.move_to_end(paper.id)
     while len(_PAPERS) > 1000:
         _PAPERS.popitem(last=False)
-    totals = [item.total for item in results if not item.error]
+    totals = [item.total for item in results if not item.error or item.papers]
     return {
         "query": query,
         "page": page,
@@ -685,7 +774,7 @@ def search_snapshot(query, page, page_size, sort, year_from, year_to, results, p
         "total": max(totals) if totals else 0,
         "total_estimated": len(totals) > 1 or bool(year_from or year_to) or any(item.warning for item in results),
         "papers": papers[offset:offset + page_size],
-        "source_counts": {item.name: item.total for item in results if not item.error},
+        "source_counts": {item.name: item.total for item in results if not item.error or item.papers},
         "source_errors": {item.name: item.error for item in results if item.error},
         "source_warnings": {item.name: item.warning for item in results if item.warning},
         "source_cached_at": {item.name: item.cached_at for item in results if item.cached_at},
@@ -698,16 +787,15 @@ def search_snapshot(query, page, page_size, sort, year_from, year_to, results, p
 async def fetch_paper(paper_id: str) -> PaperOut | None:
     cached = _PAPERS.get(paper_id)
     if cached and cached[0] > time.monotonic():
-        return cached[1]
+        return ccf.annotate(cached[1])
     timeout = httpx.Timeout(25.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         if paper_id.startswith("arxiv:"):
             paper = await fetch_arxiv_paper(client, paper_id.removeprefix("arxiv:"))
-            if paper is None:
-                return None
-            return paper
-        if paper_id.startswith("s2:"):
-            return await fetch_s2_paper(client, paper_id.removeprefix("s2:"))
-        if paper_id.startswith("doi:"):
-            return await fetch_s2_paper(client, f"DOI:{paper_id.removeprefix('doi:')}")
-    return None
+        elif paper_id.startswith("s2:"):
+            paper = await fetch_s2_paper(client, paper_id.removeprefix("s2:"))
+        elif paper_id.startswith("doi:"):
+            paper = await fetch_s2_paper(client, f"DOI:{paper_id.removeprefix('doi:')}")
+        else:
+            paper = None
+    return ccf.annotate(paper) if paper else None

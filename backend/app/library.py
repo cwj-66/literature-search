@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
+from . import ccf
 from .schemas import LocalPaperOut, PaperOut
 from .search import combine, identity_keys
 
@@ -111,7 +112,7 @@ def connection():
 
 
 def as_paper(row) -> LocalPaperOut:
-    paper = PaperOut.model_validate_json(row["data"])
+    paper = ccf.annotate(PaperOut.model_validate_json(row["data"]))
     return LocalPaperOut(**paper.model_dump(), local_id=row["local_id"], imported_at=row["imported_at"])
 
 
@@ -123,6 +124,7 @@ def get_paper(ref: str) -> LocalPaperOut | None:
 
 
 def save_paper(paper: PaperOut, reference: str) -> tuple[LocalPaperOut, bool]:
+    paper = ccf.annotate(paper)
     keys = identity_keys(paper) | {paper.id, reference}
     with connection() as db, db:
         db.execute("BEGIN IMMEDIATE")

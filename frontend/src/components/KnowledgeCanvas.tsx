@@ -1,9 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "antd";
 import { KIND_COLOR, KIND_LABEL, type EntityGraph, type EntityNode } from "../graphData";
 
-export function KnowledgeCanvas({ data, selected, onSelect }: { data: EntityGraph; selected: string; onSelect: (id: string) => void }) {
-  const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
+const savedViews = new Map<string, { x: number; y: number; zoom: number }>();
+
+export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: { data: EntityGraph; selected: string; onSelect: (id: string) => void; scope?: string }) {
+  const [view, setView] = useState(() => savedViews.get(scope) || { x: 0, y: 0, zoom: 1 });
+  useEffect(() => {
+    savedViews.set(scope, view);
+    if (savedViews.size > 24) savedViews.delete(savedViews.keys().next().value!);
+  }, [scope, view]);
   const drag = useRef<{ x: number; y: number; originX: number; originY: number; moved: boolean } | null>(null);
   const positions = useMemo(() => {
     const result = new Map<string, EntityNode & { x: number; y: number }>();
