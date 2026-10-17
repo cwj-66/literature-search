@@ -11,6 +11,7 @@ import re
 from pydantic import BaseModel, Field, ValidationError
 
 from app.infrastructure import llm
+from app.services.analysis import checkpoints
 from app.schemas import AnalysisClaim, AnalysisFields, ExtractionOutput, SourceParagraph
 
 UNKNOWN = "论文未明确说明"
@@ -79,16 +80,40 @@ def parse_json(raw: str):
 
 
 async def extract(messages: list[dict]) -> ExtractionOutput:
+    key = checkpoints.key_for(messages, llm.model_name(), llm.PROMPT_VERSION)
+    cached = checkpoints.get(key)
+    if cached is not None:
+        try:
+            return ExtractionOutput.model_validate(cached)
+        except ValidationError:
+            pass
     raw = await llm.complete(messages)
     try:
-        return ExtractionOutput.model_validate(parse_json(raw))
+        output = ExtractionOutput.model_validate(parse_json(raw))
     except (ValueError, ValidationError) as exc:
         repair = [*messages, {"role": "assistant", "content": raw[:18000]}, {
             "role": "user", "content": "仅修正JSON结构或缺失证据，不能补造事实。无证据项请删除。错误：" + str(exc)[:600]}]
         try:
-            return ExtractionOutput.model_validate(parse_json(await llm.complete(repair)))
+            output = ExtractionOutput.model_validate(parse_json(await llm.complete(repair)))
         except (ValueError, ValidationError) as error:
             raise llm.AnalysisError("模型返回的结果无法解析") from error
+    checkpoints.put(key, output)
+    return output
+
+
+async def extract_chunk(chunk, metadata: str, abstract: bool, depth: int = 0) -> list[AnalysisClaim]:
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": metadata +
+                "<paper_text>\n" + json.dumps([p.model_dump() for p in chunk], ensure_ascii=False) + "\n</paper_text>"}]
+    try:
+        output = await extract(messages)
+        return grounded(output.claims, chunk, abstract)
+    except (llm.OutputLimitError, llm.ContextLimitError):
+        if depth >= 3 or len(chunk) < 2:
+            raise
+        # Preserve paragraph IDs and original text when reducing input size.
+        middle = len(chunk) // 2
+        return [*(await extract_chunk(chunk[:middle], metadata, abstract, depth + 1)),
+                *(await extract_chunk(chunk[middle:], metadata, abstract, depth + 1))]
 
 
 def grounded(claims: list[AnalysisClaim], source: list[SourceParagraph], abstract: bool) -> list[AnalysisClaim]:
@@ -144,6 +169,11 @@ async def review(claims: list[AnalysisClaim]) -> list[AnalysisClaim]:
         indices = [r.index for r in result.reviews]
         if len(indices) != len(claims) or len(set(indices)) != len(claims) or set(indices) != set(range(len(claims))):
             raise ValueError("核对结果不完整")
+    except (llm.OutputLimitError, llm.ContextLimitError):
+        if len(claims) < 2:
+            raise
+        middle = len(claims) // 2
+        return [*(await review(claims[:middle])), *(await review(claims[middle:]))]
     except (ValueError, ValidationError) as exc:
         raise llm.AnalysisError("原文依据核对失败，请重试") from exc
     allowed = {r.index for r in result.reviews if r.supported}
@@ -216,20 +246,27 @@ async def analyze_document(paper, prepared) -> AnalysisFields:
     drafts = []
     metadata = f"标题（仅供定位）：{paper.title}\n分析依据：{prepared.basis}。仅对提供的材料负责。\n"
     for chunk in chunks:
-        messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": metadata +
-                    "<paper_text>\n" + json.dumps([p.model_dump() for p in chunk], ensure_ascii=False) + "\n</paper_text>"}]
-        output = await extract(messages)
-        drafts.extend(grounded(output.claims, chunk, prepared.basis == "abstract"))
-    if len(chunks) > 1 and drafts:
+        drafts.extend(await extract_chunk(chunk, metadata, prepared.basis == "abstract"))
+    merge_limited = False
+    if (len(chunks) > 1 or len(drafts) > 60) and drafts:
         # Keep original quotes with their IDs. Summaries never become evidence.
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": metadata +
                     "以下是分段提取的候选结论及其原文摘录。合并去重，按技术顺序排列，生成统一摘要。"
                     "证据只能复用所附原文，保留paragraph_id，不可把候选结论当作证据。\n<paper_text>\n" +
                     json.dumps(synthesis_candidates(drafts), ensure_ascii=False) + "\n</paper_text>"}]
-        output = await extract(messages)
-        drafts = grounded(output.claims, source, prepared.basis == "abstract")
+        try:
+            output = await extract(messages)
+            drafts = grounded(output.claims, source, prepared.basis == "abstract")
+        except (llm.OutputLimitError, llm.ContextLimitError):
+            merge_limited = True
+            # Keep already grounded claims instead of endlessly repeating an oversized merge.
+            candidates = synthesis_candidates(drafts)
+            groups = {kind: [AnalysisClaim.model_validate(c) for c in candidates if c["kind"] == kind] for kind in KINDS}
+            drafts = [group[i] for i in range(12) for group in groups.values() if i < len(group)][:60]
     checked = await review(drafts)
     warnings = []
+    if merge_limited:
+        warnings.append("汇总达到模型长度上限，已保留分段中有原文依据的候选结论并逐项核对，部分内容可能未纳入。")
     if len(checked) < len(drafts):
         warnings.append("部分候选结论未通过原文支持性核对，已省略；核对仍可能有误，请结合原文判断。")
     if prepared.evidence.get("truncated"):

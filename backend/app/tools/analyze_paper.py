@@ -215,7 +215,7 @@ async def _analyze_one(paper_id: str, requested: list[str], depth: str, workspac
                 raise llm.AnalysisError("没有可用的摘要或全文，无法分析。")
             if task_id:
                 analysis_store.transition(task_id, "preparing", "analyzing")
-            fields = await llm.analyze(paper, text)
+            fields = await analysis.analyze_prepared(paper, text)
             llm_calls = 1
             if task_id and not analysis_store.save_success(task_id, stored.local_id, fields, text, llm.model_name(), llm.PROMPT_VERSION):
                 raise RuntimeError("分析结果未能保存")

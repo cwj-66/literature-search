@@ -1,5 +1,9 @@
 import type { AnalysisState, AnalyzePaperResult, CompareTable, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask } from "./types";
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) { super(message); }
+}
+
 export interface SearchParams {
   q: string;
   page: number;
@@ -122,7 +126,7 @@ export async function startAnalysis(id: string, reanalyze: boolean): Promise<Ana
 
 export async function fetchAnalysis(id: string, signal?: AbortSignal): Promise<AnalysisState> {
   const response = await fetch(`/api/papers/${encodeURIComponent(id)}/analysis`, { signal });
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
   return response.json();
 }
 

@@ -1,9 +1,15 @@
 """Structured paper analysis through an OpenAI-compatible chat API."""
 
+import asyncio
 import json
 import logging
+import math
 import os
+import random
 import re
+import time
+import weakref
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 import httpx
@@ -36,6 +42,69 @@ class AnalysisError(Exception):
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
+
+
+class OutputLimitError(AnalysisError):
+    pass
+
+
+class ContextLimitError(AnalysisError):
+    pass
+
+
+_GATES = weakref.WeakKeyDictionary()
+
+
+def _model_gate() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    if loop not in _GATES:
+        _GATES[loop] = asyncio.Semaphore(2)
+    return _GATES[loop]
+
+
+def retry_delay(headers, attempt: int) -> float | None:
+    """Respect provider cooldowns; an excessive delay ends this bounded attempt."""
+    for name, scale in (("retry-after-ms", 1000), ("retry-after", 1)):
+        value = headers.get(name)
+        if value is None:
+            continue
+        try:
+            delay = float(value) / scale
+        except (ValueError, TypeError):
+            if name != "retry-after":
+                continue
+            try:
+                delay = parsedate_to_datetime(value).timestamp() - time.time()
+            except (ValueError, TypeError, OverflowError):
+                continue
+        if not math.isfinite(delay) or delay > 60:
+            return None
+        if delay >= 0:
+            return delay
+    return min(2 ** attempt, 8) * random.uniform(0.75, 1.0)
+
+
+def _response_error(response: httpx.Response) -> AnalysisError:
+    try:
+        error = response.json().get("error") or {}
+        code = str(error.get("code", "")).lower()
+        # Inspect locally for classification, never log provider bodies or prompts.
+        message = str(error.get("message", "")).lower()
+    except (ValueError, AttributeError, TypeError):
+        code = message = ""
+    if response.status_code == 400 and any(word in code + " " + message for word in (
+        "context_length", "context length", "maximum context", "max context", "input length", "input tokens")):
+        return ContextLimitError("论文材料超过模型上下文上限，请缩小分析范围")
+    if response.status_code in (401, 403):
+        return AnalysisError("模型密钥无效或没有访问权限，请检查服务配置")
+    if response.status_code == 429:
+        if any(word in code for word in ("insufficient_quota", "insufficient_balance", "insufficientbalance",
+                                         "balanceinsufficient", "arrear", "billing", "allocationquota", "quotaexhausted")):
+            return AnalysisError("模型额度不足，请检查账户余额或配额")
+        return AnalysisError("模型服务限流，稍后可重试；已完成分段会尽量复用")
+    if response.status_code >= 500:
+        return AnalysisError("模型服务暂时不可用，自动重试后仍未恢复，请稍后重试")
+    return AnalysisError(f"模型请求失败（HTTP {response.status_code}），请检查模型配置")
 
 
 def model_name() -> str:
@@ -117,16 +186,28 @@ async def complete(messages: list[dict]) -> str:
     if urlparse(base).hostname in {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"}:
         payload["enable_thinking"] = False
     timeout = httpx.Timeout(90.0, connect=10.0)
-    try:
-        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-            response = await client.post(f"{base}/chat/completions", headers={"Authorization": f"Bearer {key}"}, json=payload)
-    except httpx.TimeoutException as exc:
-        raise AnalysisError("模型调用超时") from exc
-    except httpx.HTTPError as exc:
-        raise AnalysisError("模型调用失败") from exc
-    if response.status_code != 200:
-        log.warning("model request failed: %s", response.status_code)
-        raise AnalysisError("模型调用失败")
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+        for attempt in range(3):
+            try:
+                async with _model_gate():
+                    response = await client.post(f"{base}/chat/completions", headers={"Authorization": f"Bearer {key}"}, json=payload)
+            except httpx.TransportError as exc:
+                if attempt == 2:
+                    message = "模型调用超时" if isinstance(exc, httpx.TimeoutException) else "模型网络连接中断，自动重试后仍未恢复"
+                    raise AnalysisError(message) from exc
+                log.warning("model transport retry: attempt=%s error=%s", attempt + 1, type(exc).__name__)
+                await asyncio.sleep(retry_delay({}, attempt))
+                continue
+            if response.status_code == 200:
+                break
+            error = _response_error(response)
+            retryable = response.status_code in (408, 409, 429) or response.status_code >= 500
+            retryable = retryable and "额度不足" not in error.message and response.headers.get("x-should-retry") != "false"
+            delay = retry_delay(response.headers, attempt)
+            if not retryable or attempt == 2 or delay is None:
+                raise error
+            log.warning("model status retry: status=%s attempt=%s delay=%.2f", response.status_code, attempt + 1, delay)
+            await asyncio.sleep(delay)
     try:
         data = response.json()
         choice = data["choices"][0]
@@ -137,7 +218,7 @@ async def complete(messages: list[dict]) -> str:
         usage = data.get("usage") or {}
         log.warning("model output truncated: model=%s completion_tokens=%s content_chars=%s",
                     model_name(), usage.get("completion_tokens"), len(content) if isinstance(content, str) else 0)
-        raise AnalysisError("模型输出达到长度上限，未生成完整结果，请重试或使用标准分析")
+        raise OutputLimitError("模型输出达到长度上限，未生成完整结果，请重试或使用标准分析")
     if not isinstance(content, str) or not content.strip():
         log.warning("model returned no answer: model=%s finish_reason=%s", model_name(), choice.get("finish_reason"))
         raise AnalysisError("模型未返回有效分析内容，请重试")

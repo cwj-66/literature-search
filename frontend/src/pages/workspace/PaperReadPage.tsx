@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Button } from "antd";
 import { ArrowLeftOutlined, ArrowUpOutlined, CommentOutlined } from "@ant-design/icons";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { askLibrary, fetchAnalysis, fetchPaper, startAnalysis } from "../../api";
+import { askLibrary, fetchPaper, startAnalysis } from "../../api";
+import { useAnalysisPolling } from "../../useAnalysisPolling";
 import { useSessionState } from "../../hooks";
 import { projects } from "../../projects";
 import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind, Paper, QAResponse } from "../../types";
@@ -97,6 +98,7 @@ export default function PaperReadPage() {
   const [state, setState] = useState<AnalysisState | null>(null);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
+  const connectionError = useAnalysisPolling(key, starting, setState);
   const [tab, setTab] = useState<"analysis" | "source">("analysis");
   const [open, setOpen] = useState("");
   useEffect(() => { document.title = paper ? `${paper.title} - 论文详情` : "论文详情"; }, [paper]);
@@ -107,20 +109,6 @@ export default function PaperReadPage() {
     fetchPaper(key, controller.signal).then(setPaper).catch(() => undefined);
     return () => controller.abort();
   }, [key]);
-  useEffect(() => {
-    if (!key) return;
-    const controller = new AbortController();
-    let timer = 0;
-    const follow = (data: AnalysisState) => {
-      if (data.task && ACTIVE.has(data.task.status)) {
-        timer = window.setTimeout(() => {
-          fetchAnalysis(key, controller.signal).then(next => { if (!controller.signal.aborted) { setState(next); follow(next); } }).catch((err: Error) => { if (!controller.signal.aborted) setError(err.message || "分析状态更新失败，请刷新重试"); });
-        }, 2000);
-      }
-    };
-    fetchAnalysis(key, controller.signal).then(data => { if (!controller.signal.aborted) { setState(data); follow(data); } }).catch((err: Error) => { if (!controller.signal.aborted) setError(err.message || "分析结果加载失败"); });
-    return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [key, starting]);
 
   if (!project) return <MissingWorkspace />;
   if (!stored || !paper) return <main className="page page-medium"><h1 className="page-title">这篇论文不在当前工作区</h1><Link to={`/w/${id}/library`}>返回论文库</Link></main>;
@@ -138,7 +126,7 @@ export default function PaperReadPage() {
   async function rerun() {
     setStarting(true); setError("");
     try { setState(await startAnalysis(key, Boolean(result))); }
-    catch (err) { setError(err instanceof Error ? err.message : "分析失败，请重试"); }
+    catch (err) { setError(err instanceof TypeError ? "提交时网络连接中断，请以重新获取的任务进度为准。" : err instanceof Error ? err.message : "分析失败，请重试"); }
     finally { setStarting(false); }
   }
   function exportAnalysis() {
@@ -175,6 +163,7 @@ export default function PaperReadPage() {
         <Button disabled={!result} onClick={exportAnalysis}>导出分析</Button>
       </div>
       {error ? <Alert type="error" showIcon message={error} /> : null}
+      {connectionError ? <Alert type="warning" showIcon message={connectionError} /> : null}
       {state?.task?.status === "failed" ? <Alert type="error" showIcon message={state.task.error || "分析失败，请重试"} /> : null}
       <div className="read-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === "analysis"} onClick={() => setTab("analysis")}>AI 分析</button>

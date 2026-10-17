@@ -9,7 +9,7 @@ from urllib.parse import unquote
 import httpx
 
 from app.infrastructure import llm
-from app.services.analysis import analysis_store as store, fulltext
+from app.services.analysis import analysis_store as store, checkpoints, fulltext
 from app.services.papers.library import get_paper, normalize_reference, save_paper
 from app.services.papers.paper_merge import identity_keys
 from app.services.retrieval.search import SourceFailure, fetch_paper
@@ -93,6 +93,14 @@ async def ensure_paper(task: dict):
     return saved
 
 
+async def analyze_prepared(paper, prepared):
+    try:
+        with checkpoints.enabled():
+            return await asyncio.wait_for(llm.analyze(paper, prepared), timeout=900)
+    except TimeoutError as exc:
+        raise llm.AnalysisError("分析超过15分钟处理上限，请重试；已完成分段会尽量复用") from exc
+
+
 async def run_task(task_id: str) -> None:
     task = await asyncio.to_thread(store.get_task, task_id)
     if not task or task["status"] != "pending":
@@ -107,7 +115,7 @@ async def run_task(task_id: str) -> None:
             raise llm.AnalysisError("没有可用的论文全文或摘要，无法分析")
         if not await asyncio.to_thread(store.transition, task_id, "preparing", "analyzing"):
             return
-        fields = await llm.analyze(paper, prepared)
+        fields = await analyze_prepared(paper, prepared)
         current = await asyncio.to_thread(store.get_task, task_id)
         if not current or not current.get("local_id"):
             raise llm.AnalysisError("论文尚未加入本地分析库")
