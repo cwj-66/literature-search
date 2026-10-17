@@ -5,6 +5,7 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { antdTheme } from "./theme";
 
+const HomePage = lazy(() => import("./pages/HomePage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const PaperPage = lazy(() => import("./pages/PaperPage"));
@@ -19,13 +20,14 @@ export default function App() {
         <AppLayout>
           <Suspense fallback={<div className="route-loading" role="status">正在加载页面…</div>}>
             <Routes>
-              <Route path="/" element={<SearchPage />} />
+              <Route path="/" element={<HomePage />} />
+              <Route path="/search" element={<SearchPage />} />
               <Route path="/library" element={<LibraryPage />} />
               <Route path="/studio" element={<StudioPage />} />
               <Route path="/paper" element={<PaperPage />} />
               <Route path="/recommend" element={<RecommendPage />} />
               <Route path="/graph" element={<KnowledgeGraphPage />} />
-              <Route path="*" element={<main className="page page-narrow"><h1 className="page-title">页面不存在</h1><Link to="/">返回检索</Link></main>} />
+              <Route path="*" element={<main className="page page-narrow"><h1 className="page-title">页面不存在</h1><Link to="/">返回工作台</Link></main>} />
             </Routes>
           </Suspense>
         </AppLayout>

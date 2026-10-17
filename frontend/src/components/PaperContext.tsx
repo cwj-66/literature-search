@@ -24,7 +24,7 @@ function LibraryDrawer({ open, onClose, current, from }: { open: boolean; onClos
   return <Drawer open={open} onClose={onClose} title="切换论文" placement="left" width={380} styles={{ body: { padding: 0 } }}>
     {error ? <Alert className="drawer-alert" type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} />
       : !data ? <div className="center-pad"><Spin /></div>
-      : !data.papers.length ? <Empty className="center-pad" description={<>文献库还没有论文，<Link to="/" onClick={onClose}>去检索</Link></>} />
+      : !data.papers.length ? <Empty className="center-pad" description={<>文献库还没有论文，<Link to="/search" onClick={onClose}>去检索</Link></>} />
       : <nav aria-label="文献库论文" className="drawer-list">
         {data.papers.map(paper => {
           const id = paperKey(paper);

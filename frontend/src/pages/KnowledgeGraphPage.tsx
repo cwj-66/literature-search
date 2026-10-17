@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Segmented, Select, Skeleton } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { fetchNetwork } from "../api";
+import { useProjects } from "../projects";
+import type { PaperNetwork } from "../types";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { paperLocation, returnLabel, safeReturn } from "../workspace";
 import { KnowledgeCanvas } from "../components/KnowledgeCanvas";
-import { KIND_COLOR, KIND_LABEL, ragExample, type EntityGraph, type EntityKind } from "../graphData";
+import { KIND_COLOR, KIND_LABEL, ragExample, type EntityGraph, type EntityKind, type EntityNode } from "../graphData";
 
 const KINDS: EntityKind[] = ["paper", "author", "keyword", "venue"];
 const example = ragExample();
@@ -12,8 +15,12 @@ const example = ragExample();
 export default function KnowledgeGraphPage() {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const current = location.pathname + location.search;
-  const mode = params.get("mode") === "example" ? "example" : "local";
+  const { current: project } = useProjects();
+  const projectIds = useMemo(() => new Set(Object.entries(project?.papers ?? {}).flatMap(([key, item]) => [key, item.paper.id])), [project]);
+  const modeParam = params.get("mode");
+  const mode = modeParam === "example" ? "example" : modeParam === "local" ? "local" : projectIds.size ? "project" : "local";
   const update = (values: Record<string, string>) => setParams(current => {
     const next = new URLSearchParams(current);
     for (const [key, value] of Object.entries(values)) { if (value) next.set(key, value); else next.delete(key); }
@@ -21,7 +28,15 @@ export default function KnowledgeGraphPage() {
   }, { replace: true });
   const setSelected = (value: string) => update({ selected: value, focus: "" });
   const setTab = (value: string) => update({ tab: value });
-  const [data, setData] = useState<EntityGraph>({ nodes: [], edges: [], total_papers: 0, scope: "" });
+  const [raw, setRaw] = useState<EntityGraph>({ nodes: [], edges: [], total_papers: 0, scope: "" });
+  const data = useMemo<EntityGraph>(() => {
+    if (mode !== "project") return raw;
+    const keep = (n: EntityNode) => n.kind !== "paper" || projectIds.has(n.paper_id ?? "") || projectIds.has(n.id.slice(6));
+    const nodes = raw.nodes.filter(keep);
+    const ids = new Set(nodes.map(n => n.id));
+    return { nodes, edges: raw.edges.filter(e => ids.has(e.source)), total_papers: nodes.filter(n => n.kind === "paper").length,
+      scope: `当前项目「${project?.name ?? ""}」中已在文献库的论文；关键词来自已有 AI 分析，未分析论文仍展示作者和刊会。` };
+  }, [raw, mode, projectIds, project]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -35,12 +50,12 @@ export default function KnowledgeGraphPage() {
   useEffect(() => { document.title = "集合图谱 - 文献研读"; }, []);
   useEffect(() => {
     setError("");
-    if (mode === "example") { setData(example); setLoading(false); return; }
-    const controller = new AbortController(); setLoading(true); setData({ nodes: [], edges: [], total_papers: 0, scope: "" });
+    if (mode === "example") { setRaw(example); setLoading(false); return; }
+    const controller = new AbortController(); setLoading(true); setRaw({ nodes: [], edges: [], total_papers: 0, scope: "" });
     fetch("/api/knowledge-graph", { signal: controller.signal }).then(async r => {
       if (!r.ok) throw new Error("本地知识图谱加载失败");
       return await r.json() as EntityGraph;
-    }).then(result => { if (!controller.signal.aborted) setData(result); })
+    }).then(result => { if (!controller.signal.aborted) setRaw(result); })
       .catch(err => { if (!controller.signal.aborted) setError(err.message || "加载失败，请重试"); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -78,6 +93,36 @@ export default function KnowledgeGraphPage() {
     return { ...visible, nodes, edges: related.filter(e => ids.has(e.source) && ids.has(e.target)) };
   }, [visible, kinds, selected]);
   const selectedNode = visible.nodes.find(n => n.id === selected);
+  const [net, setNet] = useState<PaperNetwork | null>(null);
+  const netPaperId = mode !== "example" && selectedNode?.kind === "paper" ? selectedNode.paper_id : undefined;
+  useEffect(() => {
+    setNet(null);
+    if (!netPaperId) return;
+    const controller = new AbortController();
+    fetchNetwork(netPaperId, false, controller.signal).then(d => { if (!controller.signal.aborted) setNet(d); }).catch(() => undefined);
+    return () => controller.abort();
+  }, [netPaperId]);
+  const shown = useMemo(() => {
+    if (!net || !selectedNode) return canvasData;
+    const byPaper = new Map(canvasData.nodes.filter(n => n.kind === "paper" && n.paper_id).map(n => [n.paper_id!, n.id]));
+    const nodes = [...canvasData.nodes];
+    const map = new Map<string, string>([[net.paper_id, selectedNode.id]]);
+    let external = 0;
+    for (const n of net.nodes) {
+      if (n.center || external >= 12 && !byPaper.has(n.id)) continue;
+      if (byPaper.has(n.id)) { map.set(n.id, byPaper.get(n.id)!); continue; }
+      external += 1;
+      map.set(n.id, `net:${n.id}`);
+      nodes.push({ id: `net:${n.id}`, kind: "paper", label: n.title, year: n.year, paper_id: n.id, external: true });
+    }
+    const edges = [...canvasData.edges];
+    for (const e of net.edges) {
+      const source = map.get(e.source), target = map.get(e.target);
+      if (source && target) edges.push({ source, target, relation: e.type });
+    }
+    return { ...canvasData, nodes, edges };
+  }, [canvasData, net, selectedNode]);
+  const netItems = net ? net.nodes.filter(n => !n.center).map(n => ({ node: n, labels: [...new Set(net.edges.filter(e => e.source === n.id || e.target === n.id).map(e => e.label))] })) : [];
   const neighbors = selectedNode ? visible.edges.filter(e => e.source === selected || e.target === selected)
     .map(e => visible.nodes.find(n => n.id === (e.source === selected ? e.target : e.source))).filter(n => n != null) : [];
   const themes = visible.nodes.filter(n => n.kind === "keyword").map(n => ({ ...n,
@@ -93,11 +138,11 @@ export default function KnowledgeGraphPage() {
     {from ? <Link to={from} className="back-link"><ArrowLeftOutlined aria-hidden />返回{returnLabel(from)}</Link> : null}
     <header className="page-head">
       <div>
-        <h1 className="page-title">集合图谱</h1>
-        <p className="page-sub">文献库中论文与作者、关键词、期刊／会议之间的实体关系。连线不表示引用或技术继承。</p>
+        <h1 className="page-title">知识图谱</h1>
+        <p className="page-sub">论文与作者、关键词、期刊／会议的实体关系；选中论文后叠加真实引用边和主题相似边。灰色实体连线不表示引用。</p>
       </div>
       <div className="page-actions">
-        <Segmented aria-label="图谱数据来源" value={mode} onChange={v => update({ mode: String(v), selected: "", focus: "", q: "", year: "" })} options={[{ label: "我的文献库", value: "local" }, { label: "RAG 示例", value: "example" }]} />
+        <Segmented aria-label="图谱数据来源" value={mode} onChange={v => update({ mode: String(v), selected: "", focus: "", q: "", year: "" })} options={[{ label: "当前项目", value: "project", disabled: !projectIds.size }, { label: "我的文献库", value: "local" }, { label: "RAG 示例", value: "example" }]} />
       </div>
     </header>
     <p className="kg-scope">{mode === "example" ? <><span className="status status-warning">演示数据</span> {data.scope}</> : <>{data.scope || "正在读取文献库…"}{data.total_papers > papers.length ? ` 文献库共 ${data.total_papers} 篇。` : ""}</>}</p>
@@ -115,8 +160,10 @@ export default function KnowledgeGraphPage() {
     {visiblePapers.length ? <>
       {tab === "graph" ? <div className="kg-workspace">
         <section className="kg-graph-panel" aria-label="关系图">
-          <div className="kg-legend"><Checkbox.Group value={kinds} onChange={v => update({ kinds: v.length ? v.join(",") : "none" })} options={KINDS.map(kind => ({ value: kind, label: <span><i style={{ background: KIND_COLOR[kind] }} />{KIND_LABEL[kind]}</span> }))} /></div>
-          {canvasData.nodes.length ? <KnowledgeCanvas key={`${mode}-${year}-${query}`} scope={`${mode}-${year}-${query}`} data={canvasData} selected={selectedNode?.id || ""} onSelect={setSelected} /> : <Empty description="请至少选择一种实体" />}
+          <div className="kg-legend"><Checkbox.Group value={kinds} onChange={v => update({ kinds: v.length ? v.join(",") : "none" })} options={KINDS.map(kind => ({ value: kind, label: <span><i style={{ background: KIND_COLOR[kind] }} />{KIND_LABEL[kind]}</span> }))} />
+            {net ? <span className="kg-edge-legend"><span><b className="edge-cites" />引用</span><span><b className="edge-similar" />主题相似</span><span><b className="edge-external" />不在当前图中的论文</span></span> : null}</div>
+          {canvasData.nodes.length ? <KnowledgeCanvas key={`${mode}-${year}-${query}`} scope={`${mode}-${year}-${query}`} data={shown} selected={selectedNode?.id || ""}
+            onSelect={id => id.startsWith("net:") ? navigate(paperLocation(id.slice(4), current)) : setSelected(id)} /> : <Empty description="请至少选择一种实体" />}
           <p className="kg-caption">画布最多展示 16 篇论文、18 位作者、18 个关键词和 5 个期刊／会议；计数和时间脉络使用当前筛选的全部样本。</p>
         </section>
         <aside className="kg-inspector" aria-label="节点详情">
@@ -127,9 +174,16 @@ export default function KnowledgeGraphPage() {
             {selectedNode.paper_id ? <Link className="inspector-open" to={paperLocation(selectedNode.paper_id, current)}>打开论文</Link> : null}
             <h3>关联实体 {neighbors.length}</h3>
             <div className="kg-neighbors">{neighbors.map((n, i) => n ? <button type="button" key={`${n.id}-${i}`} onClick={() => setSelected(n.id)}><i style={{ background: KIND_COLOR[n.kind] }} /><span>{n.label}</span><small>{KIND_LABEL[n.kind]}</small></button> : null)}</div>
+            {selectedNode.kind === "paper" && netPaperId ? <>
+              <h3>引用与相似论文{net ? ` ${netItems.length}` : ""}</h3>
+              {!net ? <p className="muted">正在读取关系…</p> : !netItems.length ? <p className="muted">暂未找到可核实的引用或相似论文。</p>
+                : <div className="kg-neighbors">{netItems.map(({ node, labels }) => <Link key={node.id} to={paperLocation(node.id, current)} className="kg-net-item"><span>{node.title}</span><small>{[node.year, ...labels].filter(Boolean).join(" · ")}</small></Link>)}</div>}
+              {net?.warnings.map(w => <p key={w} className="small-print">{w}</p>)}
+            </> : null}
           </> : <>
-            <h2>选择一个节点</h2>
-            <p className="muted">点击论文查看作者和主题；点击关键词查看讨论同一问题的论文。</p>
+            <h2>论文列表 {visiblePapers.length}</h2>
+            <p className="muted">点击论文在图中定位，再展开它的引用与相似关系。</p>
+            <div className="kg-neighbors">{visiblePapers.map(p => <button type="button" key={p.id} onClick={() => setSelected(p.id)}><span>{p.label}</span><small>{p.year ?? "年份未知"}</small></button>)}</div>
             {themes.length ? <><h3>常见主题</h3><div className="kg-topic-tags">{themes.slice(0, 8).map(t => <button type="button" key={t.id} onClick={() => setSelected(t.id)}>{t.label}<span>{t.count}</span></button>)}</div></> : <p className="muted">还没有主题关键词，完成论文 AI 分析后会出现。</p>}
           </>}
         </aside>

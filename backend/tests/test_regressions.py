@@ -54,11 +54,20 @@ class RegressionTests(unittest.IsolatedAsyncioTestCase):
             nonlocal calls
             calls += 1
             return httpx.Response(429)
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            with self.assertRaises(provider.SourceFailure) as error:
-                await provider.request(client, "https://test", {}, {}, "arXiv")
-            self.assertEqual(error.exception.retry_after, 60)
-            self.assertEqual(calls, 1)
+        with patch.object(provider.asyncio, "sleep", new=AsyncMock()):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                with self.assertRaises(provider.SourceFailure) as error:
+                    await provider.request(client, "https://test", {}, {}, "arXiv")
+                self.assertEqual(error.exception.retry_after, 60)
+                self.assertEqual(calls, 3)
+                provider._COOLDOWN.clear()
+                provider._NEXT.clear()
+                with provider.provider_cache.connection() as db, db:
+                    db.execute("UPDATE providers SET retry_at = 0")
+                with self.assertRaises(provider.SourceFailure) as again:
+                    await provider.request(client, "https://test", {"q": "next"}, {}, "arXiv")
+        self.assertEqual(calls, 6)
+        self.assertEqual(again.exception.retry_after, 120)
 
     async def test_no_key_all_attempts_s2_and_admin_can_disable(self):
         with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_API_KEY": "", "SEMANTIC_SCHOLAR_ENABLED": "true"}), patch.object(provider, "search_arxiv", new=AsyncMock(return_value=([paper(1)], 1))), patch.object(provider, "search_semantic_scholar", new=AsyncMock(return_value=([paper(2)], 1))) as s2:
@@ -121,6 +130,9 @@ class RegressionTests(unittest.IsolatedAsyncioTestCase):
                 response = await client.get("/api/papers/search", params={"q": "深度学习"})
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(fetch.call_args.args[0], "deep learning")
+                response = await client.get("/api/papers/search", params={"q": "大模型幻觉"})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(fetch.call_args.args[0], "large language model hallucination")
             self.assertEqual((await client.get("/api/health")).json(), {"status": "ok"})
             for method, status in [("GET", 200), ("DELETE", 400), ("POST", 200), ("PATCH", 400)]:
                 response = await client.options("/api/papers/search", headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": method})

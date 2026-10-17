@@ -89,8 +89,9 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=PAYLOAD))) as client:
             await self.fetch(client)
         self.age_cache(8)
-        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(429))) as client:
-            result = await self.fetch(client)
+        with patch.object(search.asyncio, "sleep", new=AsyncMock()):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(429))) as client:
+                result = await self.fetch(client)
         self.assertEqual(result.papers, [])
         self.assertIn("429", result.error)
 
@@ -103,6 +104,43 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             papers, total = await search.search_semantic_scholar(client, "deep learning", 0, 10, 2022, 2023, "date")
         self.assertEqual(papers[0].sources, ["semantic_scholar"])
+        self.assertEqual(total, 1)
+
+    async def test_relevance_search_uses_paper_search_page(self):
+        def handler(request):
+            self.assertTrue(request.url.path.endswith("/paper/search"))
+            self.assertEqual(request.url.params["offset"], "10")
+            self.assertEqual(request.url.params["limit"], "10")
+            self.assertEqual(request.url.params["query"], "deep learning")
+            self.assertNotIn("token", request.url.params)
+            return httpx.Response(200, json={**PAYLOAD, "total": 14902})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            papers, total = await search.search_semantic_scholar(client, "deep learning", 10, 10, None, None, "relevance")
+        self.assertEqual(papers[0].sources, ["semantic_scholar"])
+        self.assertEqual(total, 14902)
+
+    async def test_relevance_search_stops_after_1000(self):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: self.fail("must not call upstream"))) as client:
+            result = await search.run_source("semantic_scholar", lambda: search.search_semantic_scholar(client, "deep learning", 1000, 10, None, None))
+        self.assertEqual(result.papers, [])
+        self.assertIn("1000", result.warning)
+
+    async def test_short_429_then_success_does_not_cool_down(self):
+        calls = 0
+        def handler(request):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return httpx.Response(429)
+            return httpx.Response(200, json=PAYLOAD)
+        with patch.object(search.asyncio, "sleep", new=AsyncMock()):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                papers, total = await search.search_semantic_scholar(client, "deep learning", 0, 10, None, None)
+        self.assertEqual(calls, 2)
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(total, 1)
+        self.assertEqual(search._COOLDOWN.get("Semantic Scholar", 0), 0)
+        self.assertEqual(provider_cache.retry_at("Semantic Scholar"), 0)
 
     async def test_arxiv_outage_uses_only_indexed_arxiv_papers_with_explicit_notice(self):
         indexed = PaperOut(id="s2:" + "a" * 40, arxiv_id="2301.12345", title="Deep learning", sources=["semantic_scholar"])
@@ -115,6 +153,52 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("索引", result["source_warnings"]["arxiv"])
         self.assertEqual(result["source_retry_after"]["arxiv"], 60)
         self.assertTrue(result["total_estimated"])
+
+    async def test_openalex_supplies_arxiv_records_when_the_index_has_none(self):
+        journal = PaperOut(id="s2:" + "b" * 40, title="A journal article", sources=["semantic_scholar"])
+        preprint = PaperOut(id="arxiv:2406.11267", arxiv_id="2406.11267", title="Faithful finetuning", sources=["openalex"])
+        with patch.object(search, "search_arxiv", new=AsyncMock(side_effect=search.SourceFailure("arXiv 上游返回 429（限流），约 60 秒后可重试", 60))), \
+             patch.object(search, "search_s2_bulk", new=AsyncMock(return_value=([journal], 1))), \
+             patch.object(search, "search_openalex_arxiv", new=AsyncMock(return_value=[preprint])):
+            result = await search.search_papers("hallucination", 1, 10, "relevance", "arxiv", None, None)
+        self.assertEqual(result["papers"][0].arxiv_id, "2406.11267")
+        self.assertIn("OpenAlex", result["source_warnings"]["arxiv"])
+        self.assertEqual(result["source_errors"], {})
+
+    async def test_chinese_topic_does_not_spend_an_arxiv_request(self):
+        preprint = PaperOut(id="arxiv:2406.11267", arxiv_id="2406.11267", title="Faithful finetuning", sources=["semantic_scholar"])
+        live = AsyncMock(side_effect=AssertionError("must not call arXiv for an untranslated Chinese query"))
+        with patch.object(search, "search_arxiv", new=live), \
+             patch.object(search, "search_s2_bulk", new=AsyncMock(return_value=([preprint], 1))):
+            result = await search.search_papers("基层大模型", 1, 10, "relevance", "arxiv", None, None)
+        live.assert_not_awaited()
+        self.assertEqual(result["source_errors"], {})
+        self.assertEqual(result["papers"][0].arxiv_id, "2406.11267")
+
+    async def test_arxiv_rate_limit_keeps_results_from_the_other_source(self):
+        paper = PaperOut(id="s2:" + "c" * 40, title="Kept", sources=["semantic_scholar"])
+        with patch.object(search, "arxiv_with_index_fallback", new=AsyncMock(side_effect=search.SourceFailure("arXiv 上游返回 429（限流），约 60 秒后可重试", 60))), \
+             patch.object(search, "search_semantic_scholar", new=AsyncMock(return_value=([paper], 1))):
+            result = await search.search_papers("hallucination", 1, 10, "relevance", "all", None, None)
+        self.assertEqual(result["source_errors"], {})
+        self.assertIn("其他来源", result["source_warnings"]["arxiv"])
+        self.assertEqual(result["papers"][0].title, "Kept")
+        self.assertNotIn("arxiv", result["source_counts"])
+
+    def test_openalex_landing_url_becomes_an_arxiv_id(self):
+        paper = search.map_openalex_work({
+            "display_name": "Faithful Finetuning",
+            "publication_year": 2024,
+            "cited_by_count": 3,
+            "authorships": [{"author": {"display_name": "Ada"}}],
+            "primary_location": {"landing_page_url": "http://arxiv.org/abs/2406.11267v1"},
+            "abstract_inverted_index": {"Faithful": [0], "tuning": [1]},
+            "doi": "https://doi.org/10.48550/arxiv.2406.11267",
+        })
+        self.assertEqual(paper.arxiv_id, "2406.11267")
+        self.assertEqual(paper.abstract, "Faithful tuning")
+        self.assertIsNone(paper.doi)
+        self.assertEqual(paper.sources, ["openalex"])
 
 
 if __name__ == "__main__":

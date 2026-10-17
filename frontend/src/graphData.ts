@@ -1,5 +1,5 @@
 export type EntityKind = "paper" | "author" | "keyword" | "venue";
-export interface EntityNode { id: string; kind: EntityKind; label: string; year?: number | null; paper_id?: string; url?: string | null }
+export interface EntityNode { id: string; kind: EntityKind; label: string; year?: number | null; paper_id?: string; url?: string | null; external?: boolean }
 export interface EntityEdge { source: string; target: string; relation: string }
 export interface EntityGraph { nodes: EntityNode[]; edges: EntityEdge[]; total_papers: number; scope: string }
 export const KIND_LABEL: Record<EntityKind, string> = { paper: "论文", author: "作者", keyword: "关键词", venue: "期刊／会议" };

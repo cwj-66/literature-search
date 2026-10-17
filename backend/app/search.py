@@ -20,9 +20,12 @@ from . import ccf, provider_cache
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "literature-platform/0.1"
+USER_AGENT = "literature-platform/0.1 (academic literature search)"
 ARXIV_API = "https://export.arxiv.org/api/query"
 S2_API = "https://api.semanticscholar.org/graph/v1/paper"
+S2_RELEVANCE_CAP = 1000
+SHORT_RETRY_LIMIT = 30
+SHORT_ATTEMPTS = 3
 S2_FIELDS = ",".join(
     [
         "paperId",
@@ -59,6 +62,7 @@ class SourceResult:
         self.cached_at = None
         self.retry_after = 0
         self.total_limited = False
+        self.windowed = False
 
 
 def clean(text: str | None) -> str | None:
@@ -291,6 +295,26 @@ def arxiv_search_query(query: str, year_from: int | None, year_to: int | None) -
     return term
 
 
+QUERY_ALIASES = {
+    "深度学习": "deep learning",
+    "机器学习": "machine learning",
+    "大语言模型": "large language model",
+    "大模型幻觉": "large language model hallucination",
+    "知识图谱": "knowledge graph",
+    "检索增强生成": "retrieval augmented generation",
+    "人工智能": "artificial intelligence",
+}
+
+
+def normalize_query(query: str) -> str:
+    text = re.sub(r"\s+", " ", query.strip())
+    return QUERY_ALIASES.get(text, QUERY_ALIASES.get(text.replace(" ", ""), text))
+
+
+def contains_cjk(text: str) -> bool:
+    return any("\u4e00" <= char <= "\u9fff" for char in text)
+
+
 def s2_year(year_from: int | None, year_to: int | None) -> str | None:
     if year_from and year_to:
         return f"{year_from}-{year_to}"
@@ -327,6 +351,19 @@ async def cache_operation(function, *args, default=None):
     except (sqlite3.Error, OSError):
         logger.warning("Persistent provider cache unavailable")
         return default
+
+
+def retry_after_seconds(response: httpx.Response) -> float | None:
+    raw = response.headers.get("Retry-After", "")
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        try:
+            return parsedate_to_datetime(raw).timestamp() - time.time()
+        except (ValueError, TypeError, OverflowError):
+            return None
 
 
 def record_cache(response: httpx.Response, stale: bool = False, retry_after: int = 0):
@@ -369,51 +406,60 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
                 return record_cache(stale, True, retry)
             raise SourceFailure(f"{label} 上游限流，约 {retry} 秒后可重试", retry)
         await asyncio.sleep(max(0, _NEXT.get(label, 0) - time.monotonic()))
-        interval = 1.1 if label == "Semantic Scholar" else 3.1
-        try:
-            if on_items is None:
-                response = await client.get(url, params=params, headers=headers)
-            else:
-                # Parse complete paper objects as bytes arrive, without waiting
-                # for the upstream bulk response (up to 1000 papers) to finish.
-                async with client.stream("GET", url, params=params, headers=headers) as upstream:
-                    body = bytearray()
-                    items = ijson.sendable_list()
-                    parser = ijson.items_coro(items, "data.item", use_float=True)
-                    try:
-                        async for chunk in upstream.aiter_bytes():
-                            body.extend(chunk)
-                            if upstream.status_code == 200:
-                                parser.send(chunk)
-                                if items:
-                                    await on_items(list(items))
-                                    del items[:]
-                        if upstream.status_code == 200:
-                            parser.close()
-                    finally:
-                        with suppress(Exception):
-                            parser.close()
-                    response = httpx.Response(upstream.status_code, headers={
-                        key: value for key, value in upstream.headers.items()
-                        if key.lower() not in ("content-encoding", "content-length")
-                    }, content=bytes(body))
-        except httpx.HTTPError:
-            if stale is not None:
-                return record_cache(stale, True)
-            raise
-        finally:
-            # Space requests from completion, including long/failed responses.
-            _NEXT[label] = time.monotonic() + interval
-        if response.status_code == 429:
-            retry = response.headers.get("Retry-After", "")
+        interval = {"Semantic Scholar": 1.1, "arXiv": 3.1, "OpenAlex": 0.5}.get(label, 3.1)
+        attempt = 0
+        while True:
+            attempt += 1
             try:
-                delay = float(retry)
-            except ValueError:
-                try:
-                    delay = parsedate_to_datetime(retry).timestamp() - time.time()
-                except (ValueError, TypeError, OverflowError):
-                    delay = 60 if label == "arXiv" else 120
-            delay = max(1, min(delay, 3600)) if math.isfinite(delay) else 120
+                if on_items is None:
+                    response = await client.get(url, params=params, headers=headers)
+                else:
+                    # Parse complete paper objects as bytes arrive, without waiting
+                    # for the upstream bulk response (up to 1000 papers) to finish.
+                    async with client.stream("GET", url, params=params, headers=headers) as upstream:
+                        body = bytearray()
+                        items = ijson.sendable_list()
+                        parser = ijson.items_coro(items, "data.item", use_float=True)
+                        try:
+                            async for chunk in upstream.aiter_bytes():
+                                body.extend(chunk)
+                                if upstream.status_code == 200:
+                                    parser.send(chunk)
+                                    if items:
+                                        await on_items(list(items))
+                                        del items[:]
+                            if upstream.status_code == 200:
+                                parser.close()
+                        finally:
+                            with suppress(Exception):
+                                parser.close()
+                        response = httpx.Response(upstream.status_code, headers={
+                            key: value for key, value in upstream.headers.items()
+                            if key.lower() not in ("content-encoding", "content-length")
+                        }, content=bytes(body))
+            except httpx.HTTPError:
+                if stale is not None:
+                    return record_cache(stale, True)
+                raise
+            finally:
+                # Space requests from completion, including long/failed responses.
+                _NEXT[label] = time.monotonic() + interval
+            if response.status_code != 429:
+                break
+            header_delay = retry_after_seconds(response)
+            short = header_delay is None or (math.isfinite(header_delay) and header_delay <= SHORT_RETRY_LIMIT)
+            if not short or attempt >= SHORT_ATTEMPTS:
+                break
+            wait = header_delay if header_delay is not None else float(2 ** (attempt - 1))
+            logger.warning("%s upstream HTTP 429; retrying in %.0fs", label, max(0, wait))
+            await asyncio.sleep(max(0, wait))
+        if response.status_code == 429:
+            header_delay = retry_after_seconds(response)
+            strike = await cache_operation(provider_cache.bump_strike, label, default=1) or 1
+            if header_delay is None or not math.isfinite(header_delay):
+                base = 60 if label == "arXiv" else 120
+                header_delay = base * (2 ** (strike - 1))
+            delay = max(1, min(header_delay, 900))
             retry = math.ceil(delay)
             _COOLDOWN[label] = time.monotonic() + delay
             await cache_operation(provider_cache.set_retry_at, label, time.time() + delay)
@@ -439,12 +485,14 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
                     raise ValueError("Not an Atom feed")
             else:
                 payload = response.json()
-                if not isinstance(payload, dict) or not any(key in payload for key in ("data", "paperId")):
+                if not isinstance(payload, dict) or not any(key in payload for key in ("data", "paperId", "results")):
                     raise ValueError("Not a paper response")
         except Exception as exc:
             # Parser-specific failures are mapped by adapters; do not cache them.
             logger.warning("%s response skipped by cache validation: %s", label, type(exc).__name__)
             return record_cache(stale, True) if stale is not None else response
+        if response.status_code == 200:
+            await cache_operation(provider_cache.clear_strikes, label)
         response.extensions["paper_cached_at"] = time.time()
         await cache_operation(provider_cache.put, disk_key, response.headers.get("content-type", ""), response.content)
         _CACHE[cache_key] = (time.monotonic() + 600, response)
@@ -505,7 +553,7 @@ async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int
     if year:
         params["year"] = year
     state = _CACHE_STATUS.get()
-    if state is not None:
+    if state is not None and sort != "date":
         state["note"] = "相关性为每批候选的关键词排序，后续结果按需继续获取"
     papers = []
     seen = set()
@@ -559,11 +607,42 @@ def deduplicate(papers):
     return result
 
 
+async def search_s2_relevance(client, query: str, offset: int, limit: int, year_from: int | None, year_to: int | None) -> tuple[list[PaperOut], int]:
+    """One page of Semantic Scholar relevance search. The API serves at most 1000 hits."""
+    words = re.findall(r"[\w]+", query, flags=re.UNICODE)
+    if not words:
+        raise SourceFailure("请输入有效的检索关键词")
+    state = _CACHE_STATUS.get()
+    if offset >= S2_RELEVANCE_CAP:
+        if state is not None:
+            state["note"] = "相关性结果最多到第 1000 条，更靠后的页仍显示 arXiv"
+            state["total_limited"] = True
+            state["windowed"] = True
+        return [], 0
+    limit = max(1, min(limit, 100, S2_RELEVANCE_CAP - offset))
+    params = {"query": query, "offset": offset, "limit": limit, "fields": S2_FIELDS}
+    year = s2_year(year_from, year_to)
+    if year:
+        params["year"] = year
+    response = await request(client, f"{S2_API}/search", params, s2_headers(), "Semantic Scholar")
+    payload = response.json()
+    if not isinstance(payload.get("data"), list):
+        raise SourceFailure("Semantic Scholar 检索返回了无法解析的内容")
+    papers = [paper for item in payload["data"] if (paper := map_s2_paper(item)) and year_matches(paper, year_from, year_to)]
+    estimate = payload.get("total")
+    total = estimate if isinstance(estimate, int) else len(papers)
+    if state is not None:
+        state["windowed"] = True
+        if total > S2_RELEVANCE_CAP:
+            state["total_limited"] = True
+    return papers, total
+
+
 async def search_semantic_scholar(client: httpx.AsyncClient, query: str, offset: int, limit: int, year_from: int | None, year_to: int | None, sort: str = "relevance") -> tuple[list[PaperOut], int]:
-    # Bulk supports continuation beyond the relevance endpoint's 1000-hit cap,
-    # with or without an API key. Request only enough batches for this page.
-    papers, total = await search_s2_bulk(client, query, year_from, year_to, sort, offset + limit)
-    return papers[offset:offset + limit], total
+    if sort == "date":
+        papers, total = await search_s2_bulk(client, query, year_from, year_to, sort, offset + limit)
+        return papers[offset:offset + limit], total
+    return await search_s2_relevance(client, query, offset, limit, year_from, year_to)
 
 
 async def fetch_s2_paper(client: httpx.AsyncClient, paper_ref: str) -> PaperOut | None:
@@ -637,6 +716,7 @@ async def run_source(name: str, fetcher) -> SourceResult:
         result = SourceResult(name, papers, total, None)
         result.warning = state.get("note")
         result.total_limited = bool(state.get("total_limited"))
+        result.windowed = bool(state.get("windowed"))
         result.retry_after = state.get("retry_after", 0)
         if state.get("stale"):
             result.cached_at = datetime.fromtimestamp(state["cached_at"], timezone.utc).isoformat()
@@ -683,25 +763,145 @@ async def unique_prefix(fetcher, target: int, maximum: int, year_from: int | Non
     return papers, total
 
 
-async def arxiv_with_index_fallback(client, query, target, sort, year_from, year_to):
+OPENALEX_API = "https://api.openalex.org/works"
+ARXIV_SOURCE = "S4306400194"
+
+
+def abstract_from_inverted(inverted) -> str | None:
+    if not isinstance(inverted, dict):
+        return None
+    pairs = []
+    for word, positions in inverted.items():
+        if not isinstance(word, str) or not isinstance(positions, list):
+            continue
+        for pos in positions:
+            if isinstance(pos, int) and 0 <= pos < 5000:
+                pairs.append((pos, word))
+    if not pairs:
+        return None
+    words = [""] * (max(pos for pos, _ in pairs) + 1)
+    for pos, word in pairs:
+        words[pos] = word
+    return clean(" ".join(word for word in words if word))
+
+
+def arxiv_id_from_url(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    match = re.search(r"arxiv\.org/(?:abs|pdf)/([^?#]+)", raw, re.I)
+    if not match:
+        return None
+    value = match.group(1).strip("/")
+    if value.lower().endswith(".pdf"):
+        value = value[:-4]
+    return re.sub(r"v\d+$", "", value) or None
+
+
+def map_openalex_work(item: dict) -> PaperOut | None:
+    title = clean(item.get("display_name"))
+    location = item.get("primary_location") if isinstance(item.get("primary_location"), dict) else {}
+    access = item.get("open_access") if isinstance(item.get("open_access"), dict) else {}
+    ids = item.get("ids") if isinstance(item.get("ids"), dict) else {}
+    arxiv_id = arxiv_id_from_url(location.get("landing_page_url")) or arxiv_id_from_url(location.get("pdf_url"))
+    arxiv_id = arxiv_id or arxiv_id_from_url(access.get("oa_url")) or arxiv_id_from_url(ids.get("arxiv"))
+    if not title or not arxiv_id:
+        return None
+    authors = []
+    for row in item.get("authorships") or []:
+        author = row.get("author") if isinstance(row, dict) else None
+        name = clean(author.get("display_name")) if isinstance(author, dict) else None
+        if name:
+            authors.append(name)
+    doi = clean(item.get("doi"))
+    if doi and doi.lower().startswith("https://doi.org/"):
+        doi = doi[16:]
+    if doi and "arxiv" in doi.lower():
+        doi = None
+    year = item.get("publication_year")
+    citations = item.get("cited_by_count")
+    return PaperOut(
+        id=f"arxiv:{arxiv_id}",
+        title=title,
+        authors=authors,
+        abstract=abstract_from_inverted(item.get("abstract_inverted_index")),
+        year=year if isinstance(year, int) else None,
+        venue="arXiv（预印本）",
+        sources=["openalex"],
+        url=f"https://arxiv.org/abs/{arxiv_id}",
+        pdf_url=f"https://arxiv.org/pdf/{arxiv_id}",
+        citation_count=citations if isinstance(citations, int) else None,
+        arxiv_id=arxiv_id,
+        doi=doi,
+    )
+
+
+async def search_openalex_arxiv(client, query, year_from, year_to, limit):
+    filters = [f"primary_location.source.id:{ARXIV_SOURCE}"]
+    if year_from or year_to:
+        filters.append(f"publication_year:{year_from or 1900}-{year_to or 2100}")
+    params = {
+        "search": query,
+        "filter": ",".join(filters),
+        "per_page": max(1, min(limit, 25)),
+        "select": "display_name,authorships,publication_year,ids,doi,cited_by_count,primary_location,open_access,abstract_inverted_index",
+    }
+    mailto = os.getenv("OPENALEX_MAILTO", "").strip()
+    if mailto:
+        params["mailto"] = mailto
+    response = await request(client, OPENALEX_API, params, {"User-Agent": USER_AGENT}, "OpenAlex")
     try:
-        return await unique_prefix(lambda start, size: search_arxiv(client, query, start, size, sort, year_from, year_to), target, 10000, year_from, year_to)
-    except (SourceFailure, httpx.HTTPError) as exc:
-        if not semantic_enabled():
-            raise
+        payload = response.json()
+    except ValueError as exc:
+        raise SourceFailure("OpenAlex 返回了无法解析的内容") from exc
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if not isinstance(results, list):
+        raise SourceFailure("OpenAlex 返回了无法解析的内容")
+    return [paper for item in results if isinstance(item, dict) and (paper := map_openalex_work(item)) and year_matches(paper, year_from, year_to)]
+
+
+def remember_arxiv_substitute(papers, via, failure):
+    state = _CACHE_STATUS.get()
+    if state is not None:
+        state["note"] = f"arXiv API 暂不可用，以下来自{via}；总数仅为本批匹配记录，相关性为本地排序"
+        state["total_limited"] = True
+        state["retry_after"] = getattr(failure, "retry_after", 0) or 0
+    return papers, len(papers)
+
+
+async def arxiv_substitutes(client, query, sort, year_from, year_to, limit):
+    if semantic_enabled():
         try:
-            indexed, _ = await search_s2_bulk(client, query, year_from, year_to, sort)
+            indexed, _ = await search_s2_bulk(client, query, year_from, year_to, sort, max(limit, 20))
+            papers = [paper for paper in indexed if paper.arxiv_id]
+            if papers:
+                return papers, "Semantic Scholar 收录的 arXiv 论文索引"
         except (SourceFailure, httpx.HTTPError):
-            raise exc
-        papers = [paper for paper in indexed if paper.arxiv_id]
-        if not papers:
-            raise exc
-        state = _CACHE_STATUS.get()
-        if state is not None:
-            state["note"] = "arXiv API 暂不可用，以下来自 Semantic Scholar 收录的 arXiv 论文索引；总数仅为本批匹配记录，相关性为本地排序"
-            state["total_limited"] = True
-            state["retry_after"] = getattr(exc, "retry_after", 0)
-        return papers, len(papers)
+            pass
+    try:
+        papers = await search_openalex_arxiv(client, query, year_from, year_to, max(limit, 10))
+        if papers:
+            return papers, "OpenAlex 收录的 arXiv 论文"
+    except (SourceFailure, httpx.HTTPError):
+        pass
+    return [], None
+
+
+async def arxiv_with_index_fallback(client, query, target, sort, year_from, year_to):
+    failure = None
+    if not contains_cjk(query):
+        try:
+            return await unique_prefix(lambda start, size: search_arxiv(client, query, start, size, sort, year_from, year_to), target, 10000, year_from, year_to)
+        except (SourceFailure, httpx.HTTPError) as exc:
+            failure = exc
+    papers, via = await arxiv_substitutes(client, query, sort, year_from, year_to, target)
+    if papers:
+        return remember_arxiv_substitute(papers, via, failure)
+    if failure is not None:
+        raise failure
+    state = _CACHE_STATUS.get()
+    if state is not None:
+        state["note"] = "arXiv 只索引英文题录，中文检索未向 arXiv 发送请求"
+    return [], 0
 
 
 async def search_papers(query: str, page: int, page_size: int, sort: str, source: str, year_from: int | None, year_to: int | None) -> dict:
@@ -712,6 +912,7 @@ async def search_papers(query: str, page: int, page_size: int, sort: str, source
 
 
 async def search_papers_stream(query: str, page: int, page_size: int, sort: str, source: str, year_from: int | None, year_to: int | None):
+    query = normalize_query(query)
     offset = (page - 1) * page_size
     target = offset + page_size
     timeout = httpx.Timeout(25.0, connect=10.0)
@@ -732,8 +933,11 @@ async def search_papers_stream(query: str, page: int, page_size: int, sort: str,
             jobs.append(asyncio.create_task(worker("arxiv", lambda: arxiv_with_index_fallback(client, query, target, sort, year_from, year_to))))
         if source == "semantic_scholar" or (source == "all" and semantic_enabled()):
             pending.append("semantic_scholar")
-            jobs.append(asyncio.create_task(worker("semantic_scholar", lambda: search_semantic_scholar(
-                client, query, 0, target, year_from, year_to, sort))))
+            if sort == "date":
+                s2_call = lambda: search_semantic_scholar(client, query, 0, target, year_from, year_to, "date")
+            else:
+                s2_call = lambda: search_semantic_scholar(client, query, offset, page_size, year_from, year_to, "relevance")
+            jobs.append(asyncio.create_task(worker("semantic_scholar", s2_call)))
         results = {}
         try:
             yield search_snapshot(query, page, page_size, sort, year_from, year_to, list(results.values()), pending)
@@ -758,8 +962,20 @@ def search_snapshot(query, page, page_size, sort, year_from, year_to, results, p
     offset = (page - 1) * page_size
     # Completion order must not change final ranking or metadata precedence.
     results = sorted(results, key=lambda item: 0 if item.name == "arxiv" else 1)
-    papers = merge_papers([item.papers for item in results if item.papers], sort)
-    papers = [ccf.annotate(paper) for paper in papers if year_matches(paper, year_from, year_to)]
+    if any(item.papers for item in results):
+        for item in results:
+            if item.name == "arxiv" and item.error and item.retry_after and not item.papers:
+                item.warning = item.warning or "arXiv 正在限流，本次结果来自其他来源，请稍后再试"
+                item.error = None
+    def eligible(group):
+        return [paper for paper in group if year_matches(paper, year_from, year_to)]
+
+    prefixes = [eligible(item.papers) for item in results if item.papers and not item.windowed]
+    windows = [eligible(item.papers) for item in results if item.papers and item.windowed]
+    papers = merge_papers(prefixes, sort)[offset:offset + page_size] if prefixes else []
+    if windows:
+        papers = merge_papers([papers, *windows], sort)[:page_size]
+    papers = [ccf.annotate(paper) for paper in papers]
     # Keep merged metadata identical when navigating from a card to its detail.
     for paper in papers:
         _PAPERS[paper.id] = (time.monotonic() + 600, paper)
@@ -773,8 +989,8 @@ def search_snapshot(query, page, page_size, sort, year_from, year_to, results, p
         "page_size": page_size,
         "total": max(totals) if totals else 0,
         "total_estimated": len(totals) > 1 or bool(year_from or year_to) or any(item.warning for item in results),
-        "papers": papers[offset:offset + page_size],
-        "source_counts": {item.name: item.total for item in results if not item.error or item.papers},
+        "papers": papers,
+        "source_counts": {item.name: item.total for item in results if item.papers or (not item.error and not item.warning)},
         "source_errors": {item.name: item.error for item in results if item.error},
         "source_warnings": {item.name: item.warning for item in results if item.warning},
         "source_cached_at": {item.name: item.cached_at for item in results if item.cached_at},

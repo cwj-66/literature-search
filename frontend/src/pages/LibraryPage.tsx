@@ -61,7 +61,7 @@ export default function LibraryPage() {
     {importOpen || empty ? <div className="panel import-wrap"><ImportPanel autoFocus={importOpen} onImported={() => { patch({ page: null }); setRetry(v => v + 1); }} /></div> : null}
     {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} /> : null}
     {loading && !data ? <div className="row-skeletons">{[0, 1, 2, 3].map(i => <Skeleton key={i} active title={{ width: "60%" }} paragraph={{ rows: 1 }} />)}</div> : null}
-    {empty ? <Empty description={<>文献库为空。<Link to="/">检索论文</Link>后点“加入文献库”，或用上方输入框导入。</>} /> : null}
+    {empty ? <Empty description={<>文献库为空。<Link to="/search">检索论文</Link>后点“加入文献库”，或用上方输入框导入。</>} /> : null}
     {data && data.papers.length ? <section className="library-surface" aria-label="文献列表" aria-busy={loading}>
       <div className="library-tools">
         <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选本页文献" placeholder="筛选本页标题、作者或年份" />

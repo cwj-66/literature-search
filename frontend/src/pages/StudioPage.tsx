@@ -70,7 +70,7 @@ export default function StudioPage() {
     {data && papers.length ? <div className="scope-tools"><Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} placeholder="查找标题或年份" aria-label="查找范围内论文" /><Button size="small" type={onlyPicked ? "primary" : "text"} aria-pressed={onlyPicked} onClick={() => setOnlyPicked(value => !value)}>仅看已选</Button></div> : null}
     {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} /> : null}
     {!data && !error ? <Skeleton active paragraph={{ rows: 5 }} /> : null}
-    {data && !papers.length ? <Empty description={<>文献库为空，<Link to="/">先检索并加入论文</Link></>} /> : null}
+    {data && !papers.length ? <Empty description={<>文献库为空，<Link to="/search">先检索并加入论文</Link></>} /> : null}
     <ul className="scope-list">{visible.map(paper => {
       const id = paper.id;
       const checked = picked.some(item => item.id === id);

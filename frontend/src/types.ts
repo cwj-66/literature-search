@@ -26,7 +26,7 @@ export function ccfLabel(paper: Paper): string | null {
   return null;
 }
 
-export const SOURCE_LABEL: Record<string, string> = { arxiv: "arXiv", semantic_scholar: "Semantic Scholar" };
+export const SOURCE_LABEL: Record<string, string> = { arxiv: "arXiv", semantic_scholar: "Semantic Scholar", openalex: "OpenAlex" };
 
 export function paperKey(paper: Paper) {
   return paper.local_id ?? paper.id;

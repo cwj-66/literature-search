@@ -1,15 +1,15 @@
 import type { ThemeConfig } from "antd";
 
 export const tokens = {
-  bg: "#f5f5f1",
+  bg: "#ffffff",
   surface: "#ffffff",
-  subtle: "#fafaf7",
+  subtle: "#f7f8fb",
   ink: "#191f2b",
   text: "#2c3340",
   muted: "#545d6c",
   faint: "#6b7382",
-  line: "#e6e5df",
-  lineStrong: "#d2d1c9",
+  line: "#e8eaf0",
+  lineStrong: "#d4d8e2",
   accent: "#2a53b0",
   accentHover: "#1f418c",
   accentSoft: "#edf1f9",

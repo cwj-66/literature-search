@@ -14,7 +14,12 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
   const drag = useRef<{ x: number; y: number; originX: number; originY: number; moved: boolean } | null>(null);
   const positions = useMemo(() => {
     const result = new Map<string, EntityNode & { x: number; y: number }>();
-    const groups = { paper: data.nodes.filter(n => n.kind === "paper"), author: data.nodes.filter(n => n.kind === "author"), keyword: data.nodes.filter(n => n.kind === "keyword"), venue: data.nodes.filter(n => n.kind === "venue") };
+    const ext = data.nodes.filter(n => n.external);
+    ext.forEach((node, i) => {
+      const angle = 2 * Math.PI * i / Math.max(ext.length, 1) - Math.PI / 2;
+      result.set(node.id, { ...node, x: 510 + Math.cos(angle) * 360, y: 345 + Math.sin(angle) * 190 });
+    });
+    const groups = { paper: data.nodes.filter(n => n.kind === "paper" && !n.external), author: data.nodes.filter(n => n.kind === "author"), keyword: data.nodes.filter(n => n.kind === "keyword"), venue: data.nodes.filter(n => n.kind === "venue") };
     for (const [kind, list] of Object.entries(groups)) {
       list.forEach((node, i) => {
         let x = 0, y = 0;
@@ -58,7 +63,11 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
         {data.edges.map((edge, i) => {
           const a = positions.get(edge.source), b = positions.get(edge.target); if (!a || !b) return null;
           const active = edge.source === selected || edge.target === selected;
-          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={active ? KIND_COLOR[b.kind] : "#d6d5ce"} strokeWidth={active ? 2.2 : 1} opacity={selected && !active ? .13 : .65} />;
+          if (edge.relation === "cites" || edge.relation === "similar") {
+            const cites = edge.relation === "cites";
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={cites ? "#e8590c" : "#7048e8"} strokeWidth={2.2} strokeDasharray={cites ? undefined : "6 5"} />;
+          }
+          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={active ? KIND_COLOR[b.kind] : "#dfe2ea"} strokeWidth={active ? 2.2 : 1} opacity={selected && !active ? .13 : .8} />;
         })}
         {[...positions.values()].map(node => <g key={node.id} role="button" tabIndex={0}
           aria-label={`${KIND_LABEL[node.kind]}：${node.label}`} className="kg-node"
@@ -66,9 +75,9 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
           onClick={() => { if (!drag.current?.moved) onSelect(node.id === selected ? "" : node.id); }}
           onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.id === selected ? "" : node.id); } }}>
           <title>{node.label}</title>
-          <circle r={node.kind === "paper" ? 22 : 14} fill={KIND_COLOR[node.kind]} stroke={selected === node.id ? "#191f2b" : "white"} strokeWidth={selected === node.id ? 4 : 3} />
-          <text y="4" textAnchor="middle" fill="white" fontSize="11">{node.kind === "paper" ? node.year ?? "?" : KIND_LABEL[node.kind].slice(0, 1)}</text>
-          <text y={node.kind === "paper" ? 40 : 32} textAnchor="middle" fill="#2c3340" fontSize="13" stroke="#fcfcfa" strokeWidth="4" paintOrder="stroke">{node.label.length > 19 ? node.label.slice(0, 18) + "…" : node.label}</text>
+          <circle r={node.kind === "paper" ? 22 : 14} fill={node.external ? "#fff" : KIND_COLOR[node.kind]} stroke={selected === node.id ? "#191f2b" : node.external ? KIND_COLOR.paper : "white"} strokeWidth={selected === node.id ? 4 : 3} strokeDasharray={node.external ? "4 3" : undefined} />
+          <text y="4" textAnchor="middle" fill={node.external ? KIND_COLOR.paper : "white"} fontSize="11">{node.kind === "paper" ? node.year ?? "?" : KIND_LABEL[node.kind].slice(0, 1)}</text>
+          <text y={node.kind === "paper" ? 40 : 32} textAnchor="middle" fill="#2c3340" fontSize="13" stroke="#fff" strokeWidth="4" paintOrder="stroke">{node.label.length > 19 ? node.label.slice(0, 18) + "…" : node.label}</text>
         </g>)}
       </g>
     </svg>

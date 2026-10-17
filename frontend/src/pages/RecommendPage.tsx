@@ -38,7 +38,7 @@ function StartPicker() {
     <header className="page-head"><div><h1 className="page-title">相关推荐</h1><p className="page-sub">从一篇已入库论文出发，查找相关工作。推荐会区分有来源记录的引用关系与算法推算的主题相似。</p></div></header>
     {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} /> : null}
     {!choices && !error ? <Skeleton active /> : null}
-    {choices && !choices.length ? <Empty description={<>文献库还没有论文，<Link to="/">先检索并加入一篇</Link>。</>} /> : null}
+    {choices && !choices.length ? <Empty description={<>文献库还没有论文，<Link to="/search">先检索并加入一篇</Link>。</>} /> : null}
     <div className="paper-list">{choices?.map(paper => <PaperRow key={paperKey(paper)} paper={paper} from={here} abstract={false}
       side={<Link to={recommendLocation(paperKey(paper), "/library")}>以此为起点</Link>} />)}</div>
   </main>;

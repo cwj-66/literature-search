@@ -24,12 +24,14 @@ export function sectionOf(pathname: string, params: URLSearchParams) {
   if (pathname.startsWith("/library")) return "library";
   if (pathname.startsWith("/studio")) return "studio";
   if (pathname.startsWith("/graph")) return "graph";
-  return "search";
+  if (pathname.startsWith("/search")) return "search";
+  return "home";
 }
 
 export function returnLabel(from: string) {
   const path = new URL(from, window.location.origin).pathname;
-  if (path === "/") return "检索结果";
+  if (path === "/") return "工作台";
+  if (path === "/search") return "检索结果";
   if (path.startsWith("/recommend")) return "相关推荐";
   if (path.startsWith("/paper")) return "上一篇论文";
   if (path.startsWith("/graph")) return "图谱";

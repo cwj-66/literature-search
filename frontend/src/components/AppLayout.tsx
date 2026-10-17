@@ -5,7 +5,8 @@ import { sectionOf } from "../workspace";
 const scrollPositions = new Map<string, number>();
 
 const navigation = [
-  { label: "检索", href: "/", key: "search" },
+  { label: "工作台", href: "/", key: "home" },
+  { label: "检索", href: "/search", key: "search" },
   { label: "文献库", href: "/library", key: "library" },
   { label: "研究台", href: "/studio", key: "studio" },
   { label: "图谱", href: "/graph", key: "graph" },
@@ -63,7 +64,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <a href="#main" className="skip-link">跳到主要内容</a>
     <header className="app-header">
       <div className="app-header-inner">
-        <Link to="/" className="app-brand" aria-label="文献研读，返回检索">
+        <Link to="/" className="app-brand" aria-label="文献研读，返回工作台">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5c-.8 0-1.5-.7-1.5-1.5v-13ZM13 4h5.5c.8 0 1.5.7 1.5 1.5v13c0 .8-.7 1.5-1.5 1.5H13V4Z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
           <span>文献研读</span>
         </Link>

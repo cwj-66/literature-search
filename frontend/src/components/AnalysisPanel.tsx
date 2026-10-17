@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { Alert, Button, Collapse } from "antd";
+import { Alert, Button, Checkbox, Collapse, Switch } from "antd";
 import { fetchAnalysis, startAnalysis } from "../api";
 import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind } from "../types";
 
@@ -23,6 +23,35 @@ const BLOCKS: [ClaimKind, string][] = [
   ["evaluation", "实验与验证"],
   ["limitation", "局限与未来工作"],
 ];
+
+export type Tone = "problem" | "method" | "contribution" | "result";
+export const TONES: { key: Tone; label: string; hint: string }[] = [
+  { key: "problem", label: "研究问题", hint: "背景、目标与主要研究内容，蓝色" },
+  { key: "method", label: "方法", hint: "技术方案与步骤，橙色" },
+  { key: "contribution", label: "作者声称的贡献", hint: "创新点，紫色" },
+  { key: "result", label: "实验结果与局限", hint: "实验验证、局限与未来工作，粉色" },
+];
+const TONE_OF: Partial<Record<ClaimKind, Tone>> = {
+  research_problem: "problem", main_content: "problem", technical_method: "method", method_step: "method",
+  innovation: "contribution", evaluation: "result", limitation: "result",
+};
+export interface Skim { on: boolean; tones: Tone[] }
+export const ALL_TONES: Tone[] = TONES.map(t => t.key);
+
+export function SkimPanel({ result, value, onChange }: { result: AnalysisResult; value: Skim; onChange: (value: Skim) => void }) {
+  const count = (tone: Tone) => result.claims?.filter(c => c.status === "supported" && TONE_OF[c.kind] === tone).length ?? 0;
+  return <section className="skim-panel" aria-label="速读高亮">
+    <div className="skim-head"><h2>速读高亮</h2><Switch checked={value.on} onChange={on => onChange({ ...value, on })} aria-label="启用速读高亮" /></div>
+    <p className="field-help">按类别给分析结论上色，便于快速浏览；每条结论仍可展开原文依据核验。</p>
+    <ul className="skim-list">{TONES.map(tone => <li key={tone.key}>
+      <Checkbox disabled={!value.on} checked={value.tones.includes(tone.key)}
+        onChange={e => onChange({ ...value, tones: e.target.checked ? [...value.tones, tone.key] : value.tones.filter(t => t !== tone.key) })}>
+        <span className={`skim-dot tone-${tone.key}`} />{tone.label}（{count(tone.key)} 条）
+      </Checkbox>
+      <span className="small-print">{tone.hint}</span>
+    </li>)}</ul>
+  </section>;
+}
 
 function toView(key: string, section: string, claim: AnalysisClaim, result: AnalysisResult): EvidenceView {
   const sources = new Map(result.source_paragraphs?.map(p => [p.id, p]));
@@ -48,7 +77,7 @@ function Claim({ claim, result, section, id, mode, active, onEvidence }: ClaimPr
     ["数据集／对象", claim.dataset], ["比较对象", claim.baseline], ["指标", claim.metric], ["结果", claim.result], ["成立条件", claim.conditions],
   ].filter(([, value]) => value) : [];
   const view = toView(id, section, claim, result);
-  return <div className={`claim${selected ? " is-active" : ""}`}>
+  return <div className={`claim${selected ? " is-active" : ""}`} data-tone={TONE_OF[claim.kind]}>
     <p className="claim-text">{claim.text}</p>
     {details.length ? <dl className="claim-fields">{details.map(([label, value]) => <Fragment key={label}><dt>{label}</dt><dd>{value}</dd></Fragment>)}</dl> : null}
     {claim.evidence.length

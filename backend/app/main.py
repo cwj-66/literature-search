@@ -19,7 +19,7 @@ from .schemas import (
     LibraryResponse, LocalPaperOut, NetworkResponse, PaperOut, QARequest, RecommendationResponse,
     ResearchResume, ResearchStart, SearchResponse,
 )
-from .search import SourceFailure, fetch_paper, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
+from .search import SourceFailure, fetch_paper, normalize_query, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 logging.basicConfig(level=logging.INFO)
@@ -74,8 +74,7 @@ async def search(
         raise HTTPException(status_code=400, detail="请输入关键词")
     if year_from and year_to and year_from > year_to:
         raise HTTPException(status_code=400, detail="起始年份不能晚于结束年份")
-    query = {"深度学习": "deep learning", "机器学习": "machine learning", "大语言模型": "large language model",
-             "知识图谱": "knowledge graph", "检索增强生成": "retrieval augmented generation", "人工智能": "artificial intelligence"}.get(query, query)
+    query = normalize_query(query)
     if stream:
         async def chunks():
             async for snapshot in search_papers_stream(query, page, page_size, sort, source, year_from, year_to):

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Skeleton } from "antd";
+import { Alert, Button, Select, Skeleton } from "antd";
 import { CloseOutlined } from "@ant-design/icons";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { AnalysisPanel, EvidenceList, type EvidenceView } from "../components/AnalysisPanel";
-import { ImportButton } from "../components/ImportPaper";
+import { ALL_TONES, AnalysisPanel, EvidenceList, SkimPanel, type EvidenceView, type Skim } from "../components/AnalysisPanel";
+import { CollectButton } from "../components/CollectButton";
+import { findKey, projects, STATUS_LABEL, useProjects, type ReadStatus } from "../projects";
 import { PaperContext } from "../components/PaperContext";
 import { ExternalLinks, paperFacts } from "../components/PaperRow";
 import { fetchPaper } from "../api";
@@ -42,6 +43,10 @@ export default function PaperPage() {
   const [retry, setRetry] = useState(0);
   const [evidence, setEvidence] = useState<EvidenceView | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [skim, setSkim] = useState<Skim>({ on: true, tones: ALL_TONES });
+  const { current } = useProjects();
+  const projectKey = paper ? findKey(current, paper) : "";
+  useEffect(() => { if (paper) projects.open(paper); }, [paper?.id, paper?.local_id]);
   const refreshPaper = useCallback(() => {
     if (!id) return;
     fetchPaper(id).then(data => {
@@ -79,7 +84,7 @@ export default function PaperPage() {
       {loading ? <div className="reading-column"><Skeleton active title={{ width: "80%" }} paragraph={{ rows: 6 }} /></div> : null}
       {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} /> : null}
       {paper ? <div className="paper-layout">
-        <article className="reading-column">
+        <article className={`reading-column${skim.on ? skim.tones.map(t => ` skim-${t}`).join("") : ""}`}>
           <header className="paper-header">
             <p className="paper-kicker">{paper.sources.map(s => SOURCE_LABEL[s] ?? s).join(" · ") || "论文"}</p>
             <h1 className="paper-heading">{paper.title}</h1>
@@ -87,7 +92,9 @@ export default function PaperPage() {
             <p className="paper-facts">{paperFacts(paper).map(item => <span key={item}>{item}</span>)}</p>
             <Identifiers paper={paper} />
             <div className="paper-header-actions">
-              <ImportButton key={`${paper.id}-${paper.local_id ?? ""}`} paper={paper} onSaved={saved => setPaper(current => current?.id === paper.id ? saved : current)} />
+              <CollectButton key={`${paper.id}-${paper.local_id ?? ""}`} size="middle" paper={paper} onSaved={saved => setPaper(current => current?.id === paper.id ? saved : current)} />
+              {projectKey ? <Select size="small" aria-label="阅读状态" value={current!.papers[projectKey].status} onChange={(v: ReadStatus) => projects.setStatus(projectKey, v)}
+                options={(Object.keys(STATUS_LABEL) as ReadStatus[]).map(v => ({ value: v, label: STATUS_LABEL[v] }))} style={{ width: 84 }} /> : null}
               {paper.imported_at ? <span className="muted">入库于 {new Date(paper.imported_at).toLocaleDateString("zh-CN")}</span> : null}
             </div>
           </header>
@@ -95,9 +102,11 @@ export default function PaperPage() {
             <h2 id="abstract-title">摘要</h2>
             <p className="reading-text">{paper.abstract || <span className="muted">该论文没有可用摘要。</span>}</p>
           </section>
+          {result && !aside ? <SkimPanel result={result} value={skim} onChange={setSkim} /> : null}
           <AnalysisPanel paperId={id} onImported={refreshPaper} mode={aside ? "aside" : "inline"} active={evidence?.key ?? ""} onEvidence={setEvidence} onResult={setResult} />
         </article>
-        {aside ? <aside className="evidence-pane" id="evidence-pane" aria-label="原文依据" aria-live="polite">
+        {aside && result ? <aside className="evidence-pane" id="evidence-pane" aria-label="速读与原文依据" aria-live="polite">
+          <SkimPanel result={result} value={skim} onChange={setSkim} />
           <div className="evidence-pane-head">
             <h2>原文依据</h2>
             {evidence ? <Button type="text" size="small" icon={<CloseOutlined />} aria-label="关闭依据" onClick={() => setEvidence(null)} /> : null}

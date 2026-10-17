@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Empty, Input, InputNumber, Pagination, Select, Skeleton } from "antd";
+import { Alert, Button, Checkbox, Empty, Input, InputNumber, Pagination, Segmented, Select, Skeleton } from "antd";
 import { LoadingOutlined, SearchOutlined } from "@ant-design/icons";
 import type { InputRef } from "antd";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { fetchLibrary, searchPapers } from "../api";
-import { ImportButton } from "../components/ImportPaper";
+import { CollectButton } from "../components/CollectButton";
 import { ExternalLinks, PaperRow } from "../components/PaperRow";
+import { useSessionState } from "../hooks";
 import type { LibraryResponse, SearchResponse } from "../types";
 import { paperKey, SOURCE_LABEL } from "../types";
 import { paperLocation } from "../workspace";
@@ -45,6 +46,9 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(Boolean(yearFrom || yearTo || sourceParam || params.get("sort")));
   const previousRetry = useRef(0);
   const searchInput = useRef<InputRef>(null);
+  const [ccf, setCcf] = useState<string[]>([]);
+  const [excluded, setExcluded] = useSessionState<string[]>("search-excluded", []);
+  const [citeSort, setCiteSort] = useState(false);
 
   const [sourceStatus, setSourceStatus] = useState<{ enabled: boolean; message: string; checking?: boolean }>({ enabled: false, message: "正在检查数据源状态", checking: true });
   useEffect(() => {
@@ -143,7 +147,7 @@ export default function SearchPage() {
     value={draft}
     onChange={event => setDraft(event.target.value)}
     onSearch={submit}
-    placeholder="输入研究主题、关键词或论文标题"
+    placeholder="输入研究问题、关键词或论文标题，例如：降低 RAG 回答幻觉的方法"
     aria-label="论文关键词"
     enterButton={<><SearchOutlined aria-hidden />检索</>}
     size="large"
@@ -152,18 +156,18 @@ export default function SearchPage() {
     loading={loading && draft.trim() === q}
   />;
 
+  const thisYear = new Date().getFullYear();
+  const yearChips = [3, 5, 10].map(n => ({ n, from: String(thisYear - n + 1) }));
   const filters = <div className="filter-group" role="group" aria-label="检索条件">
+    <div className="filter-field"><span>时间</span>
+      <div className="chip-row">{yearChips.map(({ n, from }) => <button type="button" key={n} className={`chip${yearFrom === from && !yearTo ? " is-on" : ""}`}
+        onClick={() => patch({ year_from: yearFrom === from && !yearTo ? null : from, year_to: null }, true)}>近 {n} 年</button>)}</div>
+    </div>
     <label className="filter-field"><span>来源</span>
       <Select aria-label="数据来源" value={source} onChange={value => patch({ source: value === "all" ? null : value }, true)} options={[
         { value: "all", label: "全部可用来源" },
         { value: "arxiv", label: "arXiv" },
         { value: "semantic_scholar", label: sourceStatus.enabled ? "Semantic Scholar" : "Semantic Scholar（不可用）", disabled: !sourceStatus.enabled },
-      ]} />
-    </label>
-    <label className="filter-field"><span>排序</span>
-      <Select aria-label="排序方式" value={sort} onChange={value => patch({ sort: value === "relevance" ? null : value }, true)} options={[
-        { value: "relevance", label: "相关性" },
-        { value: "date", label: "发表时间" },
       ]} />
     </label>
     <div className="filter-field"><span id="year-range-label">发表年份</span>
@@ -215,31 +219,51 @@ export default function SearchPage() {
   ];
   const retrySeconds = Math.max(0, ...Object.values(result?.source_retry_after ?? {}));
   const pending = result?.pending_sources ?? [];
-  const papers = result?.papers ?? [];
+  const received = result?.papers ?? [];
+  const hidden = new Set(excluded);
+  const visibleAll = received.filter(p => !hidden.has(p.id));
+  const excludedCount = received.length - visibleAll.length;
+  const filtered = ccf.length ? visibleAll.filter(p => p.ccf_rank && ccf.includes(p.ccf_rank)) : visibleAll;
+  const papers = citeSort ? [...filtered].sort((a, b) => (b.citation_count ?? -1) - (a.citation_count ?? -1)) : filtered;
   const here = location.pathname + location.search;
   return <main className="page page-wide search-results">
     <div className="results-layout">
-      <aside className="results-filters" aria-label="筛选">{filters}</aside>
+      <aside className="results-filters" aria-label="筛选">
+        {filters}
+        <div className="filter-field ccf-filter"><span>CCF 等级（仅筛选本页已返回的结果）</span>
+          <Checkbox.Group value={ccf} onChange={v => setCcf(v as string[])} options={["A", "B", "C"].map(v => ({ value: v, label: `CCF ${v}` }))} />
+        </div>
+        <p className="field-help">需要中文问题生成检索计划？<Link to="/studio?tab=research">到研究台生成</Link></p>
+      </aside>
       <section className="results-main" aria-label="检索结果" aria-busy={loading}>
         <div className="results-search">{searchBox}</div>
+        <div className="results-tabs">
+          <Segmented aria-label="排序方式" value={citeSort ? "cite" : sort} onChange={value => {
+            if (value === "cite") { setCiteSort(true); return; }
+            setCiteSort(false); patch({ sort: value === "relevance" ? null : String(value) }, true);
+          }} options={[{ value: "relevance", label: "综合" }, { value: "date", label: "最新" }, { value: "cite", label: "引用数（本页）" }]} />
+          {excludedCount ? <span className="small-print">已排除 {excludedCount} 篇 <button type="button" className="link-button" onClick={() => setExcluded(list => list.filter(id => !received.some(p => p.id === id)))}>恢复</button></span> : null}
+        </div>
         <div className="results-summary" aria-live="polite">
           {result ? <>
             <strong>{result.total_estimated || result.total_is_limited ? "约 " : ""}{result.total.toLocaleString("zh-CN")} 篇</strong>
             <span>第 {page} 页</span>
             {Object.entries(result.source_counts).map(([key, count]) => <span key={key}>{SOURCE_LABEL[key] ?? key} {count.toLocaleString("zh-CN")}</span>)}
             {pending.length ? <span className="pending"><LoadingOutlined aria-hidden />仍在等待 {pending.map(key => SOURCE_LABEL[key] ?? key).join("、")}</span> : null}
+            {received.length ? sourceErrors.map(([key, text]) => <span key={key}>{`${SOURCE_LABEL[key] ?? key} 暂不可用：${text}`}</span>) : null}
           </> : loading ? <span className="pending"><LoadingOutlined aria-hidden />正在检索“{q}”</span> : null}
         </div>
         {error && !papers.length ? <Alert type="error" showIcon message={error} action={<SourceRetry seconds={retrySeconds} loading={loading} onRetry={() => setRetry(v => v + 1)} />} /> : null}
         {error && papers.length ? <Alert type="warning" showIcon message={`${error}；已收到的结果保留如下`} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} /> : null}
-        {sourceErrors.length && !loading ? <Alert type="warning" showIcon message={sourceErrors.map(([key, text]) => `${SOURCE_LABEL[key] ?? key} 暂不可用：${text}`).join("；")}
+        {sourceErrors.length && !received.length && !loading ? <Alert type="warning" showIcon message={sourceErrors.map(([key, text]) => `${SOURCE_LABEL[key] ?? key} 暂不可用：${text}`).join("；")}
           action={<SourceRetry seconds={retrySeconds} loading={loading} onRetry={() => setRetry(v => v + 1)} />} /> : null}
         {sourceNotes.length ? <p className="results-note">{sourceNotes.join("；")}</p> : null}
         {loading && !papers.length ? <div className="row-skeletons" aria-hidden>{[0, 1, 2].map(i => <Skeleton key={i} active title={{ width: "70%" }} paragraph={{ rows: 2 }} />)}</div> : null}
-        {result && !papers.length && !loading && !error && !sourceErrors.length ? <Empty description="没有找到相关论文。可以换用英文关键词，或放宽年份范围。" /> : null}
+        {result && !papers.length && !loading && !error && !sourceErrors.length ? <Empty description={received.length ? "当前筛选或排除后没有论文，可取消 CCF 筛选或恢复已排除论文。" : "没有找到相关论文。可以换用英文关键词，或放宽年份范围。"} /> : null}
         <div className="paper-list">
           {papers.map(paper => <PaperRow key={paper.id} paper={paper} from={here}
-            side={<><ImportButton paper={paper} /><ExternalLinks paper={paper} /></>} />)}
+            side={<><CollectButton paper={paper} /><ExternalLinks paper={paper} />
+              <button type="button" className="link-button quiet-link" onClick={() => setExcluded(list => [...list, paper.id])}>排除</button></>} />)}
         </div>
         {result && (page > 1 || result.total > pageSize) ? <div className="pager">
           <Pagination aria-label="检索结果分页" current={page} pageSize={pageSize}

@@ -30,7 +30,7 @@ class CursorStreamTests(unittest.IsolatedAsyncioTestCase):
         gate=asyncio.Event()
         client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r:httpx.Response(200,stream=Body(gate))))
         with patch.object(search.httpx,'AsyncClient',return_value=client):
-            stream=search.search_papers_stream('paper',1,10,'relevance','semantic_scholar',2023,2023)
+            stream=search.search_papers_stream('paper',1,10,'date','semantic_scholar',2023,2023)
             await anext(stream)
             first=await asyncio.wait_for(anext(stream),1)
             self.assertEqual(len(first['papers']),10)
@@ -49,13 +49,13 @@ class CursorStreamTests(unittest.IsolatedAsyncioTestCase):
             start,end=(0,1000) if token is None else (999,1011)
             return httpx.Response(200,json={'total':1011,'token':'second' if token is None else None,'data':[{'paperId':str(i),'title':'paper '+str(i),'year':2023} for i in range(start,end)]})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            papers,total=await search.search_semantic_scholar(client,'paper',1000,10,2023,2023)
+            papers,total=await search.search_semantic_scholar(client,'paper',1000,10,2023,2023,'date')
             self.assertEqual(len(papers),10)
             self.assertEqual(papers[0].id,'s2:1000')
             self.assertEqual(total,1011)
             self.assertEqual(calls,[None,'second'])
             calls.clear()
-            await search.search_semantic_scholar(client,'paper',1000,10,2023,2023)
+            await search.search_semantic_scholar(client,'paper',1000,10,2023,2023,'date')
             self.assertEqual(calls,[])
 
     async def test_disconnect_cancels_upstream_mid_body(self):
@@ -64,7 +64,7 @@ class CursorStreamTests(unittest.IsolatedAsyncioTestCase):
             async def aclose(self):closed.set()
         client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r:httpx.Response(200,stream=CancelBody(gate))))
         with patch.object(search.httpx,'AsyncClient',return_value=client):
-            stream=search.search_papers_stream('paper',1,10,'relevance','semantic_scholar',None,None)
+            stream=search.search_papers_stream('paper',1,10,'date','semantic_scholar',None,None)
             await anext(stream);await anext(stream);await stream.aclose()
             self.assertTrue(closed.is_set())
 

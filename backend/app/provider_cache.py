@@ -37,6 +37,9 @@ def connection():
                 label TEXT PRIMARY KEY, retry_at REAL NOT NULL
             );
         """)
+        columns = [row[1] for row in db.execute("PRAGMA table_info(providers)")]
+        if "strikes" not in columns:
+            db.execute("ALTER TABLE providers ADD COLUMN strikes INTEGER NOT NULL DEFAULT 0")
         yield db
     finally:
         db.close()
@@ -85,4 +88,26 @@ def retry_at(label: str) -> float:
 
 def set_retry_at(label: str, deadline: float):
     with connection() as db, db:
-        db.execute("INSERT OR REPLACE INTO providers VALUES (?, ?)", (label, deadline))
+        row = db.execute("SELECT strikes FROM providers WHERE label = ?", (label,)).fetchone()
+        strikes = row[0] if row else 0
+        db.execute(
+            "INSERT OR REPLACE INTO providers (label, retry_at, strikes) VALUES (?, ?, ?)",
+            (label, deadline, strikes),
+        )
+
+
+def bump_strike(label: str) -> int:
+    with connection() as db, db:
+        row = db.execute("SELECT retry_at, strikes FROM providers WHERE label = ?", (label,)).fetchone()
+        retry_at = row[0] if row else 0
+        strikes = (row[1] if row else 0) + 1
+        db.execute(
+            "INSERT OR REPLACE INTO providers (label, retry_at, strikes) VALUES (?, ?, ?)",
+            (label, retry_at, strikes),
+        )
+        return strikes
+
+
+def clear_strikes(label: str):
+    with connection() as db, db:
+        db.execute("UPDATE providers SET strikes = 0 WHERE label = ?", (label,))
