@@ -601,6 +601,8 @@ button.ws-card:hover { color: #171e2e; }
 .ws-body > .ws-main, .ws-frame > .ws-main { display: flex; flex-direction: column; min-height: 0; }
 .read-page { display: grid; grid-template-columns: minmax(0, 1fr) 340px; flex: 1; width: 100%; min-height: 0; }
 .read-main { overflow: auto; padding: 28px 36px 48px; }
+.read-navigation { position: sticky; top: -28px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 12px 0; margin-bottom: 14px; background: #fff; border-bottom: 1px solid #edf0f5; }
+.read-navigation .read-crumb { margin: 0; }
 .read-crumb { display: flex; gap: 8px; margin-bottom: 14px; color: #8b919e; font-size: 13px; }
 .read-crumb a { color: #5c6573; }
 .read-main h1 { font-size: 26px; letter-spacing: -.03em; line-height: 1.35; }

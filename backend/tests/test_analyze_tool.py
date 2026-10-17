@@ -1,9 +1,18 @@
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
+from urllib.parse import quote
+
+import httpx
 
 from app.services.analysis import analysis
 from app.tools import analyze_paper as analyze_tool
-from app.schemas import AnalysisClaim, AnalysisFields, LocalPaperOut, SourceParagraph
+from app.schemas import AnalysisClaim, AnalysisFields, LocalPaperOut, PaperOut, SourceParagraph
+from app.services.papers import library
+from app.services.analysis import analysis_store, fulltext
+from app.main import app
 
 
 def claim(kind, text, quote, pid, **extra):
@@ -85,3 +94,66 @@ class ScopeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["llm_calls"], 0)
         self.assertEqual(result["papers"][0]["basis"], "full_text")
         self.assertEqual(result["papers"][0]["fields"][0]["label"], "研究内容")
+
+
+class PersistenceTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.env = patch.dict(os.environ, {"PAPER_DB_PATH": str(Path(self.temp.name) / "papers.sqlite3")})
+        self.env.start()
+        paper = PaperOut(id="arxiv:2401.12345", title="Paper", sources=["arxiv"], abstract="Retrieval can be unreliable. The goal is constrained generation.", arxiv_id="2401.12345")
+        self.paper, _ = library.save_paper(paper, paper.id)
+
+    def tearDown(self):
+        self.env.stop()
+        self.temp.cleanup()
+
+    async def test_batch_tool_result_is_readable_in_detail_and_reused(self):
+        fields = sample_fields().model_copy(update={"analysis_basis": "abstract"})
+        model = AsyncMock(return_value=fields)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            with patch("app.tools.analyze_paper.llm.analyze", new=model):
+                response = await client.post("/api/tools/analyze_paper", json={"paper_ids": [self.paper.local_id], "fields": ["research_content"], "workspace_id": "demo"})
+                self.assertEqual(response.status_code, 200)
+                self.assertNotEqual(response.json()["status"], "failed")
+                for identifier in (self.paper.local_id, self.paper.id):
+                    detail = await client.get(f"/api/papers/{quote(identifier, safe='')}/analysis")
+                    self.assertEqual(detail.status_code, 200)
+                    self.assertEqual(detail.json()["task"]["status"], "success")
+                    self.assertEqual(detail.json()["result"]["main_content"], fields.main_content)
+                    self.assertEqual(detail.json()["result"]["claims"], fields.model_dump()["claims"])
+                second = await client.post("/api/tools/analyze_paper", json={"paper_ids": [self.paper.local_id], "workspace_id": "demo"})
+                self.assertEqual(second.json()["llm_calls"], 0)
+        self.assertEqual(model.await_count, 1)
+
+    async def test_failed_model_does_not_create_successful_result(self):
+        with patch("app.tools.analyze_paper.llm.analyze", new=AsyncMock(side_effect=analyze_tool.llm.AnalysisError("模型服务暂不可用"))):
+            result = await analyze_tool.analyze_paper([self.paper.local_id], workspace_id="demo")
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("模型服务暂不可用", result["papers"][0]["message"])
+        target = analysis.resolve_target(self.paper.local_id)
+        task, saved = analysis_store.get_state(target.aliases, target.local_id)
+        self.assertEqual(task["status"], "failed")
+        self.assertIn("模型服务暂不可用", task["error"])
+        self.assertIsNone(saved)
+
+    async def test_detail_sees_batch_analysis_in_progress(self):
+        async def inspect_progress(paper, prepared):
+            target = analysis.resolve_target(self.paper.local_id)
+            task, result = analysis_store.get_state(target.aliases, target.local_id)
+            self.assertEqual(task["status"], "analyzing")
+            self.assertIsNone(result)
+            return sample_fields().model_copy(update={"analysis_basis": "abstract"})
+        with patch("app.tools.analyze_paper.llm.analyze", new=AsyncMock(side_effect=inspect_progress)):
+            await analyze_tool.analyze_paper([self.paper.local_id], workspace_id="demo")
+
+    async def test_deep_analysis_preserves_fulltext_source(self):
+        prepared = fulltext.PreparedText(text="Full text", basis="full_text", source_kind="html", source_url="https://arxiv.org/html/2401.12345", degradation_reason=None, evidence={"sections": []})
+        with patch("app.tools.analyze_paper.fulltext.prepare", new=AsyncMock(return_value=prepared)), \
+             patch("app.tools.analyze_paper.llm.analyze", new=AsyncMock(return_value=sample_fields())):
+            await analyze_tool.analyze_paper([self.paper.local_id], depth="deep", workspace_id="demo")
+        target = analysis.resolve_target(self.paper.local_id)
+        task, result = analysis_store.get_state(target.aliases, target.local_id)
+        self.assertEqual(task["status"], "success")
+        self.assertEqual(result["analysis_basis"], "full_text")
+        self.assertEqual(result["source_url"], prepared.source_url)

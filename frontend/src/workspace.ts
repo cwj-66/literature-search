@@ -56,8 +56,9 @@ export function returnLabel(from: string) {
   return "文献库";
 }
 
-export function workspacePaperPath(workspaceId: string, paperKey: string) {
-  return `/w/${workspaceId}/p/${encodeURIComponent(paperKey)}`;
+export function workspacePaperPath(workspaceId: string, paperKey: string, from?: string) {
+  const path = `/w/${workspaceId}/p/${encodeURIComponent(paperKey)}`;
+  return from ? `${path}?${new URLSearchParams({ from })}` : path;
 }
 
 export function paperLocation(id: string, from: string) {

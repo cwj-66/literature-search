@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button } from "antd";
-import { ArrowUpOutlined, CommentOutlined } from "@ant-design/icons";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeftOutlined, ArrowUpOutlined, CommentOutlined } from "@ant-design/icons";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { askLibrary, fetchAnalysis, fetchPaper, startAnalysis } from "../../api";
 import { useSessionState } from "../../hooks";
 import { projects } from "../../projects";
 import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind, Paper, QAResponse } from "../../types";
 import { SOURCE_LABEL } from "../../types";
+import { safeReturn } from "../../workspace";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
 
 const ACTIVE = new Set(["pending", "preparing", "analyzing"]);
@@ -86,6 +87,10 @@ export default function PaperReadPage() {
   const navigate = useNavigate();
   const { paperKey: key = "" } = useParams();
   const { id, project } = useWorkspaceProject();
+  const [params] = useSearchParams();
+  const parent = `/w/${id}/library`;
+  const requestedBack = safeReturn(params.get("from"), parent);
+  const back = [`/w/${id}`, parent, `/w/${id}/compare`, `/w/${id}/graph`].includes(requestedBack) ? requestedBack : parent;
   const stored = project?.papers[key];
   const [paper, setPaper] = useState<Paper | null>(stored?.paper ?? null);
   const [state, setState] = useState<AnalysisState | null>(null);
@@ -108,7 +113,7 @@ export default function PaperReadPage() {
     const follow = (data: AnalysisState) => {
       if (data.task && ACTIVE.has(data.task.status)) {
         timer = window.setTimeout(() => {
-          fetchAnalysis(key, controller.signal).then(next => { if (!controller.signal.aborted) { setState(next); follow(next); } }).catch(() => undefined);
+          fetchAnalysis(key, controller.signal).then(next => { if (!controller.signal.aborted) { setState(next); follow(next); } }).catch((err: Error) => { if (!controller.signal.aborted) setError(err.message || "分析状态更新失败，请刷新重试"); });
         }, 2000);
       }
     };
@@ -153,7 +158,10 @@ export default function PaperReadPage() {
 
   return <div className="read-page">
     <main className="read-main">
-      <p className="read-crumb"><Link to={`/w/${id}`}>{project.name}</Link><span>/</span>论文详情</p>
+      <div className="read-navigation">
+        <Link className="back-link" to={back}><ArrowLeftOutlined aria-hidden />{back === parent ? "返回论文库" : "返回上一级"}</Link>
+        <p className="read-crumb"><Link to={`/w/${id}`}>{project.name}</Link><span>/</span><Link to={parent}>论文库</Link><span>/</span>论文详情</p>
+      </div>
       <h1>论文标题：{paper.title}</h1>
       <p className="read-meta">{meta.join(" · ")}</p>
       <div className="read-flags">
@@ -166,6 +174,7 @@ export default function PaperReadPage() {
         <Button disabled={!result} onClick={exportAnalysis}>导出分析</Button>
       </div>
       {error ? <Alert type="error" showIcon message={error} /> : null}
+      {state?.task?.status === "failed" ? <Alert type="error" showIcon message={state.task.error || "分析失败，请重试"} /> : null}
       <div className="read-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === "analysis"} onClick={() => setTab("analysis")}>AI 分析</button>
         <button type="button" role="tab" aria-selected={tab === "source"} onClick={() => setTab("source")}>原文阅读</button>
@@ -184,7 +193,7 @@ export default function PaperReadPage() {
           const shown = open === group.no;
           return <article key={group.no} className="read-card">
             <h2><span>{group.no}</span>{group.title}</h2>
-            <p>{text || (running ? "正在生成…" : "材料中未明确说明")}</p>
+            <p>{text || (running || starting ? "正在生成…" : result ? "材料中未明确说明" : "尚未分析，请先开始分析。")}</p>
             <p className="read-source-line">来源：{claims.length ? sourceLabel(claims) : "尚无原文依据"}
               {claims.some(claim => claim.evidence.length) ? <button type="button" onClick={() => setOpen(shown ? "" : group.no)}>{shown ? "收起原文" : "查看原文"}</button> : null}
             </p>

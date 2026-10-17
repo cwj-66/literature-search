@@ -160,3 +160,15 @@ def save_success(task_id: str, local_id: str, fields: AnalysisFields, prepared, 
         ))
         db.execute("UPDATE analysis_tasks SET status = 'success', error = NULL, finished_at = ? WHERE task_id = ?", (stamp, task_id))
         return True
+
+
+def create_tool_task(paper_ref: str, local_id: str, model_name: str, prompt_version: str) -> str:
+    """Expose synchronous tool progress to the same readers as queued analysis."""
+    task_id = uuid4().hex
+    stamp = now()
+    with connection() as db, db:
+        db.execute("""INSERT INTO analysis_tasks
+            (task_id, paper_ref, local_id, status, model_name, prompt_version, created_at, started_at)
+            VALUES (?, ?, ?, 'preparing', ?, ?, ?, ?)""",
+            (task_id, paper_ref, local_id, model_name, prompt_version, stamp, stamp))
+    return task_id

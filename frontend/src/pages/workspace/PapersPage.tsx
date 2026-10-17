@@ -37,6 +37,7 @@ export default function PapersPage() {
   function analyze() {
     if (!picked.length || !fields.length || analyzing) return;
     setAnalyzing(true); setAnalyzeError("");
+    setReport(null);
     analyzePapers({ paper_ids: picked, fields, depth, workspace_id: id })
       .then(setReport)
       .catch((err: Error) => setAnalyzeError(err.message || "分析失败，请重试"))
@@ -116,7 +117,7 @@ export default function PapersPage() {
       {analyzeError ? <Alert type="error" showIcon message={analyzeError} /> : null}
       {report ? <AnalyzeResult result={report} /> : null}
       {!shown.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的论文"><Button onClick={() => setFilter("")}>清除筛选</Button></Empty> : <div className="paper-list">
-        {shown.map(([key, item]) => <PaperRow key={key} paper={item.paper} from={here} href={workspacePaperPath(id, key)} selected={picked.includes(key)} onOpen={() => { projects.select(id); projects.open(item.paper); }} leading={
+        {shown.map(([key, item]) => <PaperRow key={key} paper={item.paper} from={here} href={workspacePaperPath(id, key, here)} selected={picked.includes(key)} onOpen={() => { projects.select(id); projects.open(item.paper); }} leading={
           <Checkbox aria-label={`选择：${item.paper.title}`} checked={picked.includes(key)} disabled={!picked.includes(key) && picked.length >= 5} onChange={() => toggle(key)} />
         } side={<>
           <span className={`status status-${item.status === "read" ? "success" : item.status === "reading" ? "accent" : "neutral"}`}>{STATUS_LABEL[item.status]}</span>

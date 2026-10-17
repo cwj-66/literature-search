@@ -6,6 +6,7 @@
 """
 
 import re
+import sqlite3
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -204,15 +205,32 @@ async def _analyze_one(paper_id: str, requested: list[str], depth: str, workspac
             fields = None
     llm_calls = 0
     if fields is None:
-        if text is None:
-            text = await fulltext.prepare(paper) if depth == "deep" else fulltext.abstract_text(paper, "标准分析使用摘要")
-        if text is None:
-            return {**_closed(paper_id, "failed", "没有可用的摘要或全文，无法分析。", depth), "title": paper.title}, 0
+        task_id = None
         try:
+            if stored is not None:
+                task_id = analysis_store.create_tool_task(target.paper_ref, stored.local_id, llm.model_name(), llm.PROMPT_VERSION)
+            if text is None:
+                text = await fulltext.prepare(paper) if depth == "deep" else fulltext.abstract_text(paper, "标准分析使用摘要")
+            if text is None:
+                raise llm.AnalysisError("没有可用的摘要或全文，无法分析。")
+            if task_id:
+                analysis_store.transition(task_id, "preparing", "analyzing")
             fields = await llm.analyze(paper, text)
+            llm_calls = 1
+            if task_id and not analysis_store.save_success(task_id, stored.local_id, fields, text, llm.model_name(), llm.PROMPT_VERSION):
+                raise RuntimeError("分析结果未能保存")
         except llm.AnalysisError as exc:
+            if task_id:
+                analysis_store.fail(task_id, exc.message)
             return {**_closed(paper_id, "failed", exc.message, depth), "title": paper.title}, 0
-        llm_calls = 1
+        except (sqlite3.Error, OSError, RuntimeError):
+            if task_id:
+                analysis_store.fail(task_id, "分析结果保存失败，请重试")
+            return {**_closed(paper_id, "failed", "分析记录保存失败，请重试。", depth), "title": paper.title}, llm_calls
+        except Exception:
+            if task_id:
+                analysis_store.fail(task_id, "分析失败，请重试")
+            raise
         basis = text.basis
         if depth == "deep" and text.basis != "full_text":
             message = "未取得全文，已按摘要分析。"
