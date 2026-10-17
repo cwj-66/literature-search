@@ -5,10 +5,10 @@ import math
 import re
 from datetime import datetime, timezone
 
-from . import embeddings, rerank
-from .evidence_analysis import paragraphs
-from .library import connection
-from .schemas import PaperOut
+from app.infrastructure import embeddings, rerank
+from app.infrastructure.db import connection
+from app.schemas import PaperOut
+from app.services.analysis.evidence_analysis import paragraphs
 
 SPLIT_VERSION = "c2400-o400-v1"
 CHUNK_CHARS = 2400
@@ -233,7 +233,7 @@ async def vector_search(query: str, chunks: dict[str, dict], limit: int) -> list
 
 
 def index_abstracts(papers: list[PaperOut]) -> None:
-    from .fulltext import PreparedText
+    from app.services.analysis.fulltext import PreparedText
     for paper in papers:
         if load_chunks([paper.id]):
             continue

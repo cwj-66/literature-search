@@ -1,17 +1,14 @@
 """Persistent local analysis library; no external URLs are fetched directly."""
 
-import os
 import re
-import sqlite3
-from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
-from . import ccf
-from .schemas import LocalPaperOut, PaperOut
-from .search import combine, identity_keys
+from app.infrastructure.db import connection
+from app.schemas import LocalPaperOut, PaperOut
+from app.services.papers import ccf
+from app.services.papers.paper_merge import combine, identity_keys
 
 
 def normalize_reference(value: str) -> str:
@@ -42,73 +39,6 @@ def normalize_reference(value: str) -> str:
     elif value.startswith("10."):
         return normalize_reference("doi:" + value)
     raise ValueError("请输入有效的 arXiv ID、DOI、Semantic Scholar ID 或论文链接")
-
-
-@contextmanager
-def connection():
-    path = Path(os.getenv("PAPER_DB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "papers.sqlite3")))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path, timeout=10)
-    db.row_factory = sqlite3.Row
-    try:
-        db.execute("PRAGMA foreign_keys = ON")
-        db.executescript("""
-            CREATE TABLE IF NOT EXISTS papers (
-                local_id TEXT PRIMARY KEY,
-                data TEXT NOT NULL,
-                imported_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS paper_keys (
-                key TEXT PRIMARY KEY,
-                local_id TEXT NOT NULL REFERENCES papers(local_id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS analysis_tasks (
-                task_id TEXT PRIMARY KEY,
-                paper_ref TEXT NOT NULL,
-                local_id TEXT REFERENCES papers(local_id) ON DELETE CASCADE,
-                status TEXT NOT NULL,
-                error TEXT,
-                model_name TEXT NOT NULL,
-                prompt_version TEXT NOT NULL,
-                reanalyze INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL,
-                started_at TEXT,
-                finished_at TEXT
-            );
-            CREATE TABLE IF NOT EXISTS analysis_results (
-                result_id TEXT PRIMARY KEY,
-                task_id TEXT NOT NULL UNIQUE REFERENCES analysis_tasks(task_id) ON DELETE CASCADE,
-                local_id TEXT NOT NULL REFERENCES papers(local_id) ON DELETE CASCADE,
-                payload TEXT NOT NULL,
-                analysis_basis TEXT NOT NULL,
-                degradation_reason TEXT,
-                source_kind TEXT NOT NULL,
-                source_url TEXT,
-                model_name TEXT NOT NULL,
-                prompt_version TEXT NOT NULL,
-                evidence TEXT NOT NULL,
-                generated_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_analysis_tasks_ref ON analysis_tasks(paper_ref, status);
-            CREATE INDEX IF NOT EXISTS idx_analysis_tasks_local ON analysis_tasks(local_id, status);
-            CREATE INDEX IF NOT EXISTS idx_analysis_results_local ON analysis_results(local_id, generated_at);
-            CREATE TABLE IF NOT EXISTS paper_embeddings (
-                cache_key TEXT PRIMARY KEY,
-                model TEXT NOT NULL,
-                vector TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS paper_relations (
-                source_local_id TEXT NOT NULL,
-                cache_key TEXT NOT NULL,
-                payload TEXT NOT NULL,
-                computed_at TEXT NOT NULL,
-                PRIMARY KEY (source_local_id, cache_key)
-            );
-        """)
-        yield db
-    finally:
-        db.close()
 
 
 def as_paper(row) -> LocalPaperOut:

@@ -7,7 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app import library, search as provider
+from app.services.papers import library
+from app.services.retrieval import search as provider
 from app.main import app
 from app.schemas import PaperOut
 

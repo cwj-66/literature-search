@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app import metadata
+from app.services.papers import metadata
 from app.schemas import PaperOut
 
 
@@ -28,7 +28,7 @@ class MetadataTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_lookups_go_through_cached_request(self):
         work = httpx.Response(200, json={"status": "ok", "message": {"DOI": "10.1/x", "title": ["T"]}})
-        with patch("app.search.request", new=AsyncMock(return_value=work)) as request:
+        with patch("app.services.retrieval.search.request", new=AsyncMock(return_value=work)) as request:
             async with httpx.AsyncClient() as client:
                 result = await metadata.crossref_work(client, "10.1/x")
         self.assertEqual(result["DOI"], "10.1/x")

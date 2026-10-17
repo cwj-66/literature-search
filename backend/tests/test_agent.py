@@ -4,8 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from app import agent, llm
-from app.fulltext import PreparedText
+from app.agents import agent
+from app.infrastructure import llm
+from app.services.analysis.fulltext import PreparedText
 from app.schemas import PaperOut
 
 
@@ -54,8 +55,8 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
             "papers": [], "source_errors": {"arxiv": "arXiv 上游返回 429（限流），约 60 秒后可重试"},
             "source_retry_after": {"arxiv": 60},
         }
-        with patch("app.attribution.decompose", new=AsyncMock(return_value={"queries": ["rag hallucination"], "exclusions": [], "rationale": "模型规划不可用，已使用原始问题检索"})), \
-             patch("app.search.search_papers", new=AsyncMock(return_value=empty)):
+        with patch("app.services.analysis.attribution.decompose", new=AsyncMock(return_value={"queries": ["rag hallucination"], "exclusions": [], "rationale": "模型规划不可用，已使用原始问题检索"})), \
+             patch("app.services.retrieval.search.search_papers", new=AsyncMock(return_value=empty)):
             result = await agent.run("如何降低RAG幻觉", auto_approve=True)
         self.assertEqual(result["status"], "done")
         self.assertTrue(result["stop_reason"])
@@ -67,10 +68,10 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         state = agent.initial_state("降低RAG幻觉")
         state["papers"] = [paper(1, abstract="Retrieval reduces hallucination.").model_dump()]
         prepared = PreparedText("Retrieval reduces hallucination with citations.", "html", "html", None, None, {"truncated": False})
-        with patch("app.library.save_paper", return_value=(paper(1, abstract="Retrieval reduces hallucination."), False)), \
-             patch("app.fulltext.prepare", new=AsyncMock(return_value=prepared)), \
-             patch("app.hybrid.index_prepared"), \
-             patch("app.llm.analyze", new=AsyncMock(side_effect=llm.AnalysisError("模型返回的结果无法解析"))):
+        with patch("app.services.papers.library.save_paper", return_value=(paper(1, abstract="Retrieval reduces hallucination."), False)), \
+             patch("app.services.analysis.fulltext.prepare", new=AsyncMock(return_value=prepared)), \
+             patch("app.services.retrieval.hybrid.index_prepared"), \
+             patch("app.infrastructure.llm.analyze", new=AsyncMock(side_effect=llm.AnalysisError("模型返回的结果无法解析"))):
             result = await agent.read_node(state)
         self.assertEqual(result["read_ids"], ["arxiv:1"])
         self.assertTrue(any("分析失败" in gap for gap in result["gaps"]))
@@ -97,8 +98,8 @@ class AgentSqliteCheckpointTests(unittest.IsolatedAsyncioTestCase):
             "papers": [], "source_errors": {"arxiv": "arXiv 上游返回 429（限流），约 60 秒后可重试"},
             "source_retry_after": {"arxiv": 60},
         }
-        with patch("app.attribution.decompose", new=AsyncMock(return_value={"queries": ["rag hallucination"], "exclusions": [], "rationale": "模型规划不可用，已使用原始问题检索"})), \
-             patch("app.search.search_papers", new=AsyncMock(return_value=empty)):
+        with patch("app.services.analysis.attribution.decompose", new=AsyncMock(return_value={"queries": ["rag hallucination"], "exclusions": [], "rationale": "模型规划不可用，已使用原始问题检索"})), \
+             patch("app.services.retrieval.search.search_papers", new=AsyncMock(return_value=empty)):
             result = await agent.run("如何降低RAG幻觉", auto_approve=True)
         self.assertEqual(result["status"], "done")
         self.assertTrue(agent.checkpoint_path().exists())

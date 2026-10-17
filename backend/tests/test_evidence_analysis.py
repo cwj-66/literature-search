@@ -2,7 +2,8 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app import evidence_analysis as ea, fulltext, llm
+from app.infrastructure import llm
+from app.services.analysis import evidence_analysis as ea, fulltext
 from app.schemas import AnalysisClaim, PaperOut
 
 
@@ -24,20 +25,20 @@ class EvidenceAnalysisTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_semantic_review_rejects_unrelated_claim_even_with_exact_quote(self):
         claims = [AnalysisClaim.model_validate(claim(text="证明在所有语言上有效"))]
-        with patch("app.llm.complete", AsyncMock(return_value=json.dumps({"reviews": [{"index": 0, "supported": False}]}))):
+        with patch("app.infrastructure.llm.complete", AsyncMock(return_value=json.dumps({"reviews": [{"index": 0, "supported": False}]}))):
             self.assertEqual(await ea.review(claims), [])
 
     async def test_duplicate_or_missing_review_is_not_accepted(self):
         claims = [AnalysisClaim.model_validate(claim())]
         for reviews in ([], [{"index": 0, "supported": True}] * 2, [{"index": 3, "supported": True}]):
-            with patch("app.llm.complete", AsyncMock(return_value=json.dumps({"reviews": reviews}))):
+            with patch("app.infrastructure.llm.complete", AsyncMock(return_value=json.dumps({"reviews": reviews}))):
                 with self.assertRaises(llm.AnalysisError):
                     await ea.review(claims)
 
     async def test_abstract_result_is_grounded_and_missing_fields_are_unknown(self):
         output = {"claims": [claim("summary", "本文提出一种检索方法。"), claim("main_content")]}
         responses = [json.dumps(output), json.dumps({"reviews": [{"index": i, "supported": True} for i in range(2)]})]
-        with patch("app.llm.complete", AsyncMock(side_effect=responses)) as model:
+        with patch("app.infrastructure.llm.complete", AsyncMock(side_effect=responses)) as model:
             result = await llm.analyze(PaperOut(id="test", title="test"), self.prepared())
         self.assertEqual(model.await_count, 2)
         self.assertEqual(result.analysis_basis, "abstract")
@@ -49,7 +50,7 @@ class EvidenceAnalysisTests(unittest.IsolatedAsyncioTestCase):
     async def test_keywords_alone_do_not_count_as_a_successful_analysis(self):
         outputs = [json.dumps({"claims": [claim("keyword", "检索")]}),
                    json.dumps({"reviews": [{"index": 0, "supported": True}]})]
-        with patch("app.llm.complete", AsyncMock(side_effect=outputs)):
+        with patch("app.infrastructure.llm.complete", AsyncMock(side_effect=outputs)):
             with self.assertRaises(llm.AnalysisError):
                 await llm.analyze(PaperOut(id="test", title="test"), self.prepared())
 
@@ -68,7 +69,7 @@ class EvidenceAnalysisTests(unittest.IsolatedAsyncioTestCase):
         outputs += [json.dumps({"claims": [claim("limitation", "仅评估英语", quote=last.text, pid=last.id),
                     claim("main_content", "研究检索方法", quote="We propose a retrieval method.")]}),
                     json.dumps({"reviews": [{"index": 0, "supported": True}, {"index": 1, "supported": True}]})]
-        with patch("app.llm.complete", AsyncMock(side_effect=outputs)) as model:
+        with patch("app.infrastructure.llm.complete", AsyncMock(side_effect=outputs)) as model:
             result = await llm.analyze(PaperOut(id="test", title="test"), prepared)
         self.assertEqual(model.await_count, len(groups) + 2)
         self.assertEqual(result.limitations, "仅评估英语")

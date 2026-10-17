@@ -8,8 +8,8 @@ import re
 import httpx
 from pydantic import ValidationError
 
-from .fulltext import PreparedText
-from .schemas import AnalysisFields, PaperOut
+from app.schemas import AnalysisFields, PaperOut
+from app.services.analysis.fulltext import PreparedText
 
 log = logging.getLogger(__name__)
 PROMPT_VERSION = "v2-evidence"
@@ -145,5 +145,5 @@ async def repair(messages: list[dict], raw: str, exc: Exception) -> AnalysisFiel
 
 
 async def analyze(paper: PaperOut, prepared: PreparedText) -> AnalysisFields:
-    from .evidence_analysis import analyze_document
+    from app.services.analysis.evidence_analysis import analyze_document
     return await analyze_document(paper, prepared)

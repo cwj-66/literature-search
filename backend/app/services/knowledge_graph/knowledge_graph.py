@@ -3,7 +3,8 @@
 import hashlib
 import json
 
-from . import library
+from app.infrastructure.db import connection
+from app.services.papers import library
 
 
 def build(limit: int = 80) -> dict:
@@ -17,7 +18,7 @@ def build(limit: int = 80) -> dict:
         nodes.setdefault(key, {"id": key, "kind": kind, "label": clean})
         return key
 
-    with library.connection() as db:
+    with connection() as db:
         total = db.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
         for paper in papers:
             key = "paper:" + paper.local_id

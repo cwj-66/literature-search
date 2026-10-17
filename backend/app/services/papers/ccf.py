@@ -5,9 +5,9 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from .schemas import PaperOut
+from app.schemas import PaperOut
 
-CATALOG_PATH = Path(__file__).resolve().parent / "ccf_catalog.json"
+CATALOG_PATH = Path(__file__).resolve().parents[2] / "resources" / "ccf_catalog.json"
 PREPRINT = re.compile(r"arxiv|preprint|\bcorr\b", re.I)
 TRACK = re.compile(r"workshop|workshops|\bws\b|findings|short paper|\bdemo\b|poster|companion", re.I)
 TOKEN = re.compile(r"[a-z0-9\u4e00-\u9fff]+", re.I)

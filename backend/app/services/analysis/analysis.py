@@ -8,10 +8,11 @@ from urllib.parse import unquote
 
 import httpx
 
-from . import analysis_store as store
-from . import fulltext, llm
-from .library import get_paper, normalize_reference, save_paper
-from .search import SourceFailure, fetch_paper, identity_keys
+from app.infrastructure import llm
+from app.services.analysis import analysis_store as store, fulltext
+from app.services.papers.library import get_paper, normalize_reference, save_paper
+from app.services.papers.paper_merge import identity_keys
+from app.services.retrieval.search import SourceFailure, fetch_paper
 
 log = logging.getLogger(__name__)
 _queue: asyncio.Queue | None = None

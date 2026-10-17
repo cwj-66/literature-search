@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import xml.etree.ElementTree as ET
 
 import httpx
-from app import search as provider
+from app.services.retrieval import search as provider
 from app.main import app
 from app.schemas import PaperOut
 

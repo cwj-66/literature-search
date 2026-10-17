@@ -9,12 +9,16 @@ from datetime import datetime, timezone
 
 import httpx
 
-from . import embeddings, library, relation_score, search
-from .analysis import ResolveError, resolve_target
-from .library import get_paper, save_paper
-from .relation_score import ALGORITHM, EMBED_LIMIT, NOTE
-from .schemas import PaperOut
-from .search import SourceFailure, combine, fetch_paper, identity_keys, semantic_enabled
+from app.infrastructure import embeddings
+from app.infrastructure.db import connection
+from app.schemas import PaperOut
+from app.services.analysis.analysis import ResolveError, resolve_target
+from app.services.papers import library
+from app.services.papers.library import get_paper, save_paper
+from app.services.papers.paper_merge import combine, identity_keys
+from app.services.retrieval import relation_score, search
+from app.services.retrieval.relation_score import ALGORITHM, EMBED_LIMIT, NOTE
+from app.services.retrieval.search import SourceFailure, fetch_paper, semantic_enabled
 
 log = logging.getLogger(__name__)
 _LOCKS: dict[str, asyncio.Lock] = {}
@@ -62,7 +66,7 @@ def recall_query(terms: list[str], title: str) -> str:
 
 
 def latest_keywords(local_id: str) -> list[str]:
-    with library.connection() as db:
+    with connection() as db:
         row = db.execute(
             "SELECT payload FROM analysis_results WHERE local_id = ? ORDER BY generated_at DESC, result_id DESC LIMIT 1",
             (local_id,),
@@ -108,7 +112,7 @@ def select_for_embedding(groups: list[dict], limit: int = EMBED_LIMIT) -> list[d
 
 
 def cache_key(local_id: str, weights: dict[str, float], model: str) -> str:
-    with library.connection() as db:
+    with connection() as db:
         count, stamp = db.execute("SELECT COUNT(*), MAX(imported_at) FROM papers").fetchone()
         analyzed = db.execute(
             "SELECT MAX(generated_at) FROM analysis_results WHERE local_id = ?",
@@ -119,7 +123,7 @@ def cache_key(local_id: str, weights: dict[str, float], model: str) -> str:
 
 
 def read_cache(local_id: str, key: str) -> dict | None:
-    with library.connection() as db:
+    with connection() as db:
         row = db.execute(
             "SELECT payload FROM paper_relations WHERE source_local_id = ? AND cache_key = ?",
             (local_id, key),
@@ -134,7 +138,7 @@ def read_cache(local_id: str, key: str) -> dict | None:
 
 
 def write_cache(local_id: str, key: str, payload: dict) -> None:
-    with library.connection() as db, db:
+    with connection() as db, db:
         db.execute("DELETE FROM paper_relations WHERE source_local_id = ?", (local_id,))
         db.execute(
             "INSERT INTO paper_relations (source_local_id, cache_key, payload, computed_at) VALUES (?, ?, ?, ?)",

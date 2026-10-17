@@ -5,8 +5,8 @@ from urllib.parse import quote
 
 import httpx
 
-from . import search
-from .schemas import PaperOut
+from app.schemas import PaperOut
+from app.services.retrieval import search
 
 CROSSREF = "https://api.crossref.org/works"
 UNPAYWALL = "https://api.unpaywall.org/v2"
@@ -191,5 +191,5 @@ async def enrich(paper: PaperOut) -> tuple[PaperOut, dict]:
             extras["warnings"].append("没有 DOI，无法查询 Crossref 或 Unpaywall")
     if not extras["bibtex"]:
         extras["bibtex"] = bibtex_from_paper(paper)
-    from . import ccf
+    from app.services.papers import ccf
     return ccf.annotate(paper), extras

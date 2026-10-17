@@ -10,10 +10,12 @@ from urllib.parse import quote
 import httpx
 from pydantic import ValidationError
 
-from app import analysis, analysis_store as store, fulltext, library, llm
-from app import search as provider
-from app.fulltext import PreparedText
-from app.llm import AnalysisError
+from app.infrastructure import llm
+from app.services.analysis import analysis, analysis_store as store, fulltext
+from app.services.papers import library
+from app.services.retrieval import search as provider
+from app.services.analysis.fulltext import PreparedText
+from app.infrastructure.llm import AnalysisError
 from app.main import app
 from app.schemas import AnalysisFields, PaperOut
 
@@ -147,7 +149,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
         async def fail_download(*_args, **_kwargs):
             raise AssertionError("should not download")
 
-        with patch("app.fulltext.download", new=fail_download):
+        with patch("app.services.analysis.fulltext.download", new=fail_download):
             prepared = await fulltext.prepare(paper)
         self.assertEqual(prepared.basis, "abstract")
         self.assertEqual(prepared.degradation_reason, "全文链接不在可公开获取范围内")
@@ -156,7 +158,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
         def fake_addr(*_args, **_kwargs):
             return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))]
 
-        with patch("app.fulltext.socket.getaddrinfo", side_effect=fake_addr):
+        with patch("app.services.analysis.fulltext.socket.getaddrinfo", side_effect=fake_addr):
             prepared = await fulltext.prepare(sample())
         self.assertEqual(prepared.basis, "abstract")
         self.assertEqual(prepared.degradation_reason, "全文下载失败")
@@ -185,7 +187,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
             if pdf is not None:
                 return pdf
             raise fulltext.TextFailure("全文下载失败")
-        with patch("app.fulltext.download", new=fake):
+        with patch("app.services.analysis.fulltext.download", new=fake):
             return await fulltext.prepare(sample())
 
     def test_prompt_keeps_paper_text_out_of_the_rules(self):
@@ -211,7 +213,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
             async def post(self, *_args, **_kwargs):
                 raise httpx.ReadTimeout("slow")
 
-        with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}), patch("app.llm.httpx.AsyncClient", Client):
+        with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}), patch("app.infrastructure.llm.httpx.AsyncClient", Client):
             with self.assertRaises(AnalysisError) as timed:
                 await llm.complete([{"role": "user", "content": "hi"}])
         self.assertEqual(timed.exception.message, "模型调用超时")
@@ -236,7 +238,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
                 return json.dumps({"reviews": [{"index": 0, "supported": True}]})
             return json.dumps({"claims": [{"kind": "research_problem", "text": "研究检索增强生成",
                 "evidence": [{"paragraph_id": "P0001", "quote": "introduction introduction"}]}]})
-        with patch("app.llm.complete", new=repair), patch("app.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.fulltext.download", new=AsyncMock(return_value=html_paper())):
+        with patch("app.infrastructure.llm.complete", new=repair), patch("app.services.analysis.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.services.analysis.fulltext.download", new=AsyncMock(return_value=html_paper())):
             task_id = await self.run_new("arxiv:2005.11401")
         self.assertEqual(calls["n"], 3)
         state = store.get_state({"arxiv:2005.11401"}, None)
@@ -246,7 +248,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
 
         async def always_bad(_messages):
             return "{"
-        with patch("app.llm.complete", new=always_bad), patch("app.fulltext.download", new=AsyncMock(return_value=html_paper())):
+        with patch("app.infrastructure.llm.complete", new=always_bad), patch("app.services.analysis.fulltext.download", new=AsyncMock(return_value=html_paper())):
             failed = (await self.post("/api/papers/arxiv:2005.11401/analyze", {"reanalyze": True})).json()["task"]["task_id"]
             await analysis.run_task(failed)
         saved = library.get_paper("arxiv:2005.11401")
@@ -259,7 +261,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
     async def test_no_text_timeout_and_duplicate_clicks(self):
         async def timeout(_url, limit=fulltext.LIMIT):
             raise fulltext.TextFailure("下载超时")
-        with patch("app.analysis.fetch_paper", new=AsyncMock(return_value=sample(abstract=None))), patch("app.fulltext.download", new=timeout):
+        with patch("app.services.analysis.analysis.fetch_paper", new=AsyncMock(return_value=sample(abstract=None))), patch("app.services.analysis.fulltext.download", new=timeout):
             task_id = await self.run_new("arxiv:2005.11402")
         row = store.get_task(task_id)
         self.assertEqual(row["status"], "failed")
@@ -268,7 +270,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
 
         async def slow(_messages):
             raise AnalysisError("模型调用超时")
-        with patch("app.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.llm.complete", new=slow), patch("app.fulltext.download", new=AsyncMock(return_value=html_paper())):
+        with patch("app.services.analysis.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.infrastructure.llm.complete", new=slow), patch("app.services.analysis.fulltext.download", new=AsyncMock(return_value=html_paper())):
             timed = await self.run_new("arxiv:2005.11403")
         self.assertEqual(store.get_task(timed)["error"], "模型调用超时")
 
@@ -323,7 +325,7 @@ class AnalysisTests(unittest.IsolatedAsyncioTestCase):
         outputs = [json.dumps({"claims": [{"kind": "research_problem", "text": "研究问题",
             "evidence": [{"paragraph_id": "P0001", "quote": "introduction introduction"}]}]}),
             json.dumps({"reviews": [{"index": 0, "supported": True}]})]
-        with patch("app.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.llm.complete", new=AsyncMock(side_effect=outputs)), patch("app.fulltext.download", new=AsyncMock(return_value=html_paper())):
+        with patch("app.services.analysis.analysis.fetch_paper", new=AsyncMock(return_value=sample())), patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=outputs)), patch("app.services.analysis.fulltext.download", new=AsyncMock(return_value=html_paper())):
             await self.run_new("arxiv:2005.11401")
             again = await self.post("/api/papers/arxiv:2005.11401/analyze", {})
             self.assertEqual(again.status_code, 200)

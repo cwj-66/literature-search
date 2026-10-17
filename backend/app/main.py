@@ -7,19 +7,26 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import agent, analysis, analysis_store, attribution, ccf, hybrid, knowledge_graph, library, llm, metadata, recommend
-from .evidence_analysis import UNKNOWN
-from .schemas import (
+from app.agents import agent
+from app.infrastructure import llm
+from app.schemas import (
     AnalyzeRequest, AnalysisFields, AnalysisResponse, CompareRequest, ImportRequest, ImportResult,
     LibraryResponse, LocalPaperOut, NetworkResponse, PaperOut, QARequest, RecommendationResponse,
     ResearchResume, ResearchStart, SearchResponse,
 )
-from .search import SourceFailure, fetch_paper, normalize_query, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
+from app.services.analysis import analysis, analysis_store, attribution
+from app.services.analysis.evidence_analysis import UNKNOWN
+from app.services.knowledge_graph import knowledge_graph
+from app.services.papers import ccf, library, metadata, upload
+from app.services.retrieval import hybrid, recommend
+from app.services.retrieval.search import SourceFailure, fetch_paper, normalize_query, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
+import app.tools.analyze_paper as analyze_tool
+import app.tools.index_paper as index_tool
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 logging.basicConfig(level=logging.INFO)
@@ -257,6 +264,42 @@ async def compare_papers(payload: CompareRequest):
         raise _analysis_error(exc) from None
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+@app.post("/api/tools/analyze_paper")
+async def analyze_paper_tool(payload: analyze_tool.AnalyzePaperRequest):
+    try:
+        return await analyze_tool.analyze_paper(payload.paper_ids, payload.fields, payload.depth, payload.workspace_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except llm.AnalysisError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+@app.post("/api/papers/upload")
+async def upload_paper(file: UploadFile = File(), workspace_id: str = Form()):
+    data = await file.read(upload.MAX_PDF + 1)
+    try:
+        return await upload.ingest_pdf(data, file.filename, workspace_id)
+    except upload.UploadError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except (sqlite3.Error, OSError):
+        logging.exception("uploaded paper save failed")
+        raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
+
+
+@app.post("/api/tools/index_paper")
+async def index_paper_tool(payload: index_tool.IndexPaperRequest):
+    try:
+        return await index_tool.index_paper(payload.paper_id, payload.text, payload.title, payload.workspace_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="向量库暂不可用，请稍后重试") from None
 
 
 @app.post("/api/research/tasks")

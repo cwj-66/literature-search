@@ -11,7 +11,7 @@ services:
       - paper_data:/app/data
     ports:
       - "127.0.0.1:15179:8000"
-    mem_limit: 256m
+    mem_limit: 512m
     cpus: 0.75
     pids_limit: 64
     read_only: true

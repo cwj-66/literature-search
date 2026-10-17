@@ -13,7 +13,8 @@ import httpx
 from bs4 import BeautifulSoup, NavigableString
 from pypdf import PdfReader
 
-from .schemas import PaperOut
+from app.schemas import PaperOut
+from app.services.papers import documents
 
 log = logging.getLogger(__name__)
 USER_AGENT = "literature-platform/0.1"
@@ -328,7 +329,20 @@ def abstract_text(paper: PaperOut, reason: str) -> PreparedText | None:
     )
 
 
+def stored_text(paper: PaperOut) -> PreparedText | None:
+    text = documents.get_text(getattr(paper, "local_id", None), paper.id)
+    if not text:
+        return None
+    return PreparedText(
+        text, "full_text", "upload", None, None,
+        {"sections": [{"title": "正文", "chars": len(text), "excerpt": text[:240]}], "char_count": len(text), "truncated": False},
+    )
+
+
 async def prepare(paper: PaperOut) -> PreparedText | None:
+    stored = stored_text(paper)
+    if stored:
+        return stored
     jobs = _jobs(paper)
     failure = None
     if not jobs and paper.pdf_url:

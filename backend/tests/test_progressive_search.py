@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import httpx
 
-from app import search
+from app.services.retrieval import search
 from app.main import app
 from app.schemas import PaperOut
 
@@ -19,7 +19,7 @@ class ProgressiveTests(unittest.IsolatedAsyncioTestCase):
         async def s2(*_args):
             await gate.wait()
             return [slow], 1
-        with patch("app.search.arxiv_with_index_fallback", arxiv), patch("app.search.search_semantic_scholar", s2), patch("app.search.semantic_enabled", return_value=True):
+        with patch("app.services.retrieval.search.arxiv_with_index_fallback", arxiv), patch("app.services.retrieval.search.search_semantic_scholar", s2), patch("app.services.retrieval.search.semantic_enabled", return_value=True):
             stream = search.search_papers_stream("test", 1, 10, "relevance", "all", None, None)
             initial = await anext(stream)
             self.assertEqual(initial["pending_sources"], ["arxiv", "semantic_scholar"])
@@ -39,7 +39,7 @@ class ProgressiveTests(unittest.IsolatedAsyncioTestCase):
         async def s2(*_args):
             try: await asyncio.Event().wait()
             finally: stopped.set()
-        with patch("app.search.arxiv_with_index_fallback", arxiv), patch("app.search.search_semantic_scholar", s2), patch("app.search.semantic_enabled", return_value=True):
+        with patch("app.services.retrieval.search.arxiv_with_index_fallback", arxiv), patch("app.services.retrieval.search.search_semantic_scholar", s2), patch("app.services.retrieval.search.semantic_enabled", return_value=True):
             stream = search.search_papers_stream("test", 1, 10, "relevance", "all", None, None)
             await anext(stream)
             await anext(stream)
@@ -48,7 +48,7 @@ class ProgressiveTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stream_uses_same_validation_and_emits_complete_json_snapshots(self):
         async def arxiv(*_args): return [], 0
-        with patch("app.search.arxiv_with_index_fallback", arxiv):
+        with patch("app.services.retrieval.search.arxiv_with_index_fallback", arxiv):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 invalid = await client.get("/api/papers/search", params={"q": "test", "stream": "true", "year_from": 2025, "year_to": 2023})
                 self.assertEqual(invalid.status_code, 400)

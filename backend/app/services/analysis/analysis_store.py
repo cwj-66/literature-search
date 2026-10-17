@@ -4,8 +4,8 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from .library import connection
-from .schemas import AnalysisFields
+from app.infrastructure.db import connection
+from app.schemas import AnalysisFields
 
 
 class Decision:

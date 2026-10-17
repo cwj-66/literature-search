@@ -7,7 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app import provider_cache, search
+from app.infrastructure import provider_cache
+from app.services.retrieval import search
 from app.schemas import PaperOut
 
 

@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app import hybrid
-from app.fulltext import PreparedText
+from app.services.retrieval import hybrid
+from app.services.analysis.fulltext import PreparedText
 from app.schemas import PaperOut
 
 

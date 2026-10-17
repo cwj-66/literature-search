@@ -7,9 +7,13 @@ from pathlib import Path
 from typing import Literal, TypedDict
 from uuid import uuid4
 
-from . import attribution, fulltext, hybrid, library, llm, search
-from .library import connection
-from .schemas import PaperOut
+from app.infrastructure import llm
+from app.infrastructure.db import connection
+from app.schemas import PaperOut
+from app.services.analysis import attribution, fulltext
+from app.services.papers import library
+from app.services.retrieval import hybrid, search
+import app.tools.analyze_paper as analyze_tool
 
 MAX_EXTRA_SEARCH = 2
 MAX_API = 8
@@ -51,7 +55,7 @@ class AgentState(TypedDict, total=False):
 
 
 def checkpoint_path() -> Path:
-    base = Path(os.getenv("PAPER_DB_PATH", str(Path(__file__).resolve().parents[1] / "data" / "papers.sqlite3")))
+    base = Path(os.getenv("PAPER_DB_PATH", str(Path(__file__).resolve().parents[2] / "data" / "papers.sqlite3")))
     return base.with_name("research-checkpoints.sqlite3")
 
 
@@ -219,15 +223,18 @@ async def read_node(state: dict) -> dict:
         event = {"step": "read", "paper_id": paper.id, "reason": "全文不可得，保留摘要缺口"}
     else:
         hybrid.index_prepared(saved, prepared, getattr(saved, "local_id", None))
-        try:
-            fields = await llm.analyze(saved, prepared)
-            llm_calls += 1
-            items = attribution.evidence_from_claims(paper.id, fields, start=len(evidence_ids) + 1)
-            evidence_ids.extend(item.evidence_id for item in items)
-            event = {"step": "read", "paper_id": paper.id, "reason": "补读正文并建立证据"}
-        except llm.AnalysisError:
+        report = await analyze_tool.analyze_paper(
+            [paper.id], depth="deep", papers={paper.id: saved}, prepared={paper.id: prepared},
+            evidence_start=len(evidence_ids) + 1,
+        )
+        llm_calls += report.get("llm_calls") or 0
+        item = report["papers"][0]
+        if item["status"] in {"failed", "not_found", "out_of_scope"}:
             gaps.append(f"分析失败:{paper.id}")
-            event = {"step": "read", "paper_id": paper.id, "reason": "精读解析失败，已保留全文索引"}
+            event = {"step": "read", "paper_id": paper.id, "tool": "analyze_paper", "reason": "精读解析失败，已保留全文索引"}
+        else:
+            evidence_ids.extend(item.get("evidence_ids") or [])
+            event = {"step": "read", "paper_id": paper.id, "tool": "analyze_paper", "reason": "补读正文并建立证据"}
     read_ids.append(paper.id)
     return {
         "read_ids": read_ids,

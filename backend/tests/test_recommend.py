@@ -7,11 +7,13 @@ from urllib.parse import quote
 
 import httpx
 
-from app import embeddings, library, recommend, relation_score, search
+from app.infrastructure import embeddings
+from app.services.papers import library
+from app.services.retrieval import recommend, relation_score, search
 from app.main import app
-from app.relation_score import DEFAULT_WEIGHTS
+from app.services.retrieval.relation_score import DEFAULT_WEIGHTS
 from app.schemas import PaperOut
-from app.search import SourceFailure
+from app.services.retrieval.search import SourceFailure
 
 
 def paper(**extra) -> PaperOut:

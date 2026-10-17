@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import httpx
-from app import search
+from app.services.retrieval import search
 
 class Body(httpx.AsyncByteStream):
     def __init__(self, gate): self.gate=gate

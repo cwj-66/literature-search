@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from .library import connection
+from app.infrastructure.db import connection
 
 log = logging.getLogger(__name__)
 BATCH = 10
@@ -83,8 +83,9 @@ def _vector(row: dict) -> list[float]:
     return [float(item) for item in vector]
 
 
-async def fetch_vectors(model: str, texts: list[str]) -> dict[str, list[float]]:
-    key, base = credentials()
+async def fetch_vectors(model: str, texts: list[str], key: str | None = None, base: str | None = None) -> dict[str, list[float]]:
+    if not key or not base:
+        key, base = credentials()
     if not key:
         raise EmbeddingError("未配置向量服务密钥，无法计算语义向量")
     timeout = httpx.Timeout(60.0, connect=10.0)
@@ -119,18 +120,31 @@ async def fetch_vectors(model: str, texts: list[str]) -> dict[str, list[float]]:
     return found
 
 
-async def embed_many(texts: list[str]) -> dict[str, list[float]]:
+async def embed_many(texts: list[str], model: str | None = None, key: str | None = None, base: str | None = None) -> dict[str, list[float]]:
     unique = []
     for text in texts:
         if text and text not in unique:
             unique.append(text)
     if not unique:
         return {}
-    model = model_name()
+    model = model or model_name()
     cached = await asyncio.to_thread(load_cached, model, unique)
     missing = [text for text in unique if text not in cached]
     if missing:
-        fresh = await fetch_vectors(model, missing)
+        fresh = await fetch_vectors(model, missing, key, base)
         await asyncio.to_thread(store_vectors, model, fresh)
         cached.update(fresh)
     return {text: cached[text] for text in unique if text in cached}
+
+
+def siliconflow_model() -> str:
+    return os.getenv("SILICONFLOW_EMBEDDING_MODEL", "BAAI/bge-m3").strip() or "BAAI/bge-m3"
+
+
+async def embed_siliconflow(texts: list[str]) -> tuple[str, dict[str, list[float]]]:
+    key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+    if not key:
+        raise EmbeddingError("未配置硅基流动密钥，无法计算语义向量")
+    base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
+    model = siliconflow_model()
+    return model, await embed_many(texts, model, key, base)

@@ -1,6 +1,6 @@
 import unittest
 
-from app import ccf
+from app.services.papers import ccf
 from app.schemas import PaperOut
 
 

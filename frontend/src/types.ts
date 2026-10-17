@@ -26,7 +26,7 @@ export function ccfLabel(paper: Paper): string | null {
   return null;
 }
 
-export const SOURCE_LABEL: Record<string, string> = { arxiv: "arXiv", semantic_scholar: "Semantic Scholar", openalex: "OpenAlex" };
+export const SOURCE_LABEL: Record<string, string> = { arxiv: "arXiv", semantic_scholar: "Semantic Scholar", openalex: "OpenAlex", upload: "本地上传" };
 
 export function paperKey(paper: Paper) {
   return paper.local_id ?? paper.id;
@@ -149,6 +149,34 @@ export interface AnalysisResult {
 export interface AnalysisState {
   task: AnalysisTask | null;
   result: AnalysisResult | null;
+}
+
+export interface AnalyzeEvidence { quote: string; section: string | null; page: string | null; paragraph_id: string | null }
+export interface AnalyzeField {
+  field: string;
+  label: string;
+  content: string | null;
+  evidence: AnalyzeEvidence[];
+  missing: string[];
+  status: "found" | "partial" | "not_found";
+}
+export interface AnalyzePaperItem {
+  paper_id: string;
+  title: string | null;
+  status: "completed" | "partial" | "failed" | "not_found" | "out_of_scope";
+  depth: "standard" | "deep";
+  depth_applied: "standard" | "deep";
+  basis: string | null;
+  message: string | null;
+  fields: AnalyzeField[];
+}
+export interface AnalyzePaperResult {
+  tool: "analyze_paper";
+  workspace_id: string | null;
+  depth: "standard" | "deep";
+  fields: string[];
+  status: "completed" | "partial" | "failed";
+  papers: AnalyzePaperItem[];
 }
 
 export interface RecommendationReason {

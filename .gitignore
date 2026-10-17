@@ -9,3 +9,10 @@ node_modules/
 dist/
 
 backend/data/
+backend/.pytest_cache/
+backend/pytest-cache-files-*/
+.playwright-mcp/
+.analysis-test-output.txt
+.cursor-checks.txt
+.graph-check-output.txt
+.progressive-checks.txt

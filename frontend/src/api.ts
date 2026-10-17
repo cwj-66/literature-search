@@ -1,4 +1,4 @@
-import type { AnalysisState, CompareTable, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask } from "./types";
+import type { AnalysisState, AnalyzePaperResult, CompareTable, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask } from "./types";
 
 export interface SearchParams {
   q: string;
@@ -82,6 +82,23 @@ export async function fetchPaper(id: string, signal?: AbortSignal): Promise<Pape
   return response.json();
 }
 
+export interface UploadPaperResult {
+  paper: Paper;
+  created: boolean;
+  index: { status: string; chunk_count: number; message: string | null };
+}
+
+export async function uploadPaper(file: File, workspaceId: string): Promise<UploadPaperResult> {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("workspace_id", workspaceId);
+  const response = await fetch("/api/papers/upload", { method: "POST", body });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  const result: UploadPaperResult = await response.json();
+  window.dispatchEvent(new Event("library-changed"));
+  return result;
+}
+
 export async function importPaper(externalId: string): Promise<ImportResult> {
   const response = await fetch("/api/papers/import", {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -140,6 +157,10 @@ async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Pr
 
 export function askLibrary(question: string, paperIds: string[], signal?: AbortSignal) {
   return postJson<QAResponse>("/api/qa", { question, paper_ids: paperIds }, signal);
+}
+
+export function analyzePapers(body: { paper_ids: string[]; fields?: string[]; depth?: "standard" | "deep"; workspace_id?: string }, signal?: AbortSignal) {
+  return postJson<AnalyzePaperResult>("/api/tools/analyze_paper", body, signal);
 }
 
 export function compareLibrary(paperIds: string[], signal?: AbortSignal) {

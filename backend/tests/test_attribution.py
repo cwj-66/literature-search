@@ -2,8 +2,8 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app import attribution as att
-from app.evidence_analysis import UNKNOWN
+from app.services.analysis import attribution as att
+from app.services.analysis.evidence_analysis import UNKNOWN
 from app.schemas import AnalysisClaim, AnalysisFields, PaperOut, SourceParagraph
 
 
@@ -50,7 +50,7 @@ class AttributionTests(unittest.IsolatedAsyncioTestCase):
         evidence = [att.EvidenceItem(evidence_id="E0001", paper_id="p1", quote="We reduce hallucination.")]
         claims = att.bind_claim_ids([AnalysisClaim(kind="main_content", text="降低幻觉", evidence=[], status="not_stated")])
         payload = {"reviews": [{"claim_id": claims[0]["claim_id"], "evidence_ids": ["E0001", "E9999"], "verdict": "supported", "note": ""}]}
-        with patch("app.llm.complete", AsyncMock(return_value=json.dumps(payload))):
+        with patch("app.infrastructure.llm.complete", AsyncMock(return_value=json.dumps(payload))):
             reviews = await att.judge_claims("问题", claims, evidence)
         self.assertEqual(reviews[0].evidence_ids, ["E0001"])
 

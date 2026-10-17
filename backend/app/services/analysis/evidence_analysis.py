@@ -10,8 +10,8 @@ import re
 
 from pydantic import BaseModel, Field, ValidationError
 
-from . import llm
-from .schemas import AnalysisClaim, AnalysisFields, ExtractionOutput, SourceParagraph
+from app.infrastructure import llm
+from app.schemas import AnalysisClaim, AnalysisFields, ExtractionOutput, SourceParagraph
 
 UNKNOWN = "论文未明确说明"
 BATCH_CHARS = 14000

@@ -23,7 +23,7 @@ def key(url: str, params: dict) -> str:
 
 @contextmanager
 def connection():
-    default = Path(__file__).resolve().parents[1] / "data" / "papers.sqlite3"
+    default = Path(__file__).resolve().parents[2] / "data" / "papers.sqlite3"
     path = Path(os.getenv("PAPER_DB_PATH", str(default))).with_name("provider-cache.sqlite3")
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=5)

@@ -6,10 +6,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from . import evidence_analysis as ea
-from . import llm
-from .hybrid import retrieve
-from .schemas import AnalysisClaim, AnalysisFields, PaperOut, SourceParagraph
+from app.infrastructure import llm
+from app.schemas import AnalysisClaim, AnalysisFields, PaperOut, SourceParagraph
+from app.services.analysis import evidence_analysis as ea
+from app.services.retrieval.hybrid import retrieve
 
 EVIDENCE_NS = "E"
 CLAIM_NS = "A"
