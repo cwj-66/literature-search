@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Graph, NodeEvent, type IElementEvent } from "@antv/g6";
 import type { PaperNetwork } from "../types";
+import { tokens } from "../theme";
 
 function shortTitle(title: string) {
   const chars = Array.from(title);
@@ -39,13 +40,13 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
         node: {
           type: "circle",
           style: {
-            size: (datum) => (datum.data?.center ? 52 : 34),
-            fill: (datum) => (datum.data?.center ? "#1f4b99" : "#e7eefc"),
-            stroke: "#1f4b99",
+            size: (datum) => (datum.data?.center ? 44 : 28),
+            fill: (datum) => (datum.data?.center ? tokens.accent : tokens.accentSoft),
+            stroke: tokens.accent,
             lineWidth: 1.5,
             labelText: (datum) => String(datum.data?.label ?? ""),
             labelPlacement: "bottom",
-            labelFill: "#1c1e21",
+            labelFill: tokens.text,
             labelFontSize: 12,
             labelMaxWidth: 128,
             labelWordWrap: true,
@@ -56,13 +57,13 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
         edge: {
           type: (datum) => (datum.data?.type === "similar" ? "quadratic" : "line"),
           style: {
-            stroke: (datum) => (datum.data?.type === "cites" ? "#1f4b99" : "#8a94a6"),
+            stroke: (datum) => (datum.data?.type === "cites" ? tokens.accent : "#9a9d9f"),
             lineWidth: 1.5,
             lineDash: (datum) => (datum.data?.type === "similar" ? [5, 4] : []),
             endArrow: (datum) => Boolean(datum.data?.directed),
             labelText: (datum) => String(datum.data?.label ?? ""),
             labelFontSize: 12,
-            labelFill: "#5c6570",
+            labelFill: tokens.muted,
             labelBackground: true,
             labelBackgroundFill: "#ffffff",
           },
@@ -113,7 +114,7 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
 
   return (
     <>
-      {failed ? <p className="meta">关系图渲染失败，仍可从列表打开论文详情。</p> : null}
+      {failed ? <p className="muted">关系图渲染失败，仍可从列表打开论文。</p> : null}
       <div ref={ref} className="network-canvas" hidden={failed} aria-label="论文关系网络" />
     </>
   );

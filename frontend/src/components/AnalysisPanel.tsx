@@ -1,130 +1,121 @@
-import { useEffect, useState } from "react";
-import { Alert, Button, Collapse, Steps, Tag } from "antd";
+import { Fragment, useEffect, useState } from "react";
+import { Alert, Button, Collapse } from "antd";
 import { fetchAnalysis, startAnalysis } from "../api";
 import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind } from "../types";
 
 const ACTIVE = new Set(["pending", "preparing", "analyzing"]);
 const UNKNOWN = "论文未明确说明";
+const STEPS = [["pending", "排队"], ["preparing", "准备文本"], ["analyzing", "模型分析"], ["success", "完成"]] as const;
 
-function stepOf(status?: string) {
-  if (status === "analyzing") return { current: 1, status: "process" as const };
-  if (status === "failed") return { current: 2, status: "error" as const };
-  if (status === "success") return { current: 2, status: "finish" as const };
-  return { current: 0, status: "process" as const };
+export interface EvidenceView {
+  key: string;
+  section: string;
+  claim: string;
+  refs: { paragraph_id: string; quote: string; paragraph?: { section: string; text: string } }[];
 }
 
-function TextBlock({ title, value }: { title: string; value: string }) {
-  return <>
-    <h3>{title}</h3>
-    <p className={value === UNKNOWN ? "meta" : undefined}>{value}</p>
-  </>;
+const BLOCKS: [ClaimKind, string][] = [
+  ["research_problem", "研究背景与核心问题"],
+  ["main_content", "主要研究内容"],
+  ["technical_method", "技术方案"],
+  ["method_step", "技术步骤与研究过程"],
+  ["innovation", "创新点（作者声称）"],
+  ["evaluation", "实验与验证"],
+  ["limitation", "局限与未来工作"],
+];
+
+function toView(key: string, section: string, claim: AnalysisClaim, result: AnalysisResult): EvidenceView {
+  const sources = new Map(result.source_paragraphs?.map(p => [p.id, p]));
+  return { key, section, claim: claim.text, refs: claim.evidence.map(ref => ({ ...ref, paragraph: sources.get(ref.paragraph_id) })) };
 }
 
-function ClaimView({ claim, result }: { claim: AnalysisClaim; result: AnalysisResult }) {
-  const sources = new Map(result.source_paragraphs?.map((p) => [p.id, p]));
-  const details = claim.kind === "evaluation" ? [
-    ["数据集／研究对象", claim.dataset], ["比较对象", claim.baseline], ["指标", claim.metric],
-    ["结果", claim.result], ["成立条件", claim.conditions],
-  ] : [];
-  return <div className="analysis-claim">
-    <p>{claim.text}</p>
-    {details.length ? <dl className="evaluation-fields">{details.map(([label, value]) => <div key={label}>
-      <dt>{label}</dt><dd>{value || "提供的材料中未明确说明"}</dd>
-    </div>)}</dl> : null}
-    {claim.evidence.length ? <Collapse size="small" items={[{
-      key: "source", label: "查看原文依据",
-      children: claim.evidence.map((ref, index) => {
-        const paragraph = sources.get(ref.paragraph_id);
-        return <div key={`${ref.paragraph_id}-${index}`}>
-          <strong>{paragraph?.section || "原文"} · {ref.paragraph_id}</strong>
-          <blockquote>{ref.quote}</blockquote>
-          {paragraph ? <details><summary>查看所在段落</summary><p>{paragraph.text}</p></details> : null}
-        </div>;
-      }),
-    }]} /> : <p className="meta">提供的材料中未明确说明</p>}
+export function EvidenceList({ view }: { view: EvidenceView }) {
+  return <div className="evidence-list">
+    {view.refs.map((ref, index) => <figure key={`${ref.paragraph_id}-${index}`} className="evidence-item">
+      <figcaption>{ref.paragraph?.section || "原文"} · 段落 {ref.paragraph_id}</figcaption>
+      <blockquote>{ref.quote}</blockquote>
+      {ref.paragraph && ref.paragraph.text.trim() !== ref.quote.trim() ? <details><summary>查看所在段落</summary><p>{ref.paragraph.text}</p></details> : null}
+    </figure>)}
   </div>;
 }
 
-function StructuredView({ result }: { result: AnalysisResult }) {
-  const blocks: [ClaimKind, string][] = [
-    ["summary", "中文速读摘要"], ["research_problem", "研究背景与核心问题"],
-    ["main_content", "主要研究内容"], ["technical_method", "技术方案概述"],
-    ["method_step", "技术步骤／研究过程"], ["innovation", "创新点（作者声称的贡献）"],
-    ["evaluation", "实验或验证"], ["limitation", "作者说明的局限与未来工作"], ["keyword", "关键词"],
+interface ClaimProps { claim: AnalysisClaim; result: AnalysisResult; section: string; id: string; mode: "aside" | "inline"; active: string; onEvidence: (view: EvidenceView | null) => void }
+
+function Claim({ claim, result, section, id, mode, active, onEvidence }: ClaimProps) {
+  const [open, setOpen] = useState(false);
+  const selected = mode === "aside" ? active === id : open;
+  const details = claim.kind === "evaluation" ? [
+    ["数据集／对象", claim.dataset], ["比较对象", claim.baseline], ["指标", claim.metric], ["结果", claim.result], ["成立条件", claim.conditions],
+  ].filter(([, value]) => value) : [];
+  const view = toView(id, section, claim, result);
+  return <div className={`claim${selected ? " is-active" : ""}`}>
+    <p className="claim-text">{claim.text}</p>
+    {details.length ? <dl className="claim-fields">{details.map(([label, value]) => <Fragment key={label}><dt>{label}</dt><dd>{value}</dd></Fragment>)}</dl> : null}
+    {claim.evidence.length
+      ? <button type="button" className="evidence-toggle" aria-expanded={selected} aria-controls={mode === "aside" ? "evidence-pane" : undefined}
+          onClick={() => mode === "aside" ? onEvidence(selected ? null : view) : setOpen(value => !value)}>
+          {selected ? "收起依据" : `原文依据 ${claim.evidence.length}`}
+        </button>
+      : <span className="evidence-none">未附原文依据</span>}
+    {mode === "inline" && open ? <EvidenceList view={view} /> : null}
+  </div>;
+}
+
+function StructuredView({ result, mode, active, onEvidence }: { result: AnalysisResult; mode: "aside" | "inline"; active: string; onEvidence: (view: EvidenceView | null) => void }) {
+  const supported = (kind: ClaimKind) => result.claims?.filter(c => c.kind === kind && c.status === "supported") || [];
+  const summary = supported("summary");
+  const keywords = supported("keyword");
+  return <>
+    {summary.length ? <div className="analysis-summary">
+      <h3>速读摘要</h3>
+      {summary.map((claim, i) => <Claim key={i} id={`summary-${i}`} claim={claim} result={result} section="速读摘要" mode={mode} active={active} onEvidence={onEvidence} />)}
+    </div> : null}
+    {result.paper_type ? <p className="analysis-type">论文类型：{result.paper_type}</p> : null}
+    {BLOCKS.map(([kind, title]) => {
+      const claims = supported(kind);
+      const items = claims.map((claim, i) => <Claim key={i} id={`${kind}-${i}`} claim={claim} result={result} section={title} mode={mode} active={active} onEvidence={onEvidence} />);
+      return <section key={kind} className="analysis-block" aria-label={title}>
+        <h3>{title}</h3>
+        {!claims.length ? <p className="muted">材料中未明确说明</p> : kind === "method_step" ? <ol className="claim-steps">{items.map((item, i) => <li key={i}>{item}</li>)}</ol> : items}
+      </section>;
+    })}
+    {keywords.length ? <section className="analysis-block" aria-label="关键词">
+      <h3>关键词</h3>
+      <p className="keyword-line">{keywords.map(claim => claim.text).join("，")}</p>
+    </section> : null}
+  </>;
+}
+
+function LegacyView({ result }: { result: AnalysisResult }) {
+  const rows: [string, string | string[]][] = [
+    ["研究问题", result.research_problem], ["主要内容", result.main_content], ["技术方法", result.technical_method],
+    ["创新点", result.innovations], ["实验结果", result.experimental_results], ["局限性", result.limitations], ["关键词", result.keywords.join("，")],
   ];
   return <>
-    <p className="analysis-paper-type">论文类型：{result.paper_type || "未知"}</p><div className="analysis-sections">
-    {blocks.map(([kind, title]) => {
-      const claims = result.claims?.filter((c) => c.kind === kind && c.status === "supported") || [];
-      return <section key={kind} aria-label={title} className={`analysis-section analysis-${kind}`}>
-        <h3>{title}</h3>
-        {!claims.length ? <p className="meta">提供的材料中未明确说明</p> : null}
-        {kind === "keyword" && claims.length ? <><div className="tag-row">{claims.map((claim, i) => <Tag key={i}>{claim.text}</Tag>)}</div><Collapse size="small" items={[{ key: "keywords", label: "查看关键词依据", children: claims.map((claim, i) => <ClaimView key={i} claim={claim} result={result} />) }]} /></>
-          : kind === "method_step" ? <ol>{claims.map((claim, i) => <li key={i}><ClaimView claim={claim} result={result} /></li>)}</ol>
-          : claims.map((claim, i) => <ClaimView key={i} claim={claim} result={result} />)}
-      </section>;
-    })}</div>
+    <Alert type="info" showIcon message="这是旧版分析结果，没有逐条原文依据。重新分析可生成速读摘要、技术步骤和原文依据。" />
+    {rows.map(([title, value]) => <section key={title} className="analysis-block"><h3>{title}</h3>
+      {Array.isArray(value) ? <ul>{value.map((item, i) => <li key={i} className={item === UNKNOWN ? "muted" : undefined}>{item}</li>)}</ul>
+        : <p className={value === UNKNOWN ? "muted" : undefined}>{value}</p>}
+    </section>)}
   </>;
 }
 
-function ResultView({ result }: { result: AnalysisResult }) {
-  const full = result.analysis_basis === "full_text";
-  const structured = Boolean(result.claims?.length);
-  return <>
-    <Alert
-      style={{ marginTop: 12 }}
-      type={full ? "info" : "warning"}
-      showIcon
-      message={full ? (result.truncated ? "基于全文部分章节分析" : "基于可获取的全文文本分析") : "仅基于摘要分析"}
-      description={full ? "分析范围以实际解析的文本为准，图表、公式或附录可能未被完整解析。" : (result.degradation_reason || "没有使用全文")}
-    />
-    <p className="meta">
-      生成时间：{new Date(result.generated_at).toLocaleString("zh-CN")} · 模型：{result.model_name} · 提示词 {result.prompt_version}
-    </p>
-    <p className="meta">AI 分析可能有误，请通过原文依据核对重要结论。</p>
-    {result.analysis_warnings?.map((warning) => <Alert style={{ marginTop: 12 }} key={warning} type="warning" showIcon message={warning} />)}
-    {structured ? <StructuredView result={result} /> : <>
-    <Alert type="info" message="这是旧版分析结果，重新分析可生成中文摘要、技术步骤和逐条原文依据。" />
-    <TextBlock title="研究问题" value={result.research_problem} />
-    <TextBlock title="主要内容" value={result.main_content} />
-    <TextBlock title="技术方法" value={result.technical_method} />
-    <h3>创新点</h3>
-    <ul>
-      {result.innovations.map((item, index) => <li key={`${index}-${item}`} className={item === UNKNOWN ? "meta" : undefined}>{item}</li>)}
-    </ul>
-    <TextBlock title="实验结果" value={result.experimental_results} />
-    <TextBlock title="局限性" value={result.limitations} />
-    <h3>关键词</h3>
-    <div className="tag-row">{result.keywords.map((item, index) => <Tag key={`${index}-${item}`}>{item}</Tag>)}</div>
-    </>}
-    {result.evidence_sections.length ? (
-      <Collapse style={{ marginTop: 12 }} items={[{
-        key: "evidence",
-        label: "文本来源与分析覆盖章节",
-        children: <>
-          {result.source_url ? <p className="meta">文本来源：{result.source_url}</p> : null}
-          {result.evidence_sections.map((item, index) => (
-            <div key={`${index}-${item.title}`}>
-              <strong>{item.title}</strong>
-              <p className="meta">{item.excerpt}</p>
-            </div>
-          ))}
-        </>,
-      }]} />
-    ) : null}
-  </>;
+export function basisOf(result: AnalysisResult) {
+  if (result.analysis_basis === "full_text") return { tone: "success", label: result.truncated ? "全文分析 · 部分章节" : "全文分析" };
+  return { tone: "warning", label: "摘要级分析" };
 }
 
-export function AnalysisPanel({ paperId, onImported }: { paperId: string; onImported: () => void }) {
+export function AnalysisPanel({ paperId, onImported, mode, active, onEvidence, onResult }: {
+  paperId: string; onImported: () => void; mode: "aside" | "inline"; active: string;
+  onEvidence: (view: EvidenceView | null) => void; onResult: (result: AnalysisResult | null) => void;
+}) {
   const [state, setState] = useState<AnalysisState | null>(null);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
   const [version, setVersion] = useState(0);
 
-  useEffect(() => {
-    setState(null);
-    setError("");
-  }, [paperId]);
+  useEffect(() => { setState(null); setError(""); }, [paperId]);
+  useEffect(() => { onResult(state?.result ?? null); }, [state?.result, onResult]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -138,7 +129,7 @@ export function AnalysisPanel({ paperId, onImported }: { paperId: string; onImpo
       }
       if (status && ACTIVE.has(status)) {
         timer = window.setTimeout(() => {
-          fetchAnalysis(paperId, controller.signal).then((next) => {
+          fetchAnalysis(paperId, controller.signal).then(next => {
             if (controller.signal.aborted) return;
             setState(next);
             follow(next);
@@ -148,7 +139,7 @@ export function AnalysisPanel({ paperId, onImported }: { paperId: string; onImpo
         }, 2000);
       }
     };
-    fetchAnalysis(paperId, controller.signal).then((data) => {
+    fetchAnalysis(paperId, controller.signal).then(data => {
       if (controller.signal.aborted) return;
       setState(data);
       setError("");
@@ -156,10 +147,7 @@ export function AnalysisPanel({ paperId, onImported }: { paperId: string; onImpo
     }).catch((err: Error) => {
       if (!controller.signal.aborted) setError(err.message || "分析结果加载失败");
     });
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
+    return () => { controller.abort(); window.clearTimeout(timer); };
   }, [paperId, version, onImported]);
 
   async function run(reanalyze: boolean) {
@@ -167,7 +155,8 @@ export function AnalysisPanel({ paperId, onImported }: { paperId: string; onImpo
     setError("");
     try {
       setState(await startAnalysis(paperId, reanalyze));
-      setVersion((value) => value + 1);
+      onEvidence(null);
+      setVersion(value => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "分析失败，请重试");
     } finally {
@@ -177,36 +166,43 @@ export function AnalysisPanel({ paperId, onImported }: { paperId: string; onImpo
 
   const task = state?.task;
   const result = state?.result ?? null;
-  const active = Boolean(task && ACTIVE.has(task.status));
+  const running = Boolean(task && ACTIVE.has(task.status));
   const waiting = state === null && !error;
-  const label = task?.status === "failed" ? "重试" : result ? "重新分析" : "AI 分析";
-  const steps = task ? stepOf(task.status) : null;
+  const stepIndex = STEPS.findIndex(([key]) => key === task?.status);
+  const basis = result ? basisOf(result) : null;
 
-  return (
-    <section className="paper-card analysis-block" id="analysis" aria-label="AI 分析">
-      <div className="analysis-heading"><div><span className="page-kicker">结构化研读</span><h2>AI 内容分析</h2><p className="meta">梳理研究问题、方法与贡献，并查看对应原文依据。</p></div><div className="analysis-actions">
-        <Button type="primary" disabled={waiting || active} loading={starting || waiting} onClick={() => run(Boolean(result))}>
-          {label}
-        </Button>
-      </div></div>
-      {steps ? (
-        <Steps size="small" current={steps.current} status={steps.status} items={[
-          { title: "准备文本" },
-          { title: "分析中" },
-          { title: task?.status === "failed" ? "失败" : "完成" },
-        ]} />
-      ) : null}
-      {error ? (
-        <Alert
-          style={{ marginTop: 12 }}
-          type="error"
-          showIcon
-          message={error}
-          action={<Button size="small" onClick={() => setVersion((value) => value + 1)}>重试</Button>}
-        />
-      ) : null}
-      {task?.status === "failed" && task.error ? <Alert style={{ marginTop: 12 }} type="error" showIcon message={task.error} /> : null}
-      {result ? <ResultView result={result} /> : null}
-    </section>
-  );
+  return <section className="reading-section" id="analysis" aria-labelledby="analysis-title">
+    <div className="section-head">
+      <h2 id="analysis-title">AI 分析</h2>
+      {basis ? <span className={`status status-${basis.tone}`}>{basis.label}</span> : null}
+      <div className="section-actions">
+        {result || task?.status === "failed"
+          ? <Button disabled={waiting || running} loading={starting} onClick={() => run(Boolean(result))}>{task?.status === "failed" && !result ? "重试分析" : "重新分析"}</Button>
+          : <Button type="primary" disabled={waiting || running} loading={starting || waiting} onClick={() => run(false)}>开始分析</Button>}
+      </div>
+    </div>
+    {running ? <ol className="task-steps" aria-label="分析进度" aria-live="polite">
+      {STEPS.map(([key, label], index) => <li key={key} className={index < stepIndex ? "done" : index === stepIndex ? "current" : ""}>{label}</li>)}
+    </ol> : null}
+    {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setVersion(v => v + 1)}>重试</Button>} /> : null}
+    {task?.status === "failed" && task.error ? <Alert type="error" showIcon message={`上次分析失败：${task.error}`} /> : null}
+    {!result && !running && !waiting && !error && task?.status !== "failed" ? <p className="empty-hint">尚未分析。分析会先尝试获取全文；拿不到全文时只基于摘要，结果会标注为“摘要级分析”。</p> : null}
+    {result ? <>
+      <p className="analysis-basis">
+        {result.analysis_basis === "full_text"
+          ? <>基于可获取的全文文本{result.truncated ? "的部分章节" : ""}；图表、公式和附录可能未完整解析。</>
+          : <>仅基于摘要：{result.degradation_reason || "没有使用全文"}。结论覆盖面有限。</>}
+        <span className="muted"> {new Date(result.generated_at).toLocaleString("zh-CN")} · {result.model_name} · 提示词 {result.prompt_version}。AI 可能出错，重要结论请对照原文依据。</span>
+      </p>
+      {result.analysis_warnings?.map(warning => <Alert key={warning} type="warning" showIcon message={warning} />)}
+      {result.claims?.length ? <StructuredView result={result} mode={mode} active={active} onEvidence={onEvidence} /> : <LegacyView result={result} />}
+      {result.evidence_sections.length ? <Collapse ghost className="coverage" items={[{
+        key: "coverage", label: `分析覆盖的文本章节（${result.evidence_sections.length}）`,
+        children: <>
+          {result.source_url ? <p className="muted">文本来源：<a href={result.source_url} target="_blank" rel="noopener noreferrer">{result.source_url}</a></p> : null}
+          {result.evidence_sections.map((item, index) => <div key={`${index}-${item.title}`} className="coverage-item"><strong>{item.title}</strong><p>{item.excerpt}</p></div>)}
+        </>,
+      }]} /> : null}
+    </> : null}
+  </section>;
 }

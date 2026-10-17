@@ -3,7 +3,7 @@ export interface EntityNode { id: string; kind: EntityKind; label: string; year?
 export interface EntityEdge { source: string; target: string; relation: string }
 export interface EntityGraph { nodes: EntityNode[]; edges: EntityEdge[]; total_papers: number; scope: string }
 export const KIND_LABEL: Record<EntityKind, string> = { paper: "论文", author: "作者", keyword: "关键词", venue: "期刊／会议" };
-export const KIND_COLOR: Record<EntityKind, string> = { paper: "#4168d8", author: "#a378cc", keyword: "#269d8b", venue: "#d89937" };
+export const KIND_COLOR: Record<EntityKind, string> = { paper: "#2a53b0", author: "#85599f", keyword: "#23806f", venue: "#a8701c" };
 
 // Public paper identities are real. Topic assignments are curated for this
 // prototype and must not be presented as automatic extraction or a field census.

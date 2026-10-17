@@ -1,9 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import "./index.css";
-import "./workspace.css";
-import "./research.css";
+import { cssVars } from "./theme";
+import "./styles/base.css";
+import "./styles/views.css";
+
+for (const [name, value] of Object.entries(cssVars)) document.documentElement.style.setProperty(name, value);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

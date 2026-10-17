@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "antd";
+import { ZoomInOutlined, ZoomOutOutlined } from "@ant-design/icons";
 import { KIND_COLOR, KIND_LABEL, type EntityGraph, type EntityNode } from "../graphData";
 
 const savedViews = new Map<string, { x: number; y: number; zoom: number }>();
@@ -39,9 +40,9 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
   return <div className="kg-canvas-shell">
     <div className="kg-canvas-tools">
       <span>拖动画布平移 · 点击节点查看关系</span>
-      <div><Button aria-label="缩小图谱" onClick={() => setView(v => ({ ...v, zoom: Math.max(.4, v.zoom - .2) }))}>−</Button>
-        <Button aria-label="放大图谱" onClick={() => setView(v => ({ ...v, zoom: Math.min(2.5, v.zoom + .2) }))}>＋</Button>
-        <Button onClick={() => setView({ x: 0, y: 0, zoom: 1 })}>复位</Button></div>
+      <div><Button size="small" icon={<ZoomOutOutlined />} aria-label="缩小图谱" onClick={() => setView(v => ({ ...v, zoom: Math.max(.4, v.zoom - .2) }))} />
+        <Button size="small" icon={<ZoomInOutlined />} aria-label="放大图谱" onClick={() => setView(v => ({ ...v, zoom: Math.min(2.5, v.zoom + .2) }))} />
+        <Button size="small" onClick={() => setView({ x: 0, y: 0, zoom: 1 })}>复位</Button></div>
     </div>
     <svg className="kg-canvas" viewBox={`0 0 1080 ${height}`} aria-label="论文、作者、关键词与刊会知识图谱"
       onPointerDown={event => { if (event.button !== 0) return; drag.current = { x: event.clientX, y: event.clientY, originX: view.x, originY: view.y, moved: false }; }}
@@ -57,7 +58,7 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
         {data.edges.map((edge, i) => {
           const a = positions.get(edge.source), b = positions.get(edge.target); if (!a || !b) return null;
           const active = edge.source === selected || edge.target === selected;
-          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={active ? KIND_COLOR[b.kind] : "#cdd6e4"} strokeWidth={active ? 2.2 : 1} opacity={selected && !active ? .13 : .65} />;
+          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={active ? KIND_COLOR[b.kind] : "#d6d5ce"} strokeWidth={active ? 2.2 : 1} opacity={selected && !active ? .13 : .65} />;
         })}
         {[...positions.values()].map(node => <g key={node.id} role="button" tabIndex={0}
           aria-label={`${KIND_LABEL[node.kind]}：${node.label}`} className="kg-node"
@@ -65,9 +66,9 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
           onClick={() => { if (!drag.current?.moved) onSelect(node.id === selected ? "" : node.id); }}
           onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.id === selected ? "" : node.id); } }}>
           <title>{node.label}</title>
-          <circle r={node.kind === "paper" ? 22 : 14} fill={KIND_COLOR[node.kind]} stroke={selected === node.id ? "#152b58" : "white"} strokeWidth={selected === node.id ? 4 : 3} />
+          <circle r={node.kind === "paper" ? 22 : 14} fill={KIND_COLOR[node.kind]} stroke={selected === node.id ? "#191f2b" : "white"} strokeWidth={selected === node.id ? 4 : 3} />
           <text y="4" textAnchor="middle" fill="white" fontSize="11">{node.kind === "paper" ? node.year ?? "?" : KIND_LABEL[node.kind].slice(0, 1)}</text>
-          <text y={node.kind === "paper" ? 40 : 32} textAnchor="middle" fill="#34425b" fontSize="12" stroke="#fbfcff" strokeWidth="4" paintOrder="stroke">{node.label.length > 19 ? node.label.slice(0, 18) + "…" : node.label}</text>
+          <text y={node.kind === "paper" ? 40 : 32} textAnchor="middle" fill="#2c3340" fontSize="13" stroke="#fcfcfa" strokeWidth="4" paintOrder="stroke">{node.label.length > 19 ? node.label.slice(0, 18) + "…" : node.label}</text>
         </g>)}
       </g>
     </svg>

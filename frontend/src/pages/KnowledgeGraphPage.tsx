@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Checkbox, Empty, Input, Segmented, Select, Spin, Tag } from "antd";
+import { Alert, Button, Checkbox, Empty, Input, Segmented, Select, Skeleton } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { paperLocation, safeReturn } from "../workspace";
+import { paperLocation, returnLabel, safeReturn } from "../workspace";
 import { KnowledgeCanvas } from "../components/KnowledgeCanvas";
 import { KIND_COLOR, KIND_LABEL, ragExample, type EntityGraph, type EntityKind } from "../graphData";
 
@@ -31,7 +32,7 @@ export default function KnowledgeGraphPage() {
   const selected = params.get("selected") || focused?.id || "";
   const kinds = params.has("kinds") ? KINDS.filter(kind => params.get("kinds")!.split(",").includes(kind)) : KINDS;
   const tab = params.get("tab") === "evolution" ? "evolution" : "graph";
-  useEffect(() => { document.title = "知识图谱 - 文献检索"; }, []);
+  useEffect(() => { document.title = "集合图谱 - 文献研读"; }, []);
   useEffect(() => {
     setError("");
     if (mode === "example") { setData(example); setLoading(false); return; }
@@ -86,62 +87,68 @@ export default function KnowledgeGraphPage() {
   const themeCount = (id: string, y: number) => visible.edges.filter(e => e.target === id && visiblePapers.some(p => p.id === e.source && p.year === y)).length;
   function reset() { update({ q: "", year: "", kinds: "", selected: "", focus: "" }); }
 
-  return <main className="kg-page">
-    <header className="kg-header">
-      <div><div className="kg-breadcrumb"><Link to="/library">我的文献</Link><span>/</span>集合关系</div>
-        <h1>集合关系图谱</h1><p>探索已入库文献的作者、主题和时间脉络。点击节点预览，打开研读后可返回原位置。</p></div>
-      <Link className="kg-library-link" to={safeReturn(params.get("from"))}>返回研读来源 ↗</Link>
+  const from = params.get("from") ? safeReturn(params.get("from")) : "";
+  const shownYears = years.filter(y => !year || y <= year);
+  return <main className="page page-wide kg-page">
+    {from ? <Link to={from} className="back-link"><ArrowLeftOutlined aria-hidden />返回{returnLabel(from)}</Link> : null}
+    <header className="page-head">
+      <div>
+        <h1 className="page-title">集合图谱</h1>
+        <p className="page-sub">文献库中论文与作者、关键词、期刊／会议之间的实体关系。连线不表示引用或技术继承。</p>
+      </div>
+      <div className="page-actions">
+        <Segmented aria-label="图谱数据来源" value={mode} onChange={v => update({ mode: String(v), selected: "", focus: "", q: "", year: "" })} options={[{ label: "我的文献库", value: "local" }, { label: "RAG 示例", value: "example" }]} />
+      </div>
     </header>
-    <div className="kg-scope-bar"><Segmented aria-label="图谱数据来源" value={mode} onChange={v => update({ mode: String(v), selected: "", focus: "", q: "", year: "" })} options={[{ label: "我的文献", value: "local" }, { label: "体验 RAG 示例", value: "example" }]} />
-      <Tag color={mode === "example" ? "gold" : "blue"}>{mode === "example" ? "原型 · 演示样本" : "已入库数据"}</Tag></div>
-    <p className="kg-scope">{data.scope || "正在读取本地论文库…"} {mode === "local" && data.total_papers > papers.length ? `本地共 ${data.total_papers} 篇。` : ""}</p>
-    <div className="kg-stats">{KINDS.map(kind => <div key={kind}><i style={{ background: KIND_COLOR[kind] }} /><strong>{visible.nodes.filter(n => n.kind === kind).length}</strong><span>{KIND_LABEL[kind]}</span></div>)}<div><strong>{visible.edges.length}</strong><span>实体关系</span></div></div>
-    <div className="kg-filters">
-      <Input.Search aria-label="在图谱中搜索" placeholder="搜索论文、作者或主题，如：评估" value={query} onChange={e => update({ q: e.target.value, selected: "", focus: "" })} allowClear style={{ maxWidth: 380 }} />
-      <Select aria-label="论文年份范围" value={year} onChange={v => update({ year: String(v), selected: "", focus: "" })} options={[{ value: 0, label: "全部年份" }, ...years.map(y => ({ value: y, label: `截至 ${y} 年` }))]} style={{ width: 150 }} />
-      <Button onClick={reset}>重置</Button>
+    <p className="kg-scope">{mode === "example" ? <><span className="status status-warning">演示数据</span> {data.scope}</> : <>{data.scope || "正在读取文献库…"}{data.total_papers > papers.length ? ` 文献库共 ${data.total_papers} 篇。` : ""}</>}</p>
+    <div className="kg-toolbar">
+      <Input.Search aria-label="在图谱中搜索" placeholder="搜索论文、作者或主题" value={query} onChange={e => update({ q: e.target.value, selected: "", focus: "" })} allowClear />
+      <Select aria-label="论文年份范围" value={year} onChange={v => update({ year: String(v), selected: "", focus: "" })} options={[{ value: 0, label: "全部年份" }, ...years.map(y => ({ value: y, label: `截至 ${y} 年` }))]} />
+      <Button type="text" onClick={reset}>重置</Button>
+      <Segmented aria-label="探索视图" value={tab} onChange={v => setTab(String(v))} options={[{ value: "graph", label: "关系图" }, { value: "evolution", label: "时间脉络" }]} />
     </div>
-    {!loading && !error && focus && !focused ? <Alert type="info" message="当前论文未包含在图谱数据范围内，可先加入我的文献，再查看其关系。" /> : null}
-    {loading ? <Spin tip="正在构建本地图谱"><div style={{ height: 100 }} /></Spin> : null}
-    {error ? <Alert type="error" showIcon message={error} action={<Button onClick={() => setRetry(r => r + 1)}>重试</Button>} /> : null}
-    {!loading && !error && !visiblePapers.length ? <Empty description={mode === "local" && !papers.length ? "本地论文库为空，加入论文并完成AI分析后即可连接主题" : "当前筛选没有论文，请尝试重置"} /> : null}
+    <p className="kg-counts">{KINDS.map(kind => <span key={kind}><i style={{ background: KIND_COLOR[kind] }} />{KIND_LABEL[kind]} {visible.nodes.filter(n => n.kind === kind).length}</span>)}<span>关系 {visible.edges.length}</span></p>
+    {!loading && !error && focus && !focused ? <Alert type="info" showIcon message="这篇论文不在图谱数据范围内。加入文献库后即可查看它的关系。" /> : null}
+    {loading ? <Skeleton active paragraph={{ rows: 6 }} /> : null}
+    {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(r => r + 1)}>重试</Button>} /> : null}
+    {!loading && !error && !visiblePapers.length ? <Empty description={mode === "local" && !papers.length ? "文献库为空。加入论文并完成 AI 分析后，可在这里看到主题关系。" : "当前筛选没有论文，请重置筛选"} /> : null}
     {visiblePapers.length ? <>
-      <div className="kg-view-bar"><Segmented aria-label="知识探索视图" value={tab} onChange={v => setTab(String(v))} options={[{ value: "graph", label: "关系图谱" }, { value: "evolution", label: "时间脉络" }]} />
-        <span className="meta">{tab === "graph" ? "连线表示实体关系，不表示引用或技术继承" : "按发表年份排列，不代表因果或技术继承"}</span></div>
       {tab === "graph" ? <div className="kg-workspace">
-        <section className="kg-graph-panel" aria-label="关系图谱">
+        <section className="kg-graph-panel" aria-label="关系图">
           <div className="kg-legend"><Checkbox.Group value={kinds} onChange={v => update({ kinds: v.length ? v.join(",") : "none" })} options={KINDS.map(kind => ({ value: kind, label: <span><i style={{ background: KIND_COLOR[kind] }} />{KIND_LABEL[kind]}</span> }))} /></div>
-          {canvasData.nodes.length ? <KnowledgeCanvas key={`${mode}-${year}-${query}`} scope={`${mode}-${year}-${query}`} data={canvasData} selected={selectedNode?.id || ""} onSelect={setSelected} /> : <Empty description="请选择至少一种实体" />}
-          <p className="kg-canvas-caption">为便于阅读，画布最多展示16篇论文、18位作者、18个关键词及5个刊会；统计和时间视图使用当前筛选的全部样本。</p>
+          {canvasData.nodes.length ? <KnowledgeCanvas key={`${mode}-${year}-${query}`} scope={`${mode}-${year}-${query}`} data={canvasData} selected={selectedNode?.id || ""} onSelect={setSelected} /> : <Empty description="请至少选择一种实体" />}
+          <p className="kg-caption">画布最多展示 16 篇论文、18 位作者、18 个关键词和 5 个期刊／会议；计数和时间脉络使用当前筛选的全部样本。</p>
         </section>
-        <aside className="kg-inspector">
+        <aside className="kg-inspector" aria-label="节点详情">
           {selectedNode ? <>
-            <span className="kg-eyebrow">节点详情</span><Tag color={KIND_COLOR[selectedNode.kind]}>{KIND_LABEL[selectedNode.kind]}</Tag>
+            <p className="kg-kind"><i style={{ background: KIND_COLOR[selectedNode.kind] }} />{KIND_LABEL[selectedNode.kind]}{selectedNode.year ? ` · ${selectedNode.year}` : ""}</p>
             <h2>{selectedNode.label}</h2>
-            {selectedNode.year ? <p className="meta">发表年份 · {selectedNode.year}</p> : null}
-            <p className="meta">{mode === "example" && selectedNode.kind === "keyword" ? "人工演示主题，非自动提取结果。" : selectedNode.kind === "keyword" ? "来自已有AI分析；同名归并不等于完成同义词消歧。" : "来自论文元数据；作者同名关系尚未消歧。"}</p>
-            {selectedNode.paper_id ? <Link to={paperLocation(selectedNode.paper_id, current)}>打开阅读与分析 →</Link> : null}
-            <h3>关联实体 · {neighbors.length}</h3><div className="kg-neighbors">{neighbors.map((n, i) => n ? <button key={`${n.id}-${i}`} onClick={() => setSelected(n.id)}><i style={{ background: KIND_COLOR[n.kind] }} /><span>{n.label}</span><small>{KIND_LABEL[n.kind]}</small></button> : null)}</div>
+            <p className="muted">{mode === "example" && selectedNode.kind === "keyword" ? "人工演示主题，不是自动提取结果。" : selectedNode.kind === "keyword" ? "来自已有 AI 分析；同名合并不等于同义词消歧。" : "来自论文元数据；同名作者尚未消歧。"}</p>
+            {selectedNode.paper_id ? <Link className="inspector-open" to={paperLocation(selectedNode.paper_id, current)}>打开论文</Link> : null}
+            <h3>关联实体 {neighbors.length}</h3>
+            <div className="kg-neighbors">{neighbors.map((n, i) => n ? <button type="button" key={`${n.id}-${i}`} onClick={() => setSelected(n.id)}><i style={{ background: KIND_COLOR[n.kind] }} /><span>{n.label}</span><small>{KIND_LABEL[n.kind]}</small></button> : null)}</div>
           </> : <>
-            <span className="kg-eyebrow">探索指南</span><h2>先找一个你感兴趣的节点</h2><p>点击论文看它的作者和主题；点击关键词，看哪些论文在讨论同一个问题。</p>
-            <div className="kg-tip">{mode === "example" ? "例如点击「幻觉」，查看演示论文之间的主题联系。" : "关系来自当前文献；分析论文后，可以继续探索提取出的主题。"}</div>
-            <h3>样本中常见的主题</h3><div className="kg-topic-tags">{themes.slice(0, 8).map(t => <button key={t.id} onClick={() => setSelected(t.id)}>{t.label}<span>{t.count}</span></button>)}</div>
+            <h2>选择一个节点</h2>
+            <p className="muted">点击论文查看作者和主题；点击关键词查看讨论同一问题的论文。</p>
+            {themes.length ? <><h3>常见主题</h3><div className="kg-topic-tags">{themes.slice(0, 8).map(t => <button type="button" key={t.id} onClick={() => setSelected(t.id)}>{t.label}<span>{t.count}</span></button>)}</div></> : <p className="muted">还没有主题关键词，完成论文 AI 分析后会出现。</p>}
           </>}
         </aside>
-      </div> : <section className="kg-timeline" aria-label="论文时间脉络">
-        {years.filter(y => !year || y <= year).map(y => { const items = visiblePapers.filter(p => p.year === y); if (!items.length) return null;
-          return <div className="kg-time-row" key={y}><div className="kg-time-year">{y}<small>{items.length} 篇样本</small></div><div className="kg-time-papers">{items.map(p => <article key={p.id}><h3><button className="timeline-preview" onClick={() => update({ selected: p.id, focus: "", tab: "graph" })}>{p.label}</button></h3><div>{visible.edges.filter(e => e.source === p.id).map(e => visible.nodes.find(n => n.id === e.target)).filter(n => n?.kind === "keyword").map(n => n ? <Tag key={n.id} color="cyan">{n.label}</Tag> : null)}</div></article>)}</div></div>;
+      </div> : <section className="panel kg-timeline" aria-label="时间脉络">
+        <p className="muted">按发表年份排列，不代表因果或技术继承。</p>
+        {shownYears.map(y => { const items = visiblePapers.filter(p => p.year === y); if (!items.length) return null;
+          return <div className="kg-time-row" key={y}><div className="kg-time-year">{y}<small>{items.length} 篇</small></div><ul className="kg-time-papers">{items.map(p => <li key={p.id}><button type="button" className="link-button" onClick={() => update({ selected: p.id, focus: "", tab: "graph" })}>{p.label}</button><span className="muted">{visible.edges.filter(e => e.source === p.id).map(e => visible.nodes.find(n => n.id === e.target)).filter(n => n?.kind === "keyword").map(n => n!.label).join("，")}</span></li>)}</ul></div>;
         })}
-        {visiblePapers.some(p => !p.year) ? <p className="meta">另有 {visiblePapers.filter(p => !p.year).length} 篇年份未知论文，未纳入时间脉络与年度统计。</p> : null}
+        {visiblePapers.some(p => !p.year) ? <p className="muted">另有 {visiblePapers.filter(p => !p.year).length} 篇年份未知，未纳入时间脉络。</p> : null}
       </section>}
-      <section className="kg-trends" aria-label="样本主题分布">
-        <div className="kg-section-heading"><div><span className="kg-eyebrow">TOPIC SIGNALS</span><h2>这些主题，在什么时候出现？</h2></div><Tag>当前样本统计</Tag></div>
-        <p className="meta">统计每年涉及该主题的论文篇数，一篇论文可属于多个主题。样本未覆盖的年份不代表该领域没有研究，数量不等于学术热度。</p>
-        {trendThemes.length ? <div className="kg-topic-chart"><div className="kg-chart-row kg-chart-head"><span>主题 / 篇数</span>{years.filter(y => !year || y <= year).map(y => <span key={y}>{y}</span>)}</div>
-          {trendThemes.map(t => <div className="kg-chart-row" key={t.id}><button onClick={() => update({ selected: t.id, focus: "", tab: "graph" })}>{t.label}</button>{years.filter(y => !year || y <= year).map(y => { const count = themeCount(t.id, y); return <span key={y} className="kg-heat-cell" style={{ background: count ? `rgba(38,157,139,${.14 + Math.min(count, 5) * .14})` : "#f3f5f8" }} aria-label={`${t.label}，${y}年，${count}篇`}>{count}</span>; })}</div>)}
-        </div> : <Empty description="尚无主题关键词，请先完成论文AI分析" />}
+      <section className="panel kg-trends" aria-labelledby="trend-title">
+        <h2 id="trend-title" className="view-title">主题的年度分布</h2>
+        <p className="muted">每格为当年涉及该主题的样本论文篇数，一篇论文可属于多个主题。只反映当前样本，不代表领域热度。</p>
+        {trendThemes.length ? <div className="table-scroll"><table className="heat-table">
+          <thead><tr><th scope="col">主题</th>{shownYears.map(y => <th scope="col" key={y}>{y}</th>)}</tr></thead>
+          <tbody>{trendThemes.map(t => <tr key={t.id}><th scope="row"><button type="button" className="link-button" onClick={() => update({ selected: t.id, focus: "", tab: "graph" })}>{t.label}</button></th>
+            {shownYears.map(y => { const count = themeCount(t.id, y); return <td key={y} style={{ background: count ? `rgba(42, 83, 176, ${.08 + Math.min(count, 5) * .1})` : undefined }} aria-label={`${t.label}，${y} 年，${count} 篇`}>{count || ""}</td>; })}</tr>)}</tbody>
+        </table></div> : <p className="muted">尚无主题关键词，完成论文 AI 分析后再查看。</p>}
       </section>
     </> : null}
-    <footer className="kg-footer">知识图谱原型 · 当前不自动发起外部搜索，也不调用模型。领域趋势需要持续、可比的论文样本。</footer>
   </main>;
 }

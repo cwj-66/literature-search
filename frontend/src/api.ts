@@ -1,4 +1,4 @@
-import type { AnalysisState, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask } from "./types";
+import type { AnalysisState, CompareTable, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask } from "./types";
 
 export interface SearchParams {
   q: string;
@@ -123,35 +123,37 @@ export async function fetchNetwork(id: string, refresh: boolean, signal?: AbortS
   return response.json();
 }
 
-export async function fetchLibrary(page: number, signal?: AbortSignal): Promise<LibraryResponse> {
-  const response = await fetch(`/api/papers?page=${page}&page_size=20`, { signal });
+export async function fetchLibrary(page: number, signal?: AbortSignal, pageSize = 20): Promise<LibraryResponse> {
+  const response = await fetch(`/api/papers?page=${page}&page_size=${pageSize}`, { signal });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }
 
-export async function askLibrary(question: string, paperIds: string[]): Promise<QAResponse> {
-  const response = await fetch("/api/qa", {
+async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, paper_ids: paperIds }),
+    body: JSON.stringify(body), signal,
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }
 
-export async function compareLibrary(paperIds: string[]) {
-  const response = await fetch("/api/compare", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paper_ids: paperIds }),
-  });
-  if (!response.ok) throw new Error(await errorMessage(response));
-  return response.json();
+export function askLibrary(question: string, paperIds: string[], signal?: AbortSignal) {
+  return postJson<QAResponse>("/api/qa", { question, paper_ids: paperIds }, signal);
 }
 
-export async function startResearch(goal: string, autoApprove = false): Promise<ResearchTask> {
-  const response = await fetch("/api/research/tasks", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ goal, auto_approve: autoApprove }),
-  });
-  if (!response.ok) throw new Error(await errorMessage(response));
-  return response.json();
+export function compareLibrary(paperIds: string[], signal?: AbortSignal) {
+  return postJson<CompareTable>("/api/compare", { paper_ids: paperIds }, signal);
+}
+
+export function startResearch(goal: string, options: { autoApprove: boolean; yearFrom?: number | null; yearTo?: number | null }, signal?: AbortSignal) {
+  return postJson<ResearchTask>("/api/research/tasks", {
+    goal, auto_approve: options.autoApprove, year_from: options.yearFrom ?? null, year_to: options.yearTo ?? null,
+  }, signal);
+}
+
+export function resumeResearch(taskId: string, queries: string[], signal?: AbortSignal) {
+  return postJson<ResearchTask>(`/api/research/tasks/${encodeURIComponent(taskId)}/resume`, {
+    queries, plan: queries.map(query => ({ action: "search", query })),
+  }, signal);
 }

@@ -1,20 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ResearchWorkspace } from "./ResearchWorkspace";
+import { sectionOf } from "../workspace";
 
 const scrollPositions = new Map<string, number>();
 
 const navigation = [
-  { label: "文献检索", href: "/", key: "search" },
-  { label: "我的文献", href: "/library", key: "library" },
+  { label: "检索", href: "/", key: "search" },
+  { label: "文献库", href: "/library", key: "library" },
+  { label: "研究台", href: "/studio", key: "studio" },
+  { label: "图谱", href: "/graph", key: "graph" },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const previousPath = useRef("");
   const leaving = useRef(false);
-  const active = location.pathname === "/" ? "search" : "library";
-  const inWorkspace = ["/paper", "/recommend", "/graph"].includes(location.pathname);
+  const active = sectionOf(location.pathname, new URLSearchParams(location.search));
   useEffect(() => {
     const previous = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
@@ -49,7 +50,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", stop); window.removeEventListener("scroll", save);
     };
   }, [location.pathname, location.search, location.hash]);
-  return <div className="app-layout" onClickCapture={event => {
+  return <div className="app" onClickCapture={event => {
     const anchor = event.target instanceof Element ? event.target.closest("a") : null;
     if (!anchor || anchor.target === "_blank" || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const next = new URL(anchor.href, window.location.origin);
@@ -59,16 +60,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
       leaving.current = true;
     }
   }}>
-    <a href="#workspace-content" className="skip-link">跳到主要内容</a>
-    <header className="app-header"><div className="app-header-inner">
-      <Link to="/" className="app-brand" aria-label="文献研读，返回首页">
-        <span className="app-logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 7h8v19H7zM18 7h7v19h-7z" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M10 11h2M21 11h1M10 21h2M21 21h1" stroke="currentColor" strokeWidth="2" /></svg></span>
-        <span>文献研读<small>检索与分析工作台</small></span>
-      </Link>
-      <nav aria-label="主要导航">{navigation.map(item => <Link key={item.key} to={item.href} aria-current={active === item.key ? "page" : undefined} className={active === item.key ? "active" : ""}>{item.label}</Link>)}</nav>
-      <span className="app-header-note">找到文献，接续研读</span>
-    </div></header>
-    <div id="workspace-content" tabIndex={-1} className="workspace-content">{inWorkspace ? <ResearchWorkspace>{children}</ResearchWorkspace> : children}</div>
-    <footer className="app-footer"><span>文献检索与分析平台</span><span>检索 · 阅读 · 分析 · 探索</span></footer>
+    <a href="#main" className="skip-link">跳到主要内容</a>
+    <header className="app-header">
+      <div className="app-header-inner">
+        <Link to="/" className="app-brand" aria-label="文献研读，返回检索">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5c-.8 0-1.5-.7-1.5-1.5v-13ZM13 4h5.5c.8 0 1.5.7 1.5 1.5v13c0 .8-.7 1.5-1.5 1.5H13V4Z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
+          <span>文献研读</span>
+        </Link>
+        <nav aria-label="主要导航" className="app-nav">
+          {navigation.map(item => <Link key={item.key} to={item.href} aria-current={active === item.key ? "page" : undefined}>{item.label}</Link>)}
+        </nav>
+      </div>
+    </header>
+    <div id="main" tabIndex={-1} className="app-main">{children}</div>
   </div>;
 }

@@ -1,48 +1,88 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Empty, Pagination, Spin } from "antd";
-import { Link, useSearchParams } from "react-router-dom";
+import { Alert, Button, Checkbox, Empty, Input, Pagination, Skeleton } from "antd";
+import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { fetchLibrary } from "../api";
+import { AnalysisBadge, useAnalysisStates } from "../components/AnalysisBadge";
 import { ImportPanel } from "../components/ImportPaper";
-import { ResearchDesk } from "../components/ResearchDesk";
-import { PaperCard } from "../components/PaperCard";
+import { PaperRow } from "../components/PaperRow";
+import { SelectionBar } from "../components/SelectionBar";
+import { selection, useSelection } from "../selection";
 import type { LibraryResponse } from "../types";
-import { graphLocation } from "../workspace";
+import { paperKey } from "../types";
+import { graphLocation, paperLocation, recommendLocation } from "../workspace";
 
 export default function LibraryPage() {
   const [params, setParams] = useSearchParams();
-  const analysisMode = params.get("view") === "analysis";
+  const location = useLocation();
+  const here = location.pathname + location.search;
   const page = Math.max(1, Math.floor(Number(params.get("page")) || 1));
-  const setPage = (value: number) => setParams(current => { const next = new URLSearchParams(current); next.set("page", String(value)); next.delete("view"); return next; });
+  const importOpen = params.get("import") === "1";
+  const patch = (values: Record<string, string | null>) => setParams(current => {
+    const next = new URLSearchParams(current);
+    for (const [key, value] of Object.entries(values)) { if (value) next.set(key, value); else next.delete(key); }
+    return next;
+  });
   const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState<LibraryResponse | null>(null);
-  useEffect(() => { document.title = "我的文献 - 文献研读"; }, []);
+  const [filter, setFilter] = useState("");
+  const picked = useSelection();
+  const ids = data?.papers.map(paperKey) ?? [];
+  const states = useAnalysisStates(ids);
+  useEffect(() => { document.title = "文献库 - 文献研读"; }, []);
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true); setError(""); setData(null);
-    fetchLibrary(page, controller.signal).then((result) => {
+    setLoading(true); setError("");
+    fetchLibrary(page, controller.signal).then(result => {
       if (!controller.signal.aborted) setData(result);
     }).catch((err: Error) => {
-      if (!controller.signal.aborted) setError(err.message || "本地分析库加载失败");
+      if (!controller.signal.aborted) setError(err.message || "文献库加载失败");
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [page, retry]);
-  return <main className="wrap detail">
-    <div className="page-heading"><div><span className="page-kicker">我的研究材料</span><h1>我的文献</h1><p>选一篇开始研读，在同一工作空间查看分析、发现相关推荐。</p></div><Link className="text-action" to="/">＋ 检索更多文献</Link></div>
-    <nav className="collection-tools library-views" aria-label="文献集合视图"><Link aria-current="page" to={`/library?${params}`}>文献列表</Link><Link to={graphLocation(`/library?${params}`)}>集合关系图谱 →</Link><span className="meta">从已入库文献探索关系</span></nav>
-    <div className="library-layout"><section className="library-content" aria-label="已入库论文">
-    {loading ? <Spin aria-label="正在加载本地分析库" /> : null}
-    {error ? <Alert type="error" message={error} showIcon action={<Button onClick={() => setRetry((value) => value + 1)}>重试</Button>} /> : null}
-    {data ? <>
-      <div className="list-heading"><h2>{analysisMode ? "选择待分析论文" : "已入库文献"}</h2><span className="subtle-pill">共 {data.total.toLocaleString("zh-CN")} 篇</span></div>
-      {!data.papers.length ? <Empty description="本地分析库为空，请从详情页加入论文，或通过 ID / 链接导入" /> : null}
-      {data.papers.map((paper) => <PaperCard key={paper.local_id} paper={paper} analysisMode={analysisMode} />)}
-      {data.total > 20 ? <Pagination current={page} pageSize={20} total={data.total} showSizeChanger={false} onChange={setPage} /> : null}
-    </> : null}
-    </section><aside className="library-sidebar"><ImportPanel onImported={() => { setPage(1); setRetry((value) => value + 1); }} />
-      {data ? <ResearchDesk papers={data.papers} /> : null}
-      <section className="surface guide-panel"><span className="page-kicker">开始研读</span><h2>从一篇文献出发</h2><p>打开文献后，可在阅读与分析、相关推荐之间切换。左侧保留文献列表，随时继续阅读其他论文。</p><Link to={graphLocation(`/library?${params}`)}>查看这批文献的关系 →</Link><Link to="/graph?mode=example">体验 RAG 示例图谱 →</Link></section>
-    </aside></div>
+  const needle = filter.trim().toLocaleLowerCase();
+  const visible = data?.papers.filter(paper => !needle || [paper.title, ...paper.authors, paper.year, paper.venue].filter(Boolean).join(" ").toLocaleLowerCase().includes(needle)) ?? [];
+  const pageItems = visible.map(paper => ({ id: paperKey(paper), title: paper.title }));
+  const pickedOnPage = pageItems.filter(item => picked.some(p => p.id === item.id)).length;
+  const empty = data && !data.total;
+  return <main className="page page-wide library-page">
+    <header className="page-head">
+      <div>
+        <h1 className="page-title">文献库</h1>
+        <p className="page-sub">{data ? `共 ${data.total.toLocaleString("zh-CN")} 篇 · 按导入时间排列` : "已收藏的论文"}</p>
+      </div>
+      <div className="page-actions">
+        <Link to={graphLocation(here)} className="quiet-link">集合图谱</Link>
+        <Button type={empty ? "primary" : "default"} icon={<PlusOutlined />} aria-expanded={importOpen || Boolean(empty)} onClick={() => patch({ import: importOpen ? null : "1" })}>导入论文</Button>
+      </div>
+    </header>
+    {importOpen || empty ? <div className="panel import-wrap"><ImportPanel autoFocus={importOpen} onImported={() => { patch({ page: null }); setRetry(v => v + 1); }} /></div> : null}
+    {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} /> : null}
+    {loading && !data ? <div className="row-skeletons">{[0, 1, 2, 3].map(i => <Skeleton key={i} active title={{ width: "60%" }} paragraph={{ rows: 1 }} />)}</div> : null}
+    {empty ? <Empty description={<>文献库为空。<Link to="/">检索论文</Link>后点“加入文献库”，或用上方输入框导入。</>} /> : null}
+    {data && data.papers.length ? <section className="library-surface" aria-label="文献列表" aria-busy={loading}>
+      <div className="library-tools">
+        <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选本页文献" placeholder="筛选本页标题、作者或年份" />
+        <span className="small-print">{needle ? `匹配 ${visible.length} / ${data.papers.length} 篇` : `本页 ${data.papers.length} 篇`}<span className="library-tools-tip"> · 勾选后可提问或对比</span></span>
+      </div>
+      <div className="list-toolbar">
+        <Checkbox disabled={!pageItems.length} checked={pageItems.length > 0 && pickedOnPage === pageItems.length} indeterminate={pickedOnPage > 0 && pickedOnPage < pageItems.length}
+          onChange={event => selection.setMany(pageItems, event.target.checked)}>{needle ? "选择匹配文献" : "选择本页"}</Checkbox>
+        {picked.length ? <span className="list-toolbar-hint">已选 {picked.length} 篇，跨页保留</span> : null}
+      </div>
+      <div className="paper-list library-list">
+        {visible.map(paper => {
+          const id = paperKey(paper);
+          return <PaperRow key={id} paper={paper} from={here} abstract={false} selected={picked.some(p => p.id === id)}
+            leading={<Checkbox aria-label={`选择：${paper.title}`} checked={picked.some(p => p.id === id)} onChange={() => selection.toggle({ id, title: paper.title })} />}
+            side={<><Link className="analysis-status-link" aria-label={`查看分析：${paper.title}`} to={`${paperLocation(id, here)}#analysis`}><AnalysisBadge state={states[id]} /></Link><Link className="quiet-link" to={recommendLocation(id, here)}>相关推荐</Link></>} />;
+        })}
+        {!visible.length ? <div className="center-pad"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本页没有匹配文献"><Button onClick={() => setFilter("")}>清除筛选</Button></Empty></div> : null}
+      </div>
+      {data.total > 20 ? <div className="pager"><Pagination current={page} pageSize={20} total={data.total} showSizeChanger={false} onChange={value => { setFilter(""); patch({ page: value === 1 ? null : String(value) }); }} /></div> : null}
+    </section> : null}
+    <SelectionBar />
   </main>;
 }

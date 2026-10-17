@@ -20,11 +20,16 @@ export interface Paper {
   ccf_catalog_version?: string | null;
 }
 
-export function ccfLabel(paper: Paper) {
-  if (paper.ccf_status === "preprint") return "预印本";
-  if (paper.ccf_status === "pending") return "待核验";
-  if (paper.ccf_rank) return paper.ccf_rank;
-  return "未知";
+export function ccfLabel(paper: Paper): string | null {
+  if (paper.ccf_status === "pending") return "CCF 待核验";
+  if (paper.ccf_rank) return `CCF ${paper.ccf_rank}`;
+  return null;
+}
+
+export const SOURCE_LABEL: Record<string, string> = { arxiv: "arXiv", semantic_scholar: "Semantic Scholar" };
+
+export function paperKey(paper: Paper) {
+  return paper.local_id ?? paper.id;
 }
 
 export interface EvidenceItem {
@@ -32,23 +37,44 @@ export interface EvidenceItem {
   paper_id: string;
   quote: string;
   section?: string | null;
+  material?: "original" | "model_summary" | "note";
 }
 
 export interface QAResponse {
   answer: string;
   evidence: EvidenceItem[];
-  reviews: { claim_id: string; verdict: string; note: string; evidence_ids: string[] }[];
+  reviews: { claim_id: string; verdict: "supported" | "insufficient" | "contradictory" | "unverifiable" | string; note: string; evidence_ids: string[] }[];
   coverage_gap: boolean;
+}
+
+export interface CompareTable {
+  dimensions: string[];
+  notes: string[];
+  rows: { paper_id: string; title: string; cells: { dimension: string; text: string; missing: boolean; evidence_ids: string[] }[] }[];
+}
+
+export interface ResearchEvent {
+  step: string;
+  reason?: string;
+  query?: string;
+  queries?: string[];
+  count?: number;
+  paper_id?: string;
+  errors?: Record<string, string>;
 }
 
 export interface ResearchTask {
   task_id: string;
-  status: string;
+  status: "waiting" | "done" | string;
   goal?: string;
   queries?: string[];
   paper_ids?: string[];
   evidence_ids?: string[];
-  events?: { step: string; reason?: string; query?: string }[];
+  gaps?: string[];
+  events?: ResearchEvent[];
+  api_calls?: number;
+  llm_calls?: number;
+  deep_reads?: number;
   stop_reason?: string | null;
   interrupt?: { type?: string; plan?: unknown; queries?: string[] } | null;
   answer?: string | null;

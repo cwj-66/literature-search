@@ -34,7 +34,7 @@ npm run dev
 
 服务器 `deploy/.env` 使用 `SEMANTIC_SCHOLAR_API_KEY=` 配置可选密钥；空值时调用公开匿名接口，前端如实提示共享额度可能限流，不再直接禁用来源。密钥获批后填写并重启后端即可，密钥始终只存后端。`SEMANTIC_SCHOLAR_ENABLED=false` 可由管理员临时停用来源。限流时显示来源错误与重试按钮，保留其他来源的结果。不上传本机 `.env`。
 
-上游请求使用单进程共享排队（arXiv 至少间隔 3.1 秒、Semantic Scholar 至少间隔 1.1 秒），429 遵守 Retry-After，缺省按 2/4/8 秒退避，较长限流进入冷却。相同请求缓存 10 分钟，最多 128 个响应；列表元数据缓存最多 1000 条，详情优先复用。缓存为内存缓存，重启后失效，多进程部署前需改为共享存储。分页按固定 100 条批次缓存、去重后再切页，Semantic Scholar 只访问前 1000 条且每次最多 100 条。
+上游请求使用单进程共享排队（arXiv 至少间隔 3.1 秒、Semantic Scholar 至少间隔 1.1 秒）。限流冷却与持久缓存规则见下方“检索限流与缓存”。列表元数据缓存最多 1000 条，详情优先复用；这是缓存容量，不是检索结果上限。多进程部署前需改为共享排队。
 
 前端支持六个常用中文词的精确映射，并明确提示英文检索；其他中文不自动翻译。引用量、CCF 和中科院分区缺失时按验收要求显示“未知”，不伪造等级；等级映射和筛选留在阶段二。
 
@@ -48,12 +48,12 @@ nginx -t
 
 `nginx-http.conf` 用于证书签发前的 HTTP 路由，证书签发成功后再使用 `nginx-https.conf`。修改配置后必须先执行 `nginx -t`，再平滑加载 Nginx。不要替换主域名的配置。
 
-当前代码包含论文检索、详情、本地库和 AI 分析。相似推荐与知识图谱仍待开发。分析任务使用进程内队列，必须保持 Dockerfile 中的单进程；增加 worker 会让队列分裂，重启后未完成的准备或分析会被标为失败并可重试。线上是否包含这些更新取决于实际部署版本。
+当前代码包含论文检索、详情、文献库、AI 分析、相关推荐、局部图谱及研究台。研究台提供文献问答、3–5 篇论文对比和调研任务。分析任务使用进程内队列，必须保持 Dockerfile 中的单进程；增加 worker 会让队列分裂，重启后未完成的准备或分析会被标为失败并可重试。线上是否包含这些更新取决于实际部署版本。
 
 
 ## 安全头与静态路由
 
-更新前端、后端以及对应的 Nginx 配置后生效。两份 Nginx 模板均限制 SPA 入口为 `/`、`/paper` 和 `/library`，其他不存在的资源返回真实 404。`/robots.txt` 为真实文件，保留现有禁止索引策略，因此不生成 sitemap，`/sitemap.xml` 明确返回 404。`/favicon.ico` 和 `/favicon.svg` 为真实图标，`/health` 代理后端 `/api/health`，返回 JSON；`/docs`、`/redoc`、`/openapi.json` 关闭并返回 404。
+更新前端、后端以及对应的 Nginx 配置后生效。两份 Nginx 模板均限制 SPA 入口为 `/`、`/paper`、`/library`、`/studio`、`/recommend` 和 `/graph`，其他不存在的资源返回真实 404。研究台子视图通过 `/studio?tab=ask|compare|research` 切换，刷新和直接打开链接均须返回 SPA 入口。API 代理关闭缓冲，读取超时设为 300 秒，以支持渐进检索与耗时较长的调研请求；该超时不代表任务必定在此时间内完成。`/robots.txt` 为真实文件，保留现有禁止索引策略，因此不生成 sitemap，`/sitemap.xml` 明确返回 404。`/favicon.ico` 和 `/favicon.svg` 为真实图标，`/health` 代理后端 `/api/health`，返回 JSON；`/docs`、`/redoc`、`/openapi.json` 关闭并返回 404。
 
 安全头集中在 server 级，子 location 不使用 add_header，防止覆盖继承。包含 CSP、DENY、nosniff、Referrer-Policy、Permissions-Policy，HTTPS 模板另加 HSTS。CSP 允许 Ant Design 必需的内联样式，脚本仅允许同源。
 
@@ -97,10 +97,24 @@ npm --prefix frontend run build
 
 ## 检索限流与缓存（2026-10-16）
 
-匿名 Semantic Scholar 使用官方 `/paper/search/bulk`，每个查询最多处理一批 1000 篇候选；按日期使用上游日期排序，按相关性使用本地关键词匹配排序。页面明确说明该方式，总数为当前批次可展示记录数，不冒充全库统计。配置密钥后相关性查询使用 `/paper/search`。
+Semantic Scholar 统一使用官方 `/paper/search/bulk`，有密钥时携带密钥。单次响应最多 1000 篇，但通过响应中的 `token` 获取后续批次；不再将 1000 作为整个查询的结果上限。仅获取当前页需要的批次，响应（包含游标）沿用持久缓存。按日期使用上游日期排序；相关性为每批候选的本地关键词排序，后续批次追加，不宣称全库相关性排名。总数沿用上游估计，耗尽游标后使用实际去重记录数。
 
-arXiv 官方 API 暂不可用且没有相同查询的可用缓存时，可显示 Semantic Scholar 批次中具有真实 ArXiv 外部 ID 的论文；保留 Semantic Scholar 来源标记并明确显示索引降级提示，不将其标为 arXiv API 实时结果。若两个接口都失败且没有相同查询的缓存，仍如实显示暂不可用。
+arXiv 官方 API 暂不可用且没有相同查询的可用缓存时，可显示 Semantic Scholar 批次中具有真实 ArXiv 外部 ID 的论文；保留 Semantic Scholar 来源标记，不将其标为 arXiv API 实时结果。降级详情保留在接口状态中；有论文结果时不展示技术诊断横幅。若两个接口都失败且没有相同查询的缓存，页面显示简短的加载失败提示。
 
-上游成功响应持久保存到论文数据库同目录的 `provider-cache.sqlite3`，默认 24 小时内复用；超过 24 小时、未超过 7 天的响应仅在上游 429、5xx 或网络错误时作为历史缓存显示，并附缓存时间。不同关键词、年份和排序不混用。磁盘缓存最多 128 条、32MB，单条原文最多 8MB、压缩后最多 2MB；进程内最多 32 条、16MB。
+上游成功响应持久保存到论文数据库同目录的 `provider-cache.sqlite3`，默认 24 小时内复用；超过 24 小时、未超过 7 天的响应仅在上游 429、5xx 或网络错误时复用；缓存时间保留在接口元数据中。不同关键词、年份和排序不混用。磁盘缓存最多 128 条、32MB，单条原文最多 8MB、压缩后最多 2MB；进程内最多 32 条、16MB。
 
-429 不在当前请求内连续重试，遵循 Retry-After；无该头时 arXiv 冷却 60 秒、Semantic Scholar 冷却 120 秒。期限写入持久缓存，重启服务不绕过冷却。页面展示倒计时并禁用过早重试；来源全部失败不再显示“共 0 篇”，避免把检索失败误写成无匹配论文。
+429 不在当前请求内连续重试，遵循 Retry-After；无该头时 arXiv 冷却 60 秒、Semantic Scholar 冷却 120 秒。期限写入持久缓存，重启服务不绕过冷却。有结果时页面不显示限流或缓存横幅；全部加载失败时显示简短错误和重试按钮，并在冷却期禁用重试。来源全部失败不显示“共 0 篇”，避免把检索失败误写成无匹配论文。
+
+
+## 首屏渐进显示与按需翻页
+
+`GET /api/papers/search?stream=true` 返回 NDJSON 快照流（每行一个完整的 SearchResponse），保留普通 JSON 请求兼容性。后端通过 httpx 流式读取上游、ijson 增量解析完整论文对象；当前页记录足够时立即发送，其他来源及同批剩余数据继续加载。完成后 `pending_sources` 为空，后续快照可更新候选排序。上游尚未返回字节时仍需等待其响应，流式传输不能消除这一等待。
+
+前端用 ReadableStream 逐行读取并直接展示卡片，已有论文可以立即进入详情；切换关键词、筛选或页码会取消旧连接及待完成的上游任务。当前请求完成后仅预取下一页，不后台下载全部结果。分页使用数字页码、跨页省略号与输入页码跳转，移除前端的 100 页和 1000 篇截断。深层未缓存页仍需读取中间游标，跳页不代表上游支持随机访问。Nginx 必须允许流式响应，保留 `X-Accel-Buffering: no`，避免将流重新缓冲为整包。
+
+参考：[Ant Design 输入框焦点 FAQ](https://ant.design/components/input/#faq)、[Semantic Scholar API](https://api.semanticscholar.org/api-docs/)、[Python SDK 游标分页实现](https://github.com/danielnsilva/semanticscholar/blob/master/semanticscholar/PaginatedResults.py)。
+
+
+首页与结果页都提供三个中文、三个英文示例词。点击只将显示文字原样填入输入框并聚焦，按检索或回车后才发出请求；中文到英文映射仍在后端进行，输入框和查询标题保留用户提交的中文。桌面上六个词保持一行，小屏自动换行。
+
+分页交互参考 [Ant Design 跳页示例](https://github.com/ant-design/ant-design/blob/master/components/pagination/demo/jump.tsx) 和 [TanStack Query 分页预取示例](https://github.com/TanStack/query/blob/main/examples/react/pagination/src/pages/index.tsx)。沿用现有缓存与下一页预取，不为这次交互调整增加新的数据请求框架。
