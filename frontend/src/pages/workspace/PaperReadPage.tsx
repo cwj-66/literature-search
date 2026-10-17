@@ -90,7 +90,8 @@ export default function PaperReadPage() {
   const [params] = useSearchParams();
   const parent = `/w/${id}/library`;
   const requestedBack = safeReturn(params.get("from"), parent);
-  const back = [`/w/${id}`, parent, `/w/${id}/compare`, `/w/${id}/graph`].includes(requestedBack) ? requestedBack : parent;
+  const backPath = requestedBack.split("?")[0];
+  const back = [`/w/${id}`, parent, `/w/${id}/compare`, `/w/${id}/graph`, "/graph"].includes(backPath) ? requestedBack : parent;
   const stored = project?.papers[key];
   const [paper, setPaper] = useState<Paper | null>(stored?.paper ?? null);
   const [state, setState] = useState<AnalysisState | null>(null);

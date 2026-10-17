@@ -58,9 +58,19 @@ app.add_middleware(
 
 
 @app.get("/api/knowledge-graph")
-async def get_knowledge_graph():
+async def get_knowledge_graph(limit: int = Query(80, ge=1, le=2000)):
     try:
-        return await asyncio.to_thread(knowledge_graph.build)
+        return await asyncio.to_thread(knowledge_graph.build, limit)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
+
+
+@app.post("/api/knowledge-graph")
+async def get_workspace_knowledge_graph(references: list[str] = Body(max_length=2000)):
+    if any(not ref.strip() or len(ref) > 300 for ref in references):
+        raise HTTPException(status_code=422, detail="论文标识不能为空或超过 300 字符")
+    try:
+        return await asyncio.to_thread(knowledge_graph.build, references=references)
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
 
