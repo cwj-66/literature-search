@@ -3,13 +3,12 @@ import { Alert, Button, Checkbox, Empty, Input, InputNumber, Pagination, Segment
 import { LoadingOutlined, SearchOutlined } from "@ant-design/icons";
 import type { InputRef } from "antd";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { fetchLibrary, searchPapers } from "../api";
+import { searchPapers } from "../api";
 import { CollectButton } from "../components/CollectButton";
 import { ExternalLinks, PaperRow } from "../components/PaperRow";
 import { useSessionState } from "../hooks";
-import type { LibraryResponse, SearchResponse } from "../types";
-import { paperKey, SOURCE_LABEL } from "../types";
-import { paperLocation } from "../workspace";
+import type { SearchResponse } from "../types";
+import { SOURCE_LABEL } from "../types";
 
 const SAMPLES = ["检索增强生成", "知识图谱", "大模型幻觉", "retrieval augmented generation", "knowledge graph", "large language model"];
 
@@ -43,9 +42,10 @@ export default function SearchPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [retry, setRetry] = useState(0);
-  const [showFilters, setShowFilters] = useState(Boolean(yearFrom || yearTo || sourceParam || params.get("sort")));
+  const [homeSource, setHomeSource] = useState<"arxiv" | "semantic_scholar">(source === "semantic_scholar" ? "semantic_scholar" : "arxiv");
   const previousRetry = useRef(0);
   const searchInput = useRef<InputRef>(null);
+  const heroInput = useRef<HTMLInputElement>(null);
   const [ccf, setCcf] = useState<string[]>([]);
   const [excluded, setExcluded] = useSessionState<string[]>("search-excluded", []);
   const [citeSort, setCiteSort] = useState(false);
@@ -62,13 +62,12 @@ export default function SearchPage() {
     return () => controller.abort();
   }, []);
   useEffect(() => { document.title = q ? `${q} - 检索 - 文献研读` : "检索 - 文献研读"; }, [q]);
-  const [recent, setRecent] = useState<LibraryResponse | null>(null);
   useEffect(() => {
-    if (q) return;
-    const controller = new AbortController();
-    fetchLibrary(1, controller.signal, 4).then(setRecent).catch(() => undefined);
-    return () => controller.abort();
-  }, [q]);
+    if (source === "arxiv" || source === "semantic_scholar") setHomeSource(source);
+  }, [source]);
+  useEffect(() => {
+    if (!sourceStatus.checking && !sourceStatus.enabled && homeSource === "semantic_scholar") setHomeSource("arxiv");
+  }, [sourceStatus.checking, sourceStatus.enabled, homeSource]);
 
   useEffect(() => {
     setDraft(q);
@@ -135,6 +134,16 @@ export default function SearchPage() {
     patch({ q: draft.trim() || null, year_from: fromDraft ? String(fromDraft) : null, year_to: toDraft ? String(toDraft) : null }, true);
   }
 
+  function startSearch(query: string) {
+    const next = query.trim();
+    if (!next) {
+      heroInput.current?.focus();
+      return;
+    }
+    setDraft(next);
+    patch({ q: next, source: homeSource, year_from: fromDraft ? String(fromDraft) : null, year_to: toDraft ? String(toDraft) : null }, true);
+  }
+
   function applyYears() {
     if (!q) return;
     if (String(fromDraft ?? "") === yearFrom && String(toDraft ?? "") === yearTo) return;
@@ -188,27 +197,34 @@ export default function SearchPage() {
   </div>;
 
   if (!q) {
+    const scholarOff = !sourceStatus.checking && !sourceStatus.enabled;
     return <main className="page search-home">
-      <div className="search-sources" aria-label="检索来源"><span>arXiv</span><span>Semantic Scholar</span><span className="search-source-caption">学术文献检索</span></div>
-      <h1 className="search-home-title">检索论文</h1>
-      <p className="search-home-lead">查找相关研究，收藏值得读的论文，带着证据继续探索。</p>
-      <div className="search-home-box">{searchBox}</div>
-      <div className="search-home-meta">
-        <button type="button" className="link-button" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}>{showFilters ? "收起筛选" : "来源与年份"}</button>
-        <span className="small-print">支持中英文关键词</span>
+      <div className="search-hero">
+        <div className="search-hero-copy">
+          <h1>检索论文</h1>
+          <p className="search-hero-lead">查找相关研究，收藏值得阅读的论文，带着证据继续探索。</p>
+          <div className="source-pills" role="group" aria-label="数据源">
+            <button type="button" className={homeSource === "arxiv" ? "source-pill is-on" : "source-pill"} aria-pressed={homeSource === "arxiv"} onClick={() => setHomeSource("arxiv")}>
+              <ArxivMark />arXiv
+            </button>
+            <button type="button" className={homeSource === "semantic_scholar" ? "source-pill is-on" : "source-pill"} aria-pressed={homeSource === "semantic_scholar"} disabled={scholarOff} title={scholarOff ? sourceStatus.message : undefined} onClick={() => setHomeSource("semantic_scholar")}>
+              <ScholarMark />Semantic Scholar
+            </button>
+          </div>
+          <form className="search-hero-bar" role="search" onSubmit={event => { event.preventDefault(); startSearch(draft); }}>
+            <SearchOutlined aria-hidden />
+            <input ref={heroInput} value={draft} maxLength={300} aria-label="论文关键词" placeholder="输入研究问题、关键词或论文标题，例如：降低 RAG 回答幻觉的方法" onChange={event => setDraft(event.target.value)} />
+            <button type="submit">搜索</button>
+          </form>
+          <p className="search-hero-note">支持中英文关键词、论文标题和研究问题搜索</p>
+          <div className="search-topics">
+            <span>推荐主题</span>
+            <div className="sample-list" aria-label="推荐主题">{SAMPLES.map(word => <button type="button" className="sample-button" key={word} onClick={() => startSearch(word)}>{word}</button>)}</div>
+          </div>
+          {scholarOff ? <p className="search-hero-status" role="status">{sourceStatus.message}</p> : null}
+        </div>
+        <SearchArt />
       </div>
-      {showFilters ? <div className="search-home-filters">{filters}</div> : null}
-      <div className="search-examples"><span>试试这些主题</span><div className="sample-list" aria-label="示例关键词">{SAMPLES.map(word => <button type="button" className="sample-button" key={word} onClick={() => { setDraft(word); searchInput.current?.focus(); }}>{word}</button>)}</div></div>
-      {error ? <Alert type="error" showIcon message={error} /> : null}
-      {recent?.papers.length ? <section className="recent" aria-labelledby="recent-title">
-        <div className="recent-head"><h2 id="recent-title">最近加入文献库</h2><Link to="/library">全部 {recent.total} 篇</Link></div>
-        <ul>{recent.papers.map(paper => <li key={paperKey(paper)}>
-          <Link to={paperLocation(paperKey(paper), "/library")}>{paper.title}</Link>
-          <span className="muted">{[paper.year, paper.authors[0]].filter(Boolean).join(" · ")}</span>
-        </li>)}</ul>
-      </section> : null}
-      <div className="search-home-note"><p>已有论文 ID 或链接？<Link to="/library?import=1">直接导入文献库</Link></p><Link to="/graph?mode=example">探索 RAG 示例图谱 <span className="muted">（演示）</span></Link></div>
-      {!sourceStatus.enabled && !sourceStatus.checking ? <p className="field-help" role="status">{sourceStatus.message}</p> : null}
     </main>;
   }
 
@@ -274,4 +290,40 @@ export default function SearchPage() {
       </section>
     </div>
   </main>;
+}
+
+function ArxivMark() {
+  return <svg className="mark-arxiv" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 12 6.4 4h1.4l3.2 8M4.6 9.2h4.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
+function ScholarMark() {
+  return <svg className="mark-s2" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 13.6 8 8 14.2 2.4 8Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>;
+}
+
+function SearchArt() {
+  return <div className="search-hero-art" aria-hidden="true">
+    <svg viewBox="0 0 480 360">
+      <ellipse cx="250" cy="188" rx="168" ry="128" fill="none" stroke="#d5e3fb" strokeDasharray="4 7" />
+      <rect x="214" y="28" width="214" height="148" rx="18" fill="#f4f7ff" stroke="#e1e9f8" />
+      <rect x="234" y="50" width="74" height="8" rx="4" fill="#d5e3fb" />
+      <rect x="234" y="70" width="154" height="6" rx="3" fill="#e6eefb" />
+      <rect x="234" y="86" width="128" height="6" rx="3" fill="#e6eefb" />
+      <rect x="234" y="102" width="142" height="6" rx="3" fill="#e6eefb" />
+      <rect x="56" y="108" width="268" height="176" rx="20" fill="#f7f9ff" stroke="#d7e4f8" />
+      <rect x="80" y="132" width="96" height="10" rx="5" fill="#b9d0fb" />
+      <rect x="80" y="156" width="196" height="7" rx="3.5" fill="#dce7fa" />
+      <rect x="80" y="174" width="168" height="7" rx="3.5" fill="#dce7fa" />
+      <rect x="80" y="192" width="140" height="7" rx="3.5" fill="#dce7fa" />
+      <rect x="80" y="222" width="72" height="28" rx="8" fill="#e7f0ff" />
+      <rect x="162" y="222" width="72" height="28" rx="8" fill="#f3eeff" />
+      <rect x="248" y="196" width="156" height="104" rx="16" fill="#fff" stroke="#e4eaf6" />
+      <rect x="266" y="214" width="52" height="6" rx="3" fill="#c9d8f8" />
+      <rect x="266" y="230" width="104" height="5" rx="2.5" fill="#e7eefb" />
+      <rect x="266" y="244" width="84" height="5" rx="2.5" fill="#e7eefb" />
+      <rect x="266" y="258" width="96" height="5" rx="2.5" fill="#e7eefb" />
+      <circle cx="132" cy="62" r="5" fill="#d6e4ff" />
+      <circle cx="408" cy="156" r="4" fill="#e4d9fb" />
+      <circle cx="78" cy="286" r="6" fill="#e7eeff" />
+    </svg>
+  </div>;
 }

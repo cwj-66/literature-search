@@ -21,7 +21,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const ctx = workspaceContext(location.pathname, location.search);
   const { projects: list } = useProjects();
   const project = ctx ? list.find(item => item.id === ctx.id) : undefined;
-  useEffect(() => { if (project) projects.select(project.id); }, [project?.id]);
+  const projectId = project?.id;
+  useEffect(() => {
+    if (!projectId) return;
+    projects.select(projectId);
+    projects.touch(projectId);
+  }, [projectId]);
   useEffect(() => {
     const previous = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";

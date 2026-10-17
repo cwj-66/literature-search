@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Empty, Skeleton } from "antd";
 import { Link, useNavigate } from "react-router-dom";
+import { GraphEmpty } from "../../components/EmptyState";
 import { KnowledgeCanvas } from "../../components/KnowledgeCanvas";
 import { KIND_COLOR, KIND_LABEL, type EntityGraph, type EntityKind, type EntityNode } from "../../graphData";
 import { paperLocation } from "../../workspace";
@@ -49,6 +50,15 @@ export default function GraphPage() {
   const neighbors = selected ? data.edges.filter(edge => edge.source === selected || edge.target === selected)
     .map(edge => data.nodes.find(node => node.id === (edge.source === selected ? edge.target : edge.source))).filter((node): node is EntityNode => Boolean(node)) : [];
   const count = Object.keys(project.papers).length;
+  if (!count) return <main className="ws-page kg-page ws-empty-page">
+    <header className="ws-page-head">
+      <div>
+        <h1>知识图谱</h1>
+        <p>基于工作区中的论文、作者和关键词，生成可视化的知识图谱，帮助你发现研究脉络与关联。</p>
+      </div>
+    </header>
+    <GraphEmpty workspaceId={id} />
+  </main>;
   return <main className="ws-page kg-page">
     <header className="ws-page-head">
       <div>
@@ -56,7 +66,6 @@ export default function GraphPage() {
         <p>这个工作区里的论文，以及它们的作者、关键词、期刊或会议。关键词来自已有的 AI 分析。</p>
       </div>
     </header>
-    {!count ? <Empty description={<>还没有论文。先在 <Link to={`/w/${id}`}>AI 研究助手</Link> 或 <Link to="/search">论文搜索</Link> 里加入。</>} /> : null}
     {count && error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(value => value + 1)}>重试</Button>} /> : null}
     {count && !raw && !error ? <Skeleton active paragraph={{ rows: 6 }} /> : null}
     {count && raw && !papers.length ? <Empty description="这些论文还没有进入本地知识图谱。收藏进文献库后，这里会显示作者和期刊。" /> : null}

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Checkbox, Empty } from "antd";
+import { Alert, Button, Checkbox } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { compareLibrary } from "../../api";
+import { CompareEmpty } from "../../components/EmptyState";
 import { formatAuthors } from "../../components/PaperRow";
 import type { CompareTable } from "../../types";
 import { paperLocation } from "../../workspace";
@@ -43,14 +44,14 @@ export default function ComparePage() {
       .finally(() => setBusy(false));
   }
   const cell = (row: CompareTable["rows"][number], dimension: string) => row.cells.find(item => item.dimension === dimension);
-  return <main className="ws-page">
+  return <main className={entries.length ? "ws-page" : "ws-page ws-empty-page"}>
     <header className="ws-page-head">
       <div>
         <h1>论文对比</h1>
-        <p>选出 2–5 篇并排查看年份、作者和摘要。选出 3–5 篇后，可以按已有的 AI 分析生成对比表。</p>
+        <p>{entries.length ? "选出 2–5 篇并排查看年份、作者和摘要。选出 3–5 篇后，可以按已有的 AI 分析生成对比表。" : "选择 2–5 篇论文进行对比，分析它们的研究问题、方法、创新点和实验结果。"}</p>
       </div>
     </header>
-    {!entries.length ? <Empty description={<>还没有论文。先在 <Link to={`/w/${id}`}>AI 研究助手</Link> 或 <Link to="/search">论文搜索</Link> 里加入。</>} /> : <>
+    {!entries.length ? <CompareEmpty workspaceId={id} /> : <>
       <ul className="ws-pick">
         {entries.map(([key, item]) => <li key={key}>
           <Checkbox checked={picked.includes(key)} disabled={!picked.includes(key) && picked.length >= 5} onChange={() => toggle(key)}>{item.paper.title}</Checkbox>
