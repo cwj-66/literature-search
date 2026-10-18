@@ -112,7 +112,7 @@ class ResearchResume(BaseModel):
 
 class QARequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    paper_ids: list[str] = Field(default_factory=list, max_length=40)
+    paper_ids: list[str] = Field(min_length=1, max_length=40)
 
 
 class CompareRequest(BaseModel):

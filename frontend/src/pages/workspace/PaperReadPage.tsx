@@ -1,19 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button } from "antd";
 import type { ReactNode } from "react";
 import {
-  ArrowLeftOutlined, ArrowUpOutlined, BarChartOutlined, BulbOutlined, ClockCircleOutlined, ExportOutlined, FileTextOutlined,
-  PlayCircleOutlined, PlusSquareOutlined, ProfileOutlined, QuestionCircleOutlined, ReadOutlined, RobotOutlined, SettingOutlined,
-  StarOutlined, SwapOutlined,
+  ArrowLeftOutlined, BarChartOutlined, BulbOutlined, ClockCircleOutlined, ExportOutlined, FileTextOutlined,
+  PlayCircleOutlined, PlusSquareOutlined, ProfileOutlined, ReadOutlined, SettingOutlined,
+  StarOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { askLibrary, fetchPaper, startAnalysis } from "../../api";
+import { createConversation, fetchPaper, prepareWorkspace, startAnalysis } from "../../api";
 import { useAnalysisPolling } from "../../useAnalysisPolling";
 import { Abstract, formatAuthors } from "../../components/PaperRow";
 import { AnalysisProgress } from "../../components/AnalysisProgress";
-import { useSessionState } from "../../hooks";
 import { projects } from "../../projects";
-import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind, Paper, QAResponse } from "../../types";
+import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind, Paper } from "../../types";
 import { ccfLabel, SOURCE_LABEL } from "../../types";
 import { safeReturn } from "../../workspace";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
@@ -25,15 +24,6 @@ const GROUPS: { no: string; title: string; hint: string; tone: string; icon: Rea
   { no: "04", title: "创新点与主要贡献", hint: "相比现有工作的创新之处，以及理论或应用方面的主要贡献。", tone: "amber", icon: <BulbOutlined />, kinds: ["innovation"] },
   { no: "05", title: "实验结果与局限性", hint: "实验设置、主要实验结果、消融分析，以及存在的局限和未来工作。", tone: "rose", icon: <BarChartOutlined />, kinds: ["evaluation", "limitation"] },
 ];
-const PROMPTS: { title: string; hint: string; tone: string; icon: ReactNode; question: string }[] = [
-  { title: "解释论文内容", hint: "用通俗的语言解释这篇论文的核心内容", tone: "blue", icon: <FileTextOutlined />, question: "请用通俗的语言解释这篇论文的核心内容。" },
-  { title: "总结创新点", hint: "这篇论文相比以往工作有哪些创新点？", tone: "amber", icon: <BulbOutlined />, question: "这篇论文相比以往工作有哪些创新点？" },
-  { title: "分析实验结果", hint: "实验结果如何？有什么局限性？", tone: "rose", icon: <BarChartOutlined />, question: "这篇论文的实验结果如何？有什么局限性？" },
-  { title: "对比相关工作", hint: "与其他相关工作有什么区别？", tone: "blue", icon: <SwapOutlined />, question: "这篇论文和其他相关工作有什么区别？" },
-];
-
-interface Turn { id: number; question: string; response?: QAResponse; error?: string }
-
 function claimsOf(result: AnalysisResult | null, kinds: ClaimKind[]) {
   return result?.claims?.filter(claim => kinds.includes(claim.kind) && claim.status === "supported" && claim.text && claim.text !== "论文未明确说明") ?? [];
 }
@@ -49,69 +39,6 @@ function sectionText(result: AnalysisResult | null, kinds: ClaimKind[], legacy: 
   return legacy.filter(item => item && item !== "论文未明确说明").join("\n");
 }
 
-function PaperChat({ paperId, title }: { paperId: string; title: string }) {
-  const [draft, setDraft] = useState("");
-  const [turns, setTurns] = useSessionState<Turn[]>(`paper-qa:${paperId}`, []);
-  const [busy, setBusy] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
-  const box = useRef<HTMLDivElement>(null);
-  const input = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => () => abortRef.current?.abort(), []);
-  useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight }); }, [turns, busy]);
-
-  function send(text = draft) {
-    const question = text.trim();
-    if (!question || busy) return;
-    const id = Date.now();
-    const abort = new AbortController();
-    abortRef.current?.abort();
-    abortRef.current = abort;
-    setBusy(true);
-    setDraft("");
-    setTurns(current => [...current, { id, question }]);
-    askLibrary(question, [paperId], abort.signal)
-      .then(response => setTurns(current => current.map(turn => turn.id === id ? { ...turn, response } : turn)))
-      .catch((err: Error) => setTurns(current => abort.signal.aborted ? current.filter(turn => turn.id !== id) : current.map(turn => turn.id === id ? { ...turn, error: err.message || "提问失败" } : turn)))
-      .finally(() => { if (abortRef.current === abort) setBusy(false); });
-  }
-
-  return <aside className="read-chat" aria-label="论文学习助手">
-    <header>
-      <span className="read-chat-mark" aria-hidden><RobotOutlined /></span>
-      <strong>论文学习助手</strong>
-      <span className="read-chat-badge">RAG 问答</span>
-    </header>
-    <div className="read-chat-log" ref={box}>
-      {!turns.length ? <>
-        <p className="read-chat-empty">基于《{title}》的内容提供解读、分析与对比。回答只使用这篇论文已入库的摘要或全文索引，并附上原文片段。</p>
-        <div className="read-prompts">
-          {PROMPTS.map(item => <button key={item.title} type="button" disabled={busy} onClick={() => send(item.question)}>
-            <span className={`read-ico is-${item.tone}`} aria-hidden>{item.icon}</span>
-            <span><strong>{item.title}</strong><small>{item.hint}</small></span>
-          </button>)}
-          <button type="button" onClick={() => input.current?.focus()}>
-            <span className="read-ico is-amber" aria-hidden><QuestionCircleOutlined /></span>
-            <span><strong>其他问题</strong><small>你可以基于这篇论文提出任何问题</small></span>
-          </button>
-        </div>
-      </> : null}
-      {turns.map(turn => <div key={turn.id} className="read-turn">
-        <p className="read-q">{turn.question}</p>
-        {turn.error ? <Alert type="error" showIcon message={turn.error} /> : turn.response ? <div className="read-a">
-          <p>{turn.response.answer}</p>
-          {turn.response.evidence.map(item => <blockquote key={item.evidence_id}><span>{item.evidence_id}{item.section ? ` · ${item.section}` : ""}</span>{item.quote}</blockquote>)}
-          {turn.response.coverage_gap ? <span className="small-print">这篇论文里没有找到足够证据，回答可能不完整。</span> : null}
-        </div> : <p className="read-a pending">正在检索这篇论文的证据…</p>}
-      </div>)}
-    </div>
-    <form className="read-composer" onSubmit={event => { event.preventDefault(); send(); }}>
-      <textarea ref={input} rows={2} maxLength={2000} value={draft} placeholder="继续提问这篇论文…" aria-label="向这篇论文提问" disabled={busy} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }} />
-      <button type="submit" aria-label="发送" disabled={busy || !draft.trim()}><ArrowUpOutlined /></button>
-    </form>
-    <p className="read-chat-note">基于论文内容进行回答，可能包含 AI 生成内容，请注意核实。</p>
-  </aside>;
-}
-
 export default function PaperReadPage() {
   const navigate = useNavigate();
   const { paperKey: key = "" } = useParams();
@@ -120,12 +47,13 @@ export default function PaperReadPage() {
   const parent = `/w/${id}/library`;
   const requestedBack = safeReturn(params.get("from"), parent);
   const backPath = requestedBack.split("?")[0];
-  const back = [`/w/${id}`, parent, `/w/${id}/compare`, `/w/${id}/graph`, "/graph"].includes(backPath) ? requestedBack : parent;
+  const back = [`/w/${id}`, parent, `/w/${id}/compare`, `/w/${id}/studio`, `/w/${id}/graph`, "/graph"].includes(backPath) ? requestedBack : parent;
   const stored = project?.papers[key];
   const [paper, setPaper] = useState<Paper | null>(stored?.paper ?? null);
   const [state, setState] = useState<AnalysisState | null>(null);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
   const connectionError = useAnalysisPolling(key, starting, setState);
   const [tab, setTab] = useState<"analysis" | "source">("analysis");
   const [open, setOpen] = useState("");
@@ -156,6 +84,16 @@ export default function PaperReadPage() {
     try { setState(await startAnalysis(key, Boolean(result))); }
     catch (err) { setError(err instanceof TypeError ? "提交时网络连接中断，请以重新获取的任务进度为准。" : err instanceof Error ? err.message : "分析失败，请重试"); }
     finally { setStarting(false); }
+  }
+  async function openChat() {
+    if (openingChat || !project || !paper) return;
+    setOpeningChat(true); setError("");
+    try {
+      await prepareWorkspace(id, project.name, Object.keys(project.papers));
+      const chat = await createConversation(id, [key]);
+      navigate(`/w/${id}/studio?chat=${chat.id}`);
+    } catch (err) { setError(err instanceof Error ? err.message : "新建对话失败"); }
+    finally { setOpeningChat(false); }
   }
   function exportAnalysis() {
     const lines = [`# ${paper!.title}`, "", summary && `> ${summary}`, ""];
@@ -201,6 +139,7 @@ export default function PaperReadPage() {
       <div className="read-actions">
         <Button type={result ? "default" : "primary"} icon={<PlayCircleOutlined />} loading={busy} onClick={rerun}>{result ? "重新分析" : "开始分析"}</Button>
         <Button icon={<PlusSquareOutlined />} onClick={() => navigate(`/w/${id}/compare?pick=${encodeURIComponent(key)}`)}>加入论文对比</Button>
+        <Button loading={openingChat} onClick={openChat}>到研究台提问</Button>
         <Button icon={<ExportOutlined />} disabled={!result} onClick={exportAnalysis}>导出分析</Button>
       </div>
       {error ? <Alert type="error" showIcon message={error} /> : null}
@@ -243,6 +182,5 @@ export default function PaperReadPage() {
         })}
       </div>}
     </main>
-    <PaperChat paperId={key} title={paper.title} />
   </div>;
 }

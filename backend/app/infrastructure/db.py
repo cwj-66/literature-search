@@ -35,6 +35,21 @@ def connection():
                 added_at TEXT NOT NULL,
                 PRIMARY KEY (workspace_id, local_id)
             );
+            CREATE TABLE IF NOT EXISTS research_conversations (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                paper_ids TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_conversations_workspace ON research_conversations(workspace_id, updated_at);
+            CREATE TABLE IF NOT EXISTS research_messages (
+                id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL REFERENCES research_conversations(id) ON DELETE CASCADE,
+                payload TEXT NOT NULL,
+                PRIMARY KEY (conversation_id, id)
+            );
             CREATE TABLE IF NOT EXISTS analysis_tasks (
                 task_id TEXT PRIMARY KEY,
                 paper_ref TEXT NOT NULL,

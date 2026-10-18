@@ -32,6 +32,8 @@ import app.tools.parse_paper as parse_tool
 import app.tools.search_papers as search_tool
 import app.tools.add_papers_to_workspace as workspace_tool
 from app.services.papers import workspaces
+from app.services.papers import conversations
+from app.conversation_api import router as conversation_router
 from app.services.papers import processing
 from app.tools import research as research_tools, BACKGROUND_TOOLS
 from app.tools.research_scope import ToolContext
@@ -43,6 +45,7 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    await asyncio.to_thread(conversations.recover)
     pending = await asyncio.to_thread(analysis_store.recover)
     queue = analysis.get_queue()
     for task_id in pending:
@@ -63,6 +66,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="文献检索", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+app.include_router(conversation_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -248,12 +252,19 @@ async def ccf_info():
 @app.post("/api/qa")
 async def project_qa(payload: QARequest):
     try:
-        papers = await asyncio.to_thread(library.list_recent, 100)
-        allowed = {paper.id: paper for paper in papers}
-        allowed.update({paper.local_id: paper for paper in papers})
-        selected = [allowed[pid] for pid in payload.paper_ids if pid in allowed] if payload.paper_ids else papers
-        if payload.paper_ids and len(selected) != len(payload.paper_ids):
-            raise HTTPException(status_code=400, detail="只能对当前文献库中的论文提问")
+        def selected_papers():
+            papers = []
+            seen = set()
+            for ref in payload.paper_ids:
+                paper = library.get_paper(ref)
+                if paper is None:
+                    raise HTTPException(status_code=400, detail="只能对已入库的所选论文提问")
+                if paper.id not in seen:
+                    seen.add(paper.id)
+                    papers.append(paper)
+            return papers
+
+        selected = await asyncio.to_thread(selected_papers)
         await asyncio.to_thread(hybrid.index_abstracts, selected)
         ids = [paper.id for paper in selected]
         return await attribution.answer_question(payload.question, ids)

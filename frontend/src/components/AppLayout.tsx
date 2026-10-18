@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
-import { AppstoreOutlined, BookOutlined, ExperimentOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, BookOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
 import { Link, useLocation } from "react-router-dom";
 import { projects, useProjects } from "../projects";
 import { sectionOf, workspaceContext } from "../workspace";
@@ -11,7 +11,6 @@ const navigation = [
   { label: "研究工作区", href: "/", key: "home", icon: <AppstoreOutlined aria-hidden /> },
   { label: "论文搜索", href: "/search", key: "search", icon: <SearchOutlined aria-hidden /> },
   { label: "文献库", href: "/library", key: "library", icon: <BookOutlined aria-hidden /> },
-  { label: "研究台", href: "/studio", key: "studio", icon: <ExperimentOutlined aria-hidden /> },
   { label: "设置", href: "/settings", key: "settings", icon: <SettingOutlined aria-hidden /> },
 ];
 

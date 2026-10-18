@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Button, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { antdTheme } from "./theme";
 
@@ -27,7 +27,9 @@ export default function App() {
           <Suspense fallback={<div className="route-loading" role="status">正在加载页面…</div>}>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              <Route path="/w/:id" element={<AssistantPage />} />
+              <Route path="/w/:id" element={<StudioPage />} />
+              <Route path="/w/:id/studio" element={<StudioPage />} />
+              <Route path="/w/:id/research" element={<AssistantPage />} />
               <Route path="/w/:id/library" element={<WorkspacePapersPage />} />
               <Route path="/w/:id/compare" element={<WorkspaceComparePage />} />
               <Route path="/w/:id/graph" element={<WorkspaceGraphPage />} />
@@ -35,7 +37,7 @@ export default function App() {
               <Route path="/search" element={<SearchPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/library" element={<LibraryPage />} />
-              <Route path="/studio" element={<StudioPage />} />
+              <Route path="/studio" element={<Navigate to="/" replace />} />
               <Route path="/paper" element={<PaperPage />} />
               <Route path="/recommend" element={<RecommendPage />} />
               <Route path="/graph" element={<KnowledgeGraphPage />} />

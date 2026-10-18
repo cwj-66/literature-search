@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Popconfirm, Segmented, Upload } from "antd";
 import { ArrowRightOutlined, DeleteOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
-import { Link } from "react-router-dom";
-import { analyzePapers, uploadPaper } from "../../api";
+import { Link, useNavigate } from "react-router-dom";
+import { analyzePapers, createConversation, prepareWorkspace, removeWorkspacePapers, uploadPaper } from "../../api";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { PaperRow } from "../../components/PaperRow";
 import { STATUS_LABEL, projects } from "../../projects";
@@ -20,6 +20,8 @@ const FIELDS = [
 
 export default function PapersPage() {
   const { id, project } = useWorkspaceProject();
+  const navigate = useNavigate();
+  const [openingChat, setOpeningChat] = useState(false);
   const [filter, setFilter] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [fields, setFields] = useState<string[]>(FIELDS.map(item => item[0]));
@@ -31,6 +33,16 @@ export default function PapersPage() {
   const [uploadError, setUploadError] = useState("");
   const [uploadNote, setUploadNote] = useState("");
   const here = `/w/${id}/library`;
+  async function openChat() {
+    if (!project || !picked.length || openingChat) return;
+    setOpeningChat(true); setAnalyzeError("");
+    try {
+      await prepareWorkspace(id, project.name, Object.keys(project.papers));
+      const chat = await createConversation(id, picked);
+      navigate(`/w/${id}/studio?chat=${chat.id}`);
+    } catch (err) { setAnalyzeError(err instanceof Error ? err.message : "创建对话失败"); }
+    finally { setOpeningChat(false); }
+  }
   function toggle(key: string) {
     setPicked(current => current.includes(key) ? current.filter(item => item !== key) : current.length >= 5 ? current : [...current, key]);
   }
@@ -84,6 +96,7 @@ export default function PapersPage() {
         <Checkbox.Group value={fields} options={FIELDS.map(([value, label]) => ({ value, label }))} onChange={value => setFields(value as string[])} />
         <Segmented value={depth} onChange={value => setDepth(value as "standard" | "deep")} options={[{ value: "standard", label: "标准" }, { value: "deep", label: "深度" }]} />
         <Button disabled={!picked.length || !fields.length} loading={analyzing} onClick={analyze}>分析所选</Button>
+        <Button disabled={!picked.length} loading={openingChat} onClick={openChat}>对所选提问</Button>
         <span className="small-print">已选 {picked.length} / 5</span>
       </div>
     </section> : null}
@@ -124,7 +137,7 @@ export default function PapersPage() {
           <Checkbox aria-label={`选择：${item.paper.title}`} checked={picked.includes(key)} disabled={!picked.includes(key) && picked.length >= 5} onChange={() => toggle(key)} />
         } side={<>
           <span className={`status status-${item.status === "read" ? "success" : item.status === "reading" ? "accent" : "neutral"}`}>{STATUS_LABEL[item.status]}</span>
-          <Popconfirm title="从当前工作区移出这篇论文？" description="文献库中的记录和分析会保留。" okText="移出" cancelText="取消" onConfirm={() => { projects.select(id); projects.removePaper(key); }}>
+          <Popconfirm title="从当前工作区移出这篇论文？" description="文献库中的记录和分析会保留。" okText="移出" cancelText="取消" onConfirm={async () => { try { await prepareWorkspace(id, project.name, Object.keys(project.papers)); await removeWorkspacePapers(id, [key]); projects.select(id); projects.removePaper(key); setPicked(current => current.filter(ref => ref !== key)); } catch (err) { setAnalyzeError(err instanceof Error ? err.message : "移出论文失败"); } }}>
             <Button size="small" type="text" icon={<DeleteOutlined />} aria-label={`移出：${item.paper.title}`}>移出</Button>
           </Popconfirm>
         </>} />)}

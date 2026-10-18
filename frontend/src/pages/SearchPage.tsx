@@ -249,7 +249,7 @@ export default function SearchPage() {
         <div className="filter-field ccf-filter"><span>CCF 等级（仅筛选本页已返回的结果）</span>
           <Checkbox.Group value={ccf} onChange={v => setCcf(v as string[])} options={["A", "B", "C"].map(v => ({ value: v, label: `CCF ${v}` }))} />
         </div>
-        <p className="field-help">需要中文问题生成检索计划？<Link to="/studio?tab=research">到研究台生成</Link></p>
+        <p className="field-help">需要中文问题生成检索计划？<Link to="/">进入工作区的智能调研</Link></p>
       </aside>
       <section className="results-main" aria-label="检索结果" aria-busy={loading}>
         <div className="results-search">{searchBox}</div>

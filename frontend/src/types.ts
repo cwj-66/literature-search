@@ -47,6 +47,27 @@ export interface QAResponse {
   coverage_gap: boolean;
 }
 
+export interface ConversationSummary {
+  id: string;
+  workspace_id: string;
+  title: string;
+  paper_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+export interface ConversationMessage {
+  id: string;
+  question: string;
+  papers: { id: string; paper_id: string; title: string }[];
+  created_at: string;
+  status: "pending" | "completed" | "failed";
+  response: QAResponse | null;
+  error: string | null;
+}
+export interface Conversation extends ConversationSummary {
+  messages: ConversationMessage[];
+}
+
 export interface CompareTable {
   dimensions: string[];
   notes: string[];

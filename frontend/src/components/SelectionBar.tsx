@@ -1,21 +1,44 @@
+import { useState } from "react";
 import { Button } from "antd";
 import { useNavigate } from "react-router-dom";
+import { createConversation, fetchPaper, prepareWorkspace } from "../api";
+import { findKey, projects, useProjects } from "../projects";
 import { selection, useSelection } from "../selection";
 
 export function SelectionBar() {
   const items = useSelection();
+  const { current } = useProjects();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
   if (!items.length) return null;
-  const comparable = items.length >= 3 && items.length <= 5;
-  return <div className="selection-bar" role="region" aria-label="已选论文操作">
-    <div className="selection-bar-inner">
-      <span className="selection-count">已选 <strong>{items.length}</strong> 篇</span>
-      <span className="selection-hint">{comparable ? "可以生成对比表" : items.length < 3 ? "对比需选 3–5 篇" : "对比最多 5 篇"}</span>
-      <div className="selection-actions">
-        <Button type="text" onClick={() => selection.clear()}>清除</Button>
-        <Button disabled={!comparable} onClick={() => navigate("/studio?tab=compare")}>对比</Button>
-        <Button type="primary" onClick={() => navigate("/studio?tab=ask&scope=selected")}>对所选提问</Button>
-      </div>
+  async function open(compare = false) {
+    if (!current || busy) return;
+    setBusy(true); setError("");
+    try {
+      const papers = await Promise.all(items.map(item => fetchPaper(item.id)));
+      projects.select(current.id);
+      papers.forEach(paper => projects.add(paper));
+      const refs = papers.map(paper => paper.local_id ?? paper.id);
+      await prepareWorkspace(current.id, current.name, [...new Set([...Object.keys(current.papers), ...refs])]);
+      if (compare) navigate(`/w/${current.id}/compare?${new URLSearchParams(refs.map(ref => ["pick", ref]))}`);
+      else {
+        const chat = await createConversation(current.id, refs);
+        navigate(`/w/${current.id}/studio?chat=${chat.id}`);
+      }
+      selection.clear();
+    } catch (err) { setError(err instanceof Error ? err.message : "打开研究台失败"); }
+    finally { setBusy(false); }
+  }
+  const missing = current ? items.filter(item => !findKey(current, { id: item.id, local_id: item.id })).length : 0;
+  return <div className="selection-bar" role="region" aria-label="已选论文操作"><div className="selection-bar-inner">
+    <span className="selection-count">已选 <strong>{items.length}</strong> 篇</span>
+    <span className="selection-hint">{current ? `在「${current.name}」中研究${missing ? "（会先加入所选论文）" : ""}` : "请先创建或打开一个研究工作区"}</span>
+    <div className="selection-actions">
+      <Button type="text" disabled={busy} onClick={() => selection.clear()}>清除</Button>
+      <Button disabled={busy || !current || items.length < 3 || items.length > 5} onClick={() => open(true)}>对比</Button>
+      <Button type="primary" disabled={!current} loading={busy} onClick={() => current ? open() : navigate("/")}>加入工作区并提问</Button>
     </div>
-  </div>;
+    {error ? <span role="alert" className="inline-error">{error}</span> : null}
+  </div></div>;
 }

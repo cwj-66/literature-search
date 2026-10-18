@@ -48,12 +48,12 @@ nginx -t
 
 `nginx-http.conf` 用于证书签发前的 HTTP 路由，证书签发成功后再使用 `nginx-https.conf`。修改配置后必须先执行 `nginx -t`，再平滑加载 Nginx。不要替换主域名的配置。
 
-当前代码包含论文检索、详情、文献库、AI 分析、相关推荐、局部图谱及研究台。研究台提供文献问答、3–5 篇论文对比和调研任务。分析任务使用进程内队列，必须保持 Dockerfile 中的单进程；增加 worker 会让队列分裂，重启后未完成的准备或分析会被标为失败并可重试。线上是否包含这些更新取决于实际部署版本。
+当前代码包含论文检索、详情、文献库、AI 分析、相关推荐、局部图谱及工作区研究台。主页进入各自工作区；`/w/:id` 和 `/w/:id/studio` 展示该工作区的研究对话，`/w/:id/research` 保留智能调研。每个对话独立保存论文选择、问答、引用和名称，支持导出；保存于现有 SQLite 数据卷，关闭页面或重建容器后保留。每次提问在后端校验工作区成员关系，只检索明确选中的论文；空选不回退到全库。数据库新增表自动创建，不删除原有论文与分析数据。分析任务使用进程内队列，必须保持 Dockerfile 中的单进程；增加 worker 会让队列分裂，重启后未完成的准备或分析会被标为失败并可重试。线上是否包含这些更新取决于实际部署版本。
 
 
 ## 安全头与静态路由
 
-更新前端、后端以及对应的 Nginx 配置后生效。两份 Nginx 模板均限制 SPA 入口为 `/`、`/search`、`/settings`、`/w/`、`/paper`、`/library`、`/studio`、`/recommend` 和 `/graph`，其他不存在的资源返回真实 404。研究台子视图通过 `/studio?tab=ask|compare|research` 切换，刷新和直接打开链接均须返回 SPA 入口。API 代理关闭缓冲，读取超时设为 300 秒，以支持渐进检索与耗时较长的调研请求；该超时不代表任务必定在此时间内完成。`/robots.txt` 为真实文件，保留现有禁止索引策略，因此不生成 sitemap，`/sitemap.xml` 明确返回 404。`/favicon.ico` 和 `/favicon.svg` 为真实图标，`/health` 代理后端 `/api/health`，返回 JSON；`/docs`、`/redoc`、`/openapi.json` 关闭并返回 404。
+更新前端、后端以及对应的 Nginx 配置后生效。两份 Nginx 模板均限制 SPA 入口为 `/`、`/search`、`/settings`、`/w/`、`/paper`、`/library`、`/studio`、`/recommend` 和 `/graph`，其他不存在的资源返回真实 404。研究台通过 `/w/:id/studio?chat=对话ID` 打开已保存对话，刷新和直接打开链接均须返回 SPA 入口。旧 `/studio` 入口返回工作区主页。API 代理关闭缓冲，读取超时设为 300 秒，以支持渐进检索与耗时较长的调研请求；该超时不代表任务必定在此时间内完成。`/robots.txt` 为真实文件，保留现有禁止索引策略，因此不生成 sitemap，`/sitemap.xml` 明确返回 404。`/favicon.ico` 和 `/favicon.svg` 为真实图标，`/health` 代理后端 `/api/health`，返回 JSON；`/docs`、`/redoc`、`/openapi.json` 关闭并返回 404。
 
 安全头集中在 server 级，子 location 不使用 add_header，防止覆盖继承。包含 CSP、DENY、nosniff、Referrer-Policy、Permissions-Policy，HTTPS 模板另加 HSTS。CSP 允许 Ant Design 必需的内联样式，脚本仅允许同源。
 

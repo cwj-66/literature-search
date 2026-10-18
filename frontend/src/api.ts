@@ -1,4 +1,4 @@
-import type { AnalysisState, AnalyzePaperResult, CompareTable, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask } from "./types";
+import type { AnalysisState, AnalyzePaperResult, CompareTable, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask, Conversation, ConversationSummary, ConversationMessage } from "./types";
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
@@ -162,6 +162,21 @@ async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Pr
 export function askLibrary(question: string, paperIds: string[], signal?: AbortSignal) {
   return postJson<QAResponse>("/api/qa", { question, paper_ids: paperIds }, signal);
 }
+
+const conversationUrl = (workspaceId: string, id?: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/conversations${id ? `/${encodeURIComponent(id)}` : ""}`;
+async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
+  return response.json();
+}
+export const listConversations = (workspaceId: string, signal?: AbortSignal) => getJson<ConversationSummary[]>(conversationUrl(workspaceId), signal);
+export const fetchConversation = (workspaceId: string, id: string, signal?: AbortSignal) => getJson<Conversation>(conversationUrl(workspaceId, id), signal);
+export const createConversation = (workspaceId: string, paperIds: string[] = [], signal?: AbortSignal) => postJson<Conversation>(conversationUrl(workspaceId), { paper_ids: paperIds }, signal);
+export const updateConversation = (workspaceId: string, id: string, changes: { title?: string; paper_ids?: string[] }, signal?: AbortSignal) => postJson<Conversation>(conversationUrl(workspaceId, id), changes, signal);
+export const deleteConversation = (workspaceId: string, id: string) => postJson(`${conversationUrl(workspaceId, id)}/delete`, {});
+export const askConversation = (workspaceId: string, id: string, question: string, paperIds: string[], requestId: string, signal?: AbortSignal) => postJson<ConversationMessage>(`${conversationUrl(workspaceId, id)}/messages`, { question, paper_ids: paperIds, request_id: requestId }, signal);
+export const removeWorkspacePapers = (workspaceId: string, paperIds: string[]) => postJson(`/api/workspaces/${encodeURIComponent(workspaceId)}/papers/remove`, { paper_ids: paperIds });
+export const deleteWorkspace = (workspaceId: string) => postJson(`/api/workspaces/${encodeURIComponent(workspaceId)}/delete`, {});
 
 export function analyzePapers(body: { paper_ids: string[]; fields?: string[]; depth?: "standard" | "deep"; workspace_id?: string }, signal?: AbortSignal) {
   return postJson<AnalyzePaperResult>("/api/tools/analyze_paper", body, signal);

@@ -24,8 +24,8 @@ export default function ComparePage() {
   const here = `/w/${id}/compare`;
   useEffect(() => { document.title = project ? `${project.name} - 论文对比` : "工作区"; }, [project]);
   useEffect(() => {
-    const pick = params.get("pick");
-    if (pick && project?.papers[pick]) setPicked(current => current.includes(pick) || current.length >= 5 ? current : [...current, pick]);
+    const initial = params.getAll("pick").filter(key => project?.papers[key]);
+    if (initial.length) setPicked(current => [...new Set([...current, ...initial])].slice(0, 5));
   }, [params, project]);
   if (!project) return <MissingWorkspace />;
   const entries = Object.entries(project.papers);

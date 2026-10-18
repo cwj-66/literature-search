@@ -15,7 +15,7 @@ export function libraryLocation(params: URLSearchParams): string {
   return origin.startsWith("/library") ? origin : "/library";
 }
 
-export type WorkspaceSection = "assistant" | "library" | "compare" | "graph" | "reading";
+export type WorkspaceSection = "assistant" | "studio" | "library" | "compare" | "graph" | "reading";
 
 export function workspaceContext(pathname: string, search: string): { id: string; section: WorkspaceSection } | null {
   const params = new URLSearchParams(search);
@@ -25,9 +25,12 @@ export function workspaceContext(pathname: string, search: string): { id: string
     if (!origin.startsWith("/w/")) return null;
     path = new URL(origin, "http://local").pathname;
   }
-  const match = path.match(/^\/w\/([^/]+)(?:\/(library|compare|graph|p)(?:\/([^/]+))?)?\/?$/);
+  const match = path.match(/^\/w\/([^/]+)(?:\/(library|compare|graph|studio|research|p)(?:\/([^/]+))?)?\/?$/);
   if (!match || (match[2] === "p" && !match[3])) return null;
-  const section = match[2] === "p" ? "reading" : match[2] === "library" || match[2] === "compare" || match[2] === "graph" ? match[2] : "assistant";
+  const section: WorkspaceSection = !match[2] || match[2] === "studio" ? "studio"
+    : match[2] === "p" ? "reading"
+    : match[2] === "library" || match[2] === "compare" || match[2] === "graph" ? match[2]
+    : "assistant";
   return { id: match[1], section };
 }
 

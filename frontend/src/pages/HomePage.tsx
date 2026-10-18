@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "r
 import { Dropdown, Input, Modal, Select } from "antd";
 import { ClockCircleOutlined, EllipsisOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
+import { deleteWorkspace } from "../api";
 import { COVERS, CoverArt, WorkspaceCover, readCoverFile } from "../covers";
 import { DEFAULT_COVER, projectOpened, projectUpdated, projects, useProjects, type CoverId, type Project } from "../projects";
 
@@ -168,11 +169,11 @@ export default function HomePage() {
     setMenuFor(null);
     Modal.confirm({
       title: `删除工作区「${item.name}」？`,
-      content: "只删除工作区内的阅读记录和笔记，文献库不受影响。",
+      content: "删除工作区内的对话、阅读记录和笔记，文献库不受影响。",
       okText: "删除",
       cancelText: "取消",
       okButtonProps: { danger: true },
-      onOk: () => { projects.select(item.id); projects.removeProject(); },
+      onOk: async () => { await deleteWorkspace(item.id); projects.select(item.id); projects.removeProject(); },
     });
   };
 

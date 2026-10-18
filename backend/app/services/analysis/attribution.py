@@ -157,8 +157,10 @@ async def correct_once(question: str, claims: list[dict], reviews: list[JudgeIte
     return kept
 
 
-async def answer_question(question: str, paper_ids: list[str] | None = None, rounds: int = 2) -> dict:
-    hits = await retrieve(question, paper_ids)
+async def answer_question(question: str, paper_ids: list[str] | None = None, rounds: int = 2, history: list[str] | None = None) -> dict:
+    previous = (history or [])[-3:]
+    query = "\n".join([*previous[-2:], question])
+    hits = await retrieve(query, paper_ids)
     grouped: dict[str, list[dict]] = {}
     for hit in hits:
         grouped.setdefault(hit["paper_id"], []).append(hit)
@@ -177,8 +179,9 @@ async def answer_question(question: str, paper_ids: list[str] | None = None, rou
     messages = [{"role": "system", "content": (
         "根据证据回答问题。关键事实后标注证据ID，例如[E0001]。只能使用提供的ID。"
         "没有证据的内容明确说未找到。不要编造参考文献。用简体中文。"
+        "历史问题只用于理解当前追问，不是事实依据；回答的事实只能来自本次提供的论文证据。"
         "输出JSON {\"answer\":\"...\",\"claim_texts\":[\"...\"]}"
-    )}, {"role": "user", "content": json.dumps({"question": question, "evidence": context}, ensure_ascii=False)}]
+    )}, {"role": "user", "content": json.dumps({"previous_questions": previous, "question": question, "evidence": context}, ensure_ascii=False)}]
     raw = await llm.complete(messages)
     try:
         payload = ea.parse_json(raw)

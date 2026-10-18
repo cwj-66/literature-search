@@ -106,7 +106,7 @@ function Assistant({ id }: { id: string }) {
   const [attaching, setAttaching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const here = `/w/${id}`;
+  const here = `/w/${id}/research`;
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
     try { localStorage.setItem(`ws-ask:${id}`, JSON.stringify(turns)); } catch { /* keep the in-memory thread if storage is full */ }
