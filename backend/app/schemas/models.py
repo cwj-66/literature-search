@@ -91,6 +91,8 @@ class ResearchStart(BaseModel):
     current_paper_id: str | None = Field(None, min_length=1, max_length=500)
     selected_paper_ids: list[str] = Field(default_factory=list, max_length=50)
     mode: Literal["auto", "react", "plan"] = "auto"
+    background: bool = False
+    max_seconds: int | None = Field(None, ge=30, le=3600)
 
 
 class ResearchResume(BaseModel):
@@ -98,6 +100,14 @@ class ResearchResume(BaseModel):
     plan: list[dict] | None = None
     queries: list[str] | None = None
     approved_ids: list[str] | None = Field(None, max_length=50)
+    abort: bool | None = None
+    workspace_id: str | None = Field(None, min_length=1, max_length=80)
+    scope: Literal["current", "selected", "workspace"] | None = None
+    current_paper_id: str | None = Field(None, min_length=1, max_length=500)
+    selected_paper_ids: list[str] | None = Field(None, max_length=50)
+    year_from: int | None = Field(None, ge=1900, le=2100)
+    year_to: int | None = Field(None, ge=1900, le=2100)
+    background: bool = False
 
 
 class QARequest(BaseModel):

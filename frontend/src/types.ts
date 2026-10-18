@@ -76,7 +76,8 @@ export interface ResearchTask {
   llm_calls?: number;
   deep_reads?: number;
   stop_reason?: string | null;
-  interrupt?: { type?: string; plan?: unknown; queries?: string[]; paper_ids?: string[]; tool?: string; hint?: string } | null;
+  interrupt?: { type?: string; plan?: unknown; queries?: string[]; paper_ids?: string[]; tool?: string; hint?: string;
+    slots?: { name: string; reason?: string }[] } | null;
   answer?: string | null;
 }
 

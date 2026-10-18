@@ -30,6 +30,24 @@ def enqueue(local_id):
     return status(local_id)
 
 
+def ensure_queued(local_id, retry_failed=False):
+    """Membership dedupe and processing retry are decided separately.
+
+    Missing records are queued; a previous `failed` run is re-queued only on an explicit user action
+    (retry_failed). `unavailable` (no public PDF) and finished/in-flight records are left untouched.
+    """
+    current = status(local_id)
+    if current is None:
+        return enqueue(local_id)
+    if retry_failed and current["status"] == "failed":
+        with connection() as db, db:
+            _ensure(db)
+            db.execute("UPDATE paper_processing SET status='pending', message=?, updated_at=? WHERE local_id=? AND status='failed'",
+                       ("用户重新加入，重试处理", datetime.now(timezone.utc).isoformat(), local_id))
+        return status(local_id)
+    return current
+
+
 def _finish(local_id, state, message=None, source_url=None):
     with connection() as db, db:
         _ensure(db)

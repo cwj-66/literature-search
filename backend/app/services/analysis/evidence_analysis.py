@@ -37,6 +37,8 @@ limitation：作者明确说明的局限与未来工作；keyword：5—8个关�
 evaluation 可带 dataset/baseline/metric/result/conditions 五个字符串字段，材料未提供的子字段填null。
 数字须与数据集、指标、比较对象和实验条件对应；不能把相对提升写成绝对提升。
 只输出 {"claims":[{"kind":"...","text":"中文结论","evidence":[{"paragraph_id":"P0001","quote":"原文连续摘录，8—900字符"}]}]}。
+quote 必须逐字复制所给段落中的连续文字，不得改写、翻译或拼接；页码未知时不要编造页码。
+材料为空、无法识别或与论文无关时只输出 {"claims":[]}，不要输出解释文字。
 不要输出 status。每项最多6个证据，全文最多60项；不重复相同贡献。"""
 
 

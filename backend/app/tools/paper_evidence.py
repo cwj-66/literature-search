@@ -75,8 +75,11 @@ def _semantic_scores(rows, vector, model):
 
 async def retrieve(papers, query: str, limit: int):
     rows = await asyncio.to_thread(chunks_for, papers)
+    covered = {row["local_id"] for row in rows}
+    unindexed = [p.local_id for p in papers if p.local_id not in covered]
     if not rows:
-        return {"status": "not_indexed", "evidence": [], "warnings": ["当前范围没有已保存的文本块，请先完成后台论文导入。"]}
+        return {"status": "not_indexed", "evidence": [], "unindexed_paper_ids": unindexed,
+                "warnings": ["当前范围没有已保存的文本块，请先完成后台论文导入。"]}
     warnings, semantic = [], {}
     if any("faiss_id" in row for row in rows):
         try:
@@ -106,7 +109,10 @@ async def retrieve(papers, query: str, limit: int):
         result.append({key: value for key, value in row.items() if key not in ("vector", "faiss_id")})
         result[-1].update({"rank": rank, "semantic_score": semantic.get(key), "keyword_matches": keyword[key],
                            "quote": row["text"], "material": "original"})
-    return {"status": "partial" if warnings else "completed", "evidence": result, "warnings": warnings}
+    if unindexed:
+        warnings.append(f"{len(unindexed)} 篇论文尚无已保存的文本块，结果只覆盖已索引论文。")
+    return {"status": "partial" if warnings else "completed", "evidence": result, "warnings": warnings,
+            "unindexed_paper_ids": unindexed}
 
 
 def context(papers, chunk_id: str, neighbors: int):

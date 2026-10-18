@@ -426,8 +426,11 @@ async def start_research(payload: ResearchStart):
         context = ToolContext.model_validate({key: getattr(payload, key) for key in ToolContext.model_fields})
         if context.workspace_id:
             await asyncio.to_thread(workspaces.require, context.workspace_id)
-        return await agent.run(payload.goal, payload.year_from, payload.year_to, payload.auto_approve,
-                               mode=payload.mode, context=context.model_dump())
+        starter = agent.start_background if payload.background else agent.run
+        return await starter(payload.goal, payload.year_from, payload.year_to, payload.auto_approve,
+                             mode=payload.mode, context=context.model_dump(), max_seconds=payload.max_seconds)
+    except agent.TaskConflict as exc:
+        raise HTTPException(status_code=409, detail=exc.message) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     except llm.AnalysisError as exc:
@@ -441,11 +444,27 @@ async def resume_research(task_id: str, payload: ResearchResume = Body(default_f
     current = await asyncio.to_thread(agent.get_task, task_id)
     if current is None:
         raise HTTPException(status_code=404, detail="没有找到该调研任务")
-    resume = payload.model_dump(exclude_none=True)
+    resume = payload.model_dump(exclude_none=True, exclude={"background"})
     try:
-        return await agent.run(current.get("goal") or "", resume=resume or {"plan": current.get("plan"), "queries": current.get("queries")}, task_id=task_id)
+        return await agent.resume_task(task_id, resume or {"plan": current.get("plan"), "queries": current.get("queries")},
+                                       background=payload.background)
+    except agent.TaskConflict as exc:
+        raise HTTPException(status_code=409, detail=exc.message) from None
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+
+
+@app.post("/api/research/tasks/{task_id}/continue")
+async def continue_research(task_id: str, background: bool = Query(False)):
+    try:
+        result = await agent.continue_task(task_id, background=background)
+    except agent.TaskConflict as exc:
+        raise HTTPException(status_code=409, detail=exc.message) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+    if result is None:
+        raise HTTPException(status_code=404, detail="没有找到该调研任务")
+    return result
 
 
 @app.get("/api/research/tasks/{task_id}")
@@ -530,6 +549,9 @@ async def research_task_events(
                     yield _sse({"type": "event", "task_id": task_id, "event": event})
             elif current is not None and current.get("status") == "waiting":
                 yield _sse({"type": "interrupt", "task_id": task_id, "status": "waiting", "interrupt": current.get("interrupt")})
+            elif current is not None:
+                async for item in agent.watch(task_id):
+                    yield _sse(item)
             else:
                 context = ToolContext(workspace_id=workspace_id, scope=scope, current_paper_id=current_paper_id, selected_paper_ids=selected_paper_ids)
                 if workspace_id:

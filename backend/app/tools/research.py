@@ -182,8 +182,10 @@ async def execute(name: str, arguments: dict, context: ToolContext | None = None
         result = await add_papers_to_workspace(workspace_id, args["paper_ids"])
         from app.services.papers import processing
         for item in result["results"]:
-            if item["status"] == "added":
-                item["processing"] = await asyncio.to_thread(processing.enqueue, item["local_id"])
+            if item["status"] in ("added", "already_exists"):
+                item["processing"] = await asyncio.to_thread(processing.ensure_queued, item["local_id"], True)
+        stages = [item["processing"]["status"] for item in result["results"] if item.get("processing")]
+        result["processing_summary"] = {stage: stages.count(stage) for stage in set(stages)}
     elif name == "remove_paper_from_workspace":
         result = await asyncio.to_thread(workspaces.remove, _workspace(args, ctx), [args["paper_id"]])
     elif name in {"get_paper_details", "find_related_papers", "get_paper_references", "get_paper_citations", "get_paper_analysis"}:
@@ -218,6 +220,15 @@ async def execute(name: str, arguments: dict, context: ToolContext | None = None
             result = await analyze_tool.analyze_paper([p.local_id for p in papers], args["fields"], args["depth"], ctx.workspace_id)
         elif name == "retrieve_paper_evidence":
             result = await paper_evidence.retrieve(papers, args["query"], args["limit"])
+            unindexed = set(result.get("unindexed_paper_ids") or [])
+            if unindexed:
+                from app.services.papers import processing
+                result["processing"] = []
+                for p in papers:
+                    if p.local_id in unindexed:
+                        row = await asyncio.to_thread(processing.status, p.local_id) or {}
+                        result["processing"].append({"paper_id": p.id, "local_id": p.local_id,
+                                                     "status": row.get("status"), "message": row.get("message")})
         elif name == "read_paper_context":
             result = await asyncio.to_thread(paper_evidence.context, papers, args["chunk_id"], args["neighbors"])
         elif name == "query_knowledge_graph":

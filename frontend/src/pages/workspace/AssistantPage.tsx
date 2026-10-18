@@ -131,7 +131,7 @@ function Assistant({ id }: { id: string }) {
     setTurns(current => [...current, { id: turnId, question, pending: true, tool: "agent" }]);
     try {
       await prepareWorkspace(id, project?.name || "研究工作区", Object.keys(project?.papers ?? {}), abort.signal);
-      const task = await startResearch(question, { autoApprove: mode !== "deep", mode: mode === "deep" ? "auto" : "react",
+      const task = await startResearch(question, { autoApprove: mode !== "deep", mode: "auto",
         workspaceId: id, scope, currentPaperId: currentId || undefined, selectedPaperIds: selectedIds }, abort.signal);
       setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, answeredAt: Date.now(), task } : turn));
       projects.syncPapers(id, await workspacePapers(id, abort.signal));
@@ -147,8 +147,10 @@ function Assistant({ id }: { id: string }) {
     abortRef.current = abort;
     try {
       const paused = turn.task.interrupt;
-      const task = await researchDecision(turn.task.task_id, paused?.type === "review_plan"
-        ? { approved, queries: paused.queries } : { approved_ids: approved ? paused?.paper_ids ?? [] : [] }, abort.signal);
+      const decision = paused?.type === "review_plan" ? { approved, queries: paused.queries }
+        : paused?.type === "clarify" ? (approved ? { scope, current_paper_id: currentId || undefined, selected_paper_ids: selectedIds } : { abort: true })
+        : { approved_ids: approved ? paused?.paper_ids ?? [] : [] };
+      const task = await researchDecision(turn.task.task_id, decision, abort.signal);
       setTurns(current => current.map(item => item.id === turn.id ? { ...item, task, answeredAt: Date.now(), error: undefined } : item));
       projects.syncPapers(id, await workspacePapers(id, abort.signal));
     } catch (err) {
@@ -186,6 +188,7 @@ function Assistant({ id }: { id: string }) {
               <p>{turn.task.interrupt?.hint || "请确认研究计划后继续。"}</p>
               {turn.task.interrupt?.queries?.map(query => <p key={query}>{query}</p>)}
               {turn.task.interrupt?.paper_ids?.map(ref => <p key={ref}>{project?.papers[ref]?.paper.title || ref}</p>)}
+              {turn.task.interrupt?.type === "clarify" ? <p className="small-print">请先在下方选择当前论文或已选论文范围，再点击确认继续。</p> : null}
               <button type="button" disabled={busy} onClick={() => void decide(turn, true)}>确认并继续</button>{" "}
               <button type="button" disabled={busy} onClick={() => void decide(turn, false)}>拒绝本次操作</button>
             </div> : null}

@@ -179,7 +179,12 @@ export function startResearch(goal: string, options: { autoApprove: boolean; yea
   }, signal);
 }
 
-export function researchDecision(taskId: string, decision: { approved?: boolean; approved_ids?: string[]; queries?: string[] }, signal?: AbortSignal) {
+export type ResearchDecision = {
+  approved?: boolean; approved_ids?: string[]; queries?: string[]; abort?: boolean;
+  scope?: "current" | "selected" | "workspace"; current_paper_id?: string; selected_paper_ids?: string[];
+};
+
+export function researchDecision(taskId: string, decision: ResearchDecision, signal?: AbortSignal) {
   return postJson<ResearchTask>(`/api/research/tasks/${encodeURIComponent(taskId)}/resume`, decision, signal);
 }
 
