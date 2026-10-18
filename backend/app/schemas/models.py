@@ -86,11 +86,18 @@ class ResearchStart(BaseModel):
     year_from: int | None = Field(None, ge=1900, le=2100)
     year_to: int | None = Field(None, ge=1900, le=2100)
     auto_approve: bool = False
+    workspace_id: str | None = Field(None, min_length=1, max_length=80)
+    scope: Literal["current", "selected", "workspace"] = "selected"
+    current_paper_id: str | None = Field(None, min_length=1, max_length=500)
+    selected_paper_ids: list[str] = Field(default_factory=list, max_length=50)
+    mode: Literal["auto", "react", "plan"] = "auto"
 
 
 class ResearchResume(BaseModel):
+    approved: bool | None = None
     plan: list[dict] | None = None
     queries: list[str] | None = None
+    approved_ids: list[str] | None = Field(None, max_length=50)
 
 
 class QARequest(BaseModel):

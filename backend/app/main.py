@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import json
 import os
 import sqlite3
 from contextlib import asynccontextmanager, suppress
@@ -422,7 +423,13 @@ async def start_research(payload: ResearchStart):
     if payload.year_from and payload.year_to and payload.year_from > payload.year_to:
         raise HTTPException(status_code=400, detail="起始年份不能晚于结束年份")
     try:
-        return await agent.run(payload.goal, payload.year_from, payload.year_to, payload.auto_approve)
+        context = ToolContext.model_validate({key: getattr(payload, key) for key in ToolContext.model_fields})
+        if context.workspace_id:
+            await asyncio.to_thread(workspaces.require, context.workspace_id)
+        return await agent.run(payload.goal, payload.year_from, payload.year_to, payload.auto_approve,
+                               mode=payload.mode, context=context.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     except llm.AnalysisError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from None
     except (sqlite3.Error, OSError):
@@ -434,7 +441,7 @@ async def resume_research(task_id: str, payload: ResearchResume = Body(default_f
     current = await asyncio.to_thread(agent.get_task, task_id)
     if current is None:
         raise HTTPException(status_code=404, detail="没有找到该调研任务")
-    resume = {key: value for key, value in {"plan": payload.plan, "queries": payload.queries}.items() if value is not None}
+    resume = payload.model_dump(exclude_none=True)
     try:
         return await agent.run(current.get("goal") or "", resume=resume or {"plan": current.get("plan"), "queries": current.get("queries")}, task_id=task_id)
     except (sqlite3.Error, OSError):
@@ -447,6 +454,98 @@ async def research_task(task_id: str):
     if current is None:
         raise HTTPException(status_code=404, detail="没有找到该调研任务")
     return current
+
+
+@app.get("/api/research/tasks")
+async def research_tasks():
+    try:
+        return await asyncio.to_thread(agent.list_tasks)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+
+
+@app.get("/api/research/tasks/{task_id}/state")
+async def research_task_state(task_id: str):
+    try:
+        recovered = await agent.recover_state(task_id)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+    if recovered is None:
+        raise HTTPException(status_code=404, detail="没有找到该调研任务")
+    return recovered
+
+
+@app.post("/api/research/tasks/{task_id}/cancel")
+async def cancel_research(task_id: str):
+    current = await asyncio.to_thread(agent.get_task, task_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="没有找到该调研任务")
+    try:
+        await asyncio.to_thread(agent.request_cancel, task_id)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+    return {"task_id": task_id, "cancelled": True}
+
+
+@app.post("/api/research/tasks/{task_id}/pause")
+async def pause_research(task_id: str):
+    current = await asyncio.to_thread(agent.get_task, task_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="没有找到该调研任务")
+    try:
+        await asyncio.to_thread(agent.request_pause, task_id)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+    return {"task_id": task_id, "paused": True}
+
+
+def _sse(payload: dict) -> str:
+    return "data: " + json.dumps(payload, ensure_ascii=False, default=str) + "\n\n"
+
+
+@app.get("/api/research/tasks/{task_id}/events")
+async def research_task_events(
+    task_id: str,
+    goal: str | None = Query(None, min_length=1, max_length=2000),
+    year_from: int | None = Query(None, ge=1900, le=2100),
+    year_to: int | None = Query(None, ge=1900, le=2100),
+    auto_approve: bool = Query(False),
+    workspace_id: str | None = Query(None, min_length=1, max_length=80),
+    scope: str = Query("selected", pattern="^(current|selected|workspace)$"),
+    current_paper_id: str | None = Query(None, min_length=1, max_length=500),
+    selected_paper_ids: list[str] = Query(default=[]),
+):
+    """调研任务的 SSE 事件流：已完成任务回放事件；新任务实时流式运行；挂起任务下发中断信息。"""
+    try:
+        current = await asyncio.to_thread(agent.get_task, task_id)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="调研任务存储暂不可用，请稍后重试") from None
+    if current is None and not goal:
+        raise HTTPException(status_code=404, detail="没有找到该调研任务")
+
+    async def events():
+        try:
+            if current is not None and current.get("status") == "done":
+                for event in current.get("events") or []:
+                    yield _sse({"type": "event", "task_id": task_id, "event": event})
+            elif current is not None and current.get("status") == "waiting":
+                yield _sse({"type": "interrupt", "task_id": task_id, "status": "waiting", "interrupt": current.get("interrupt")})
+            else:
+                context = ToolContext(workspace_id=workspace_id, scope=scope, current_paper_id=current_paper_id, selected_paper_ids=selected_paper_ids)
+                if workspace_id:
+                    await asyncio.to_thread(workspaces.require, workspace_id)
+                async for item in agent.stream_run(goal, year_from, year_to, auto_approve, task_id=task_id, context=context.model_dump()):
+                    yield _sse(item)
+            yield "data: [DONE]\n\n"
+        except (sqlite3.Error, OSError):
+            yield _sse({"type": "error", "message": "调研任务存储暂不可用，请稍后重试"})
+        except Exception as exc:
+            logging.exception("research event stream failed")
+            yield _sse({"type": "error", "message": str(exc)[:200]})
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={
+        "X-Accel-Buffering": "no", "Cache-Control": "no-cache, no-transform",
+    })
 
 
 @app.post("/api/papers/{paper_id:path}/metadata")
