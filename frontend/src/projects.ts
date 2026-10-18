@@ -7,7 +7,7 @@ export const COVER_IDS = ["layers", "docs", "agent", "media", "chart", "vision",
 export type CoverId = (typeof COVER_IDS)[number];
 export const DEFAULT_COVER: CoverId = "notes";
 export interface ProjectPaper { paper: Paper; status: ReadStatus; note: string; addedAt: string; openedAt?: string }
-export interface Project { id: string; name: string; description: string; createdAt: string; openedAt?: string; cover?: CoverId; coverImage?: string; papers: Record<string, ProjectPaper> }
+export interface Project { id: string; name: string; description: string; createdAt: string; updatedAt?: string; openedAt?: string; cover?: CoverId; coverImage?: string; papers: Record<string, ProjectPaper> }
 interface State { projects: Project[]; currentId: string }
 
 export function isCoverId(value: unknown): value is CoverId {
@@ -94,7 +94,12 @@ export const projects = {
     const now = new Date().toISOString();
     commit({ ...state, projects: state.projects.map(p => p.id === id ? { ...p, openedAt: now } : p) });
   },
-  rename(name: string) { patchCurrent(project => ({ ...project, name: name.trim() || project.name })); },
+  rename(name: string, id = state.currentId) {
+    const title = name.trim().slice(0, 40);
+    if (!title || !state.projects.some(project => project.id === id)) return;
+    commit({ ...state, projects: state.projects.map(project => project.id === id
+      ? { ...project, name: title, updatedAt: new Date().toISOString() } : project) });
+  },
   removeProject() {
     const rest = state.projects.filter(p => p.id !== state.currentId);
     commit({ projects: rest, currentId: rest[0]?.id ?? "" });
@@ -130,7 +135,7 @@ function subscribe(listener: () => void) {
 
 export function projectUpdated(project: Project) {
   const times = Object.values(project.papers).flatMap(item => [item.openedAt, item.addedAt].filter((value): value is string => Boolean(value)));
-  return times.sort().at(-1) ?? project.createdAt;
+  return [...times, project.updatedAt ?? project.createdAt].sort().at(-1)!;
 }
 
 export function projectOpened(project: Project) {

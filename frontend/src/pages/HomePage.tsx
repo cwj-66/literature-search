@@ -3,6 +3,7 @@ import { Dropdown, Input, Modal, Select } from "antd";
 import { ClockCircleOutlined, EllipsisOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import { deleteWorkspace } from "../api";
+import { WorkspaceRenameDialog } from "../components/WorkspaceRenameDialog";
 import { COVERS, CoverArt, WorkspaceCover, readCoverFile } from "../covers";
 import { DEFAULT_COVER, projectOpened, projectUpdated, projects, useProjects, type CoverId, type Project } from "../projects";
 
@@ -107,9 +108,11 @@ function CreateWorkspaceForm({ onClose }: { onClose: () => void }) {
   </>;
 }
 
-function CardMenu({ item, onUpload, onDelete, onCover }: { item: Project; onUpload: () => void; onDelete: () => void; onCover: (id: CoverId) => void }) {
+function CardMenu({ item, onUpload, onDelete, onCover, onRename }: { item: Project; onUpload: () => void; onDelete: () => void; onCover: (id: CoverId) => void; onRename: () => void }) {
   const custom = Boolean(item.coverImage);
   return <div className="ws-card-menu">
+    <button type="button" className="ws-menu-action" onClick={onRename}>重命名工作区</button>
+    <div className="ws-menu-split" />
     <p>更换封面</p>
     <div className="ws-mini-covers">
       {COVERS.map(cover => {
@@ -135,6 +138,7 @@ export default function HomePage() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [renameId, setRenameId] = useState<string | null>(null);
   useEffect(() => { document.title = "研究工作区 - 文献研究助手"; }, []);
 
   const shown = [...list].sort((a, b) => {
@@ -225,7 +229,7 @@ export default function HomePage() {
             placement="bottomRight"
             open={menuFor === item.id}
             onOpenChange={open => setMenuFor(current => open ? item.id : current === item.id ? null : current)}
-            popupRender={() => <CardMenu item={item} onCover={cover => { projects.setCover(item.id, cover); setMenuFor(null); }} onUpload={() => { uploadFor.current = item.id; setMenuFor(null); fileRef.current?.click(); }} onDelete={() => remove(item)} />}
+            popupRender={() => <CardMenu item={item} onRename={() => { setMenuFor(null); setRenameId(item.id); }} onCover={cover => { projects.setCover(item.id, cover); setMenuFor(null); }} onUpload={() => { uploadFor.current = item.id; setMenuFor(null); fileRef.current?.click(); }} onDelete={() => remove(item)} />}
           >
             <button type="button" className="ws-more" aria-label={`${item.name}的更多操作`}><EllipsisOutlined /></button>
           </Dropdown>
@@ -234,6 +238,7 @@ export default function HomePage() {
       {filteredEmpty ? <p className="ws-filter-empty">没有符合条件的工作区</p> : null}
     </div>
     <CreateWorkspace open={creating} onClose={() => setCreating(false)} />
+    <WorkspaceRenameDialog project={list.find(item => item.id === renameId) ?? null} onClose={() => setRenameId(null)} />
     <input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={onCoverFile} />
   </main>;
 }

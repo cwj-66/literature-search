@@ -2455,3 +2455,21 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
   .research-layout .assistant-composer { margin: 8px; }
   .research-layout .assistant-mode { display: none; }
 }
+
+/* Name editing is available beside the item, with keyboard-accessible controls. */
+.rename-field { display: flex; flex-direction: column; gap: 10px; padding: 12px 0; }
+.ws-rename { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; flex-shrink: 0; }
+.ws-rename:hover, .ws-rename:focus-visible { color: var(--accent); background: #eeedff; }
+.research-chat-row { display: flex; align-items: flex-start; min-width: 0; border-radius: 8px; }
+.research-chat-row.is-active { background: #eeedff; }
+.research-chat-list .research-chat-open { flex: 1; min-width: 0; background: transparent; }
+.research-chat-list .research-chat-open[aria-current="true"] { background: transparent; }
+.research-chat-list .research-chat-rename { flex: 0 0 28px; width: 28px; height: 32px; padding: 6px; margin-top: 5px; color: var(--muted); }
+.research-chat-list .research-chat-rename:hover, .research-chat-list .research-chat-rename:focus-visible { color: var(--accent); background: #e2dfff; }
+@media (max-width: 700px) {
+  .research-chat-row { flex: 0 0 auto; max-width: 240px; }
+  .research-chat-list .research-chat-open { overflow: hidden; text-overflow: ellipsis; }
+  .ws-heading { min-width: 0; }
+  .ws-switch { min-width: 0; }
+  .ws-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

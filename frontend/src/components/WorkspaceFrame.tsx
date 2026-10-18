@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Dropdown } from "antd";
+import { EditOutlined } from "@ant-design/icons";
+import { WorkspaceRenameDialog } from "./WorkspaceRenameDialog";
 import { Link } from "react-router-dom";
 import { useProjects, type Project } from "../projects";
 import type { WorkspaceSection } from "../workspace";
@@ -26,6 +28,7 @@ function sectionHref(section: WorkspaceSection, id: string) {
 
 export function WorkspaceFrame({ project, section, children }: { project: Project; section: WorkspaceSection; children: ReactNode }) {
   const { projects: list } = useProjects();
+  const [renaming, setRenaming] = useState(false);
   const count = Object.keys(project.papers).length;
   if (section === "reading") return <div className="ws-frame"><div id="main" tabIndex={-1} className="ws-main">{children}</div></div>;
   return <div className="ws-frame">
@@ -43,6 +46,7 @@ export function WorkspaceFrame({ project, section, children }: { project: Projec
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </Dropdown>
+        <button type="button" className="ws-rename" aria-label="重命名当前工作区" title="重命名工作区" onClick={() => setRenaming(true)}><EditOutlined /></button>
       </div>
       <div id="research-header-slot" />
       <span className="ws-count"><Glyph><path d="M7 4.5h7.2L18.5 8.6V19a1.2 1.2 0 0 1-1.2 1.2H7A1.2 1.2 0 0 1 5.8 19V5.7A1.2 1.2 0 0 1 7 4.5Z" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M14 4.6V8.7h4.3" fill="none" stroke="currentColor" strokeWidth="1.6" /></Glyph>{count} 篇论文</span>
@@ -54,5 +58,6 @@ export function WorkspaceFrame({ project, section, children }: { project: Projec
       </nav>
       <div id="main" tabIndex={-1} className="ws-main">{children}</div>
     </div>
+    <WorkspaceRenameDialog project={renaming ? project : null} onClose={() => setRenaming(false)} />
   </div>;
 }

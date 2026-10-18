@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { prepareWorkspace, researchDecision, startResearch, uploadPaper, workspacePapers } from "../../api";
 import { projects, useProjects } from "../../projects";
 import { ResearchSources } from "../../components/ResearchSources";
+import { RenameDialog } from "../../components/RenameDialog";
+import { EditOutlined } from "@ant-design/icons";
 import { Button } from "antd";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { CollectButton } from "../../components/CollectButton";
@@ -253,7 +255,7 @@ function Assistant({ id, chatId, onTitle, onBusy }: { id: string; chatId: string
   </div>;
 }
 
-interface SavedChat { id: string; title: string }
+interface SavedChat { id: string; title: string; titleEdited?: boolean }
 function AssistantSessions({ id }: { id: string }) {
   const [params, setParams] = useSearchParams();
   const [chats, setChats] = useState<SavedChat[]>(() => {
@@ -266,6 +268,8 @@ function AssistantSessions({ id }: { id: string }) {
     return [{ id: "first", title: "研究对话" }];
   });
   const [busy, setBusy] = useState(false);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const renameChat = chats.find(chat => chat.id === renameId);
   const seeded = useRef(false);
   const active = chats.find(c => c.id === params.get("conversation")) ?? chats[0];
   useEffect(() => { try { localStorage.setItem(`research-chats:${id}`, JSON.stringify(chats)); } catch { /* retain in memory */ } }, [id, chats]);
@@ -282,10 +286,15 @@ function AssistantSessions({ id }: { id: string }) {
     <aside className="research-chats" aria-label="研究对话列表">
       <h2>研究助手</h2><Button type="primary" block disabled={busy} onClick={create}>＋ 新建对话</Button>
       <p className="small-print">对话与资料选择保存在此浏览器</p>
-      <div className="research-chat-list">{chats.map(chat => <button type="button" key={chat.id} disabled={busy} aria-current={active.id === chat.id ? "true" : undefined} onClick={() => setParams({ conversation: chat.id })}>{chat.title}</button>)}</div>
+      <div className="research-chat-list">{chats.map(chat => <div className={`research-chat-row${active.id === chat.id ? " is-active" : ""}`} key={chat.id}>
+        <button type="button" className="research-chat-open" disabled={busy} aria-current={active.id === chat.id ? "true" : undefined} title={chat.title} onClick={() => setParams({ conversation: chat.id })}>{chat.title}</button>
+        <button type="button" className="research-chat-rename" aria-label={`重命名对话：${chat.title}`} title="重命名对话" onClick={() => setRenameId(chat.id)}><EditOutlined /></button>
+      </div>)}</div>
       <Link to={`/w/${id}/studio`}>查看原研究台历史对话</Link>
     </aside>
-    <Assistant key={active.id} id={id} chatId={active.id} onBusy={setBusy} onTitle={title => setChats(list => list.map(c => c.id === active.id ? { ...c, title } : c))} />
+    <Assistant key={active.id} id={id} chatId={active.id} onBusy={setBusy} onTitle={title => setChats(list => list.map(c => c.id === active.id && !c.titleEdited ? { ...c, title } : c))} />
+    <RenameDialog open={!!renameChat} title="重命名对话" label="对话名称" value={renameChat?.title ?? ""} maxLength={120}
+      onClose={() => setRenameId(null)} onSave={title => setChats(list => list.map(chat => chat.id === renameId ? { ...chat, title, titleEdited: true } : chat))} />
   </div>;
 }
 
