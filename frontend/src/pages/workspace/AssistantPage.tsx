@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { analyzePapers, searchPapers, uploadPaper } from "../../api";
+import { prepareWorkspace, researchDecision, startResearch, uploadPaper, workspacePapers } from "../../api";
 import { projects } from "../../projects";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { CollectButton } from "../../components/CollectButton";
 import { formatAuthors, paperFacts } from "../../components/PaperRow";
-import type { AnalyzePaperResult, Paper } from "../../types";
+import type { AnalyzePaperResult, Paper, ResearchTask } from "../../types";
 import { paperKey } from "../../types";
 import { paperLocation } from "../../workspace";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
 
-interface Turn { id: number; question: string; answeredAt?: number; pending?: boolean; tool?: "search" | "analyze"; error?: string; papers?: Paper[]; total?: number; analysis?: AnalyzePaperResult; note?: string }
+interface Turn { id: number; question: string; answeredAt?: number; pending?: boolean; tool?: "search" | "analyze" | "agent"; error?: string; papers?: Paper[]; total?: number; analysis?: AnalyzePaperResult; task?: ResearchTask; note?: string }
 
 const WELCOME = ["你好！我是你的 AI 研究助手。", "我可以帮你搜索和阅读学术论文、梳理研究方向、提炼关键信息，并将有价值的论文加入当前工作区。你想研究什么主题呢？"];
 
@@ -72,10 +72,6 @@ function UserBubble({ time, children }: { time: number; children: ReactNode }) {
   </div>;
 }
 
-function wantsAnalysis(text: string) {
-  return /分析|精读|创新点|局限|技术方案|实验结果|研究内容/.test(text);
-}
-
 function loadTurns(id: string): Turn[] {
   const key = `ws-ask:${id}`;
   try {
@@ -103,6 +99,9 @@ function Assistant({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"deep" | "standard">("deep");
   const [modeOpen, setModeOpen] = useState(false);
+  const [scope, setScope] = useState<"current" | "selected" | "workspace">("selected");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [currentId, setCurrentId] = useState("");
   const [attachNote, setAttachNote] = useState("");
   const [attaching, setAttaching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -120,7 +119,7 @@ function Assistant({ id }: { id: string }) {
     if (node) node.scrollTop = node.scrollHeight;
   }, [turns]);
 
-  function send() {
+  async function send() {
     const question = draft.trim();
     if (!question || busy) return;
     const turnId = Date.now();
@@ -129,21 +128,32 @@ function Assistant({ id }: { id: string }) {
     abortRef.current = abort;
     setBusy(true);
     setDraft("");
-    const analyze = wantsAnalysis(question);
-    const paperIds = Object.entries(project?.papers ?? {}).sort((a, b) => (b[1].openedAt ?? b[1].addedAt).localeCompare(a[1].openedAt ?? a[1].addedAt)).map(([key]) => key);
-    if (analyze && !paperIds.length) {
-      setTurns(current => [...current, { id: turnId, question, answeredAt: Date.now(), tool: "analyze", error: "工作区里还没有论文，无法分析。可以先搜索并收藏。" }]);
-      setBusy(false);
-      return;
-    }
-    const ids = paperIds.slice(0, 5);
-    const deep = mode === "deep";
-    setTurns(current => [...current, { id: turnId, question, pending: true, tool: analyze ? "analyze" : "search", note: analyze && paperIds.length > 5 ? "工作区论文超过 5 篇，本次分析最近阅读的 5 篇。" : undefined }]);
-    const request = analyze
-      ? analyzePapers({ paper_ids: ids, workspace_id: id, depth: deep ? "deep" : "standard" }, abort.signal).then(analysis => setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, answeredAt: Date.now(), analysis } : turn)))
-      : searchPapers({ q: question, page: 1, pageSize: deep ? 8 : 6, sort: "relevance", source: "all" }, abort.signal).then(result => setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, answeredAt: Date.now(), papers: result.papers, total: result.total } : turn)));
-    request.catch((err: Error) => setTurns(current => current.flatMap(turn => turn.id !== turnId ? [turn] : abort.signal.aborted ? [] : [{ ...turn, pending: false, answeredAt: Date.now(), error: err.message || (analyze ? "分析失败，请重试" : "搜索失败，请重试") }])))
-      .finally(() => { if (abortRef.current === abort) setBusy(false); });
+    setTurns(current => [...current, { id: turnId, question, pending: true, tool: "agent" }]);
+    try {
+      await prepareWorkspace(id, project?.name || "研究工作区", Object.keys(project?.papers ?? {}), abort.signal);
+      const task = await startResearch(question, { autoApprove: mode !== "deep", mode: mode === "deep" ? "auto" : "react",
+        workspaceId: id, scope, currentPaperId: currentId || undefined, selectedPaperIds: selectedIds }, abort.signal);
+      setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, answeredAt: Date.now(), task } : turn));
+      projects.syncPapers(id, await workspacePapers(id, abort.signal));
+    } catch (err) {
+      if (!abort.signal.aborted) setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, error: err instanceof Error ? err.message : "研究任务失败" } : turn));
+    } finally { if (abortRef.current === abort) setBusy(false); }
+  }
+
+  async function decide(turn: Turn, approved: boolean) {
+    if (!turn.task || busy) return;
+    setBusy(true);
+    const abort = new AbortController();
+    abortRef.current = abort;
+    try {
+      const paused = turn.task.interrupt;
+      const task = await researchDecision(turn.task.task_id, paused?.type === "review_plan"
+        ? { approved, queries: paused.queries } : { approved_ids: approved ? paused?.paper_ids ?? [] : [] }, abort.signal);
+      setTurns(current => current.map(item => item.id === turn.id ? { ...item, task, answeredAt: Date.now(), error: undefined } : item));
+      projects.syncPapers(id, await workspacePapers(id, abort.signal));
+    } catch (err) {
+      if (!abort.signal.aborted) setTurns(current => current.map(item => item.id === turn.id ? { ...item, error: err instanceof Error ? err.message : "任务恢复失败" } : item));
+    } finally { setBusy(false); }
   }
 
   async function onAttach(file: File) {
@@ -170,7 +180,15 @@ function Assistant({ id }: { id: string }) {
         {turns.map(turn => <div className="assistant-pair" key={turn.id}>
           <UserBubble time={turn.id}>{turn.question}</UserBubble>
           <AssistantBubble time={turn.answeredAt ?? turn.id}>
-            {turn.pending ? <p className="pending">{turn.tool === "analyze" ? "正在分析论文…" : "正在搜索论文…"}</p> : null}
+            {turn.pending ? <p className="pending">正在研究并收集资料…</p> : null}
+            {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer}</p> : null}
+            {turn.task?.status === "waiting" ? <div>
+              <p>{turn.task.interrupt?.hint || "请确认研究计划后继续。"}</p>
+              {turn.task.interrupt?.queries?.map(query => <p key={query}>{query}</p>)}
+              {turn.task.interrupt?.paper_ids?.map(ref => <p key={ref}>{project?.papers[ref]?.paper.title || ref}</p>)}
+              <button type="button" disabled={busy} onClick={() => void decide(turn, true)}>确认并继续</button>{" "}
+              <button type="button" disabled={busy} onClick={() => void decide(turn, false)}>拒绝本次操作</button>
+            </div> : null}
             {turn.note ? <p className="small-print">{turn.note}</p> : null}
             {turn.analysis ? <><p className="small-print">已使用论文分析，提取研究内容、技术方案、创新点、实验结果和局限性。</p><AnalyzeResult result={turn.analysis} /></> : null}
             {turn.error ? <p className="inline-error" role="alert">{turn.error}</p> : null}
@@ -190,7 +208,19 @@ function Assistant({ id }: { id: string }) {
       </div>
     </div>
     {attachNote ? <p className="assistant-attach-note" role="status">{attachNote}</p> : null}
-    <form className="assistant-composer" onSubmit={event => { event.preventDefault(); send(); }}>
+    <div className="research-scope" aria-label="研究范围">
+      <label>研究范围 <select aria-label="研究范围" disabled={busy} value={scope} onChange={event => setScope(event.target.value as typeof scope)}>
+        <option value="selected">已选论文</option><option value="current">当前论文</option><option value="workspace">整个工作区</option>
+      </select></label>
+      {scope === "current" ? <select aria-label="当前论文" value={currentId} disabled={busy} onChange={event => setCurrentId(event.target.value)}>
+        <option value="">请选择论文</option>{Object.entries(project?.papers ?? {}).map(([key, item]) => <option key={key} value={key}>{item.paper.title}</option>)}
+      </select> : null}
+      {scope === "selected" ? <select multiple aria-label="选择研究论文" disabled={busy} value={selectedIds} onChange={event => setSelectedIds(Array.from(event.target.selectedOptions, option => option.value))}>
+        {Object.entries(project?.papers ?? {}).map(([key, item]) => <option key={key} value={key}>{item.paper.title}</option>)}
+      </select> : null}
+      <span className="small-print">未选论文时可搜索新论文或讨论通用概念。</span>
+    </div>
+    <form className="assistant-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
       <button type="button" className="assistant-clip" aria-label="上传 PDF" disabled={attaching} onClick={() => fileRef.current?.click()}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 12.2 14.6 6a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a4.4 4.4 0 0 1-6.2-6.2l7.6-7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
       </button>

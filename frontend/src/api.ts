@@ -171,10 +171,35 @@ export function compareLibrary(paperIds: string[], signal?: AbortSignal) {
   return postJson<CompareTable>("/api/compare", { paper_ids: paperIds }, signal);
 }
 
-export function startResearch(goal: string, options: { autoApprove: boolean; yearFrom?: number | null; yearTo?: number | null }, signal?: AbortSignal) {
+export function startResearch(goal: string, options: { autoApprove: boolean; yearFrom?: number | null; yearTo?: number | null; workspaceId?: string; scope?: "current" | "selected" | "workspace"; currentPaperId?: string; selectedPaperIds?: string[]; mode?: "auto" | "react" | "plan" }, signal?: AbortSignal) {
   return postJson<ResearchTask>("/api/research/tasks", {
     goal, auto_approve: options.autoApprove, year_from: options.yearFrom ?? null, year_to: options.yearTo ?? null,
+    workspace_id: options.workspaceId, scope: options.scope ?? "selected", current_paper_id: options.currentPaperId,
+    selected_paper_ids: options.selectedPaperIds ?? [], mode: options.mode ?? "auto",
   }, signal);
+}
+
+export function researchDecision(taskId: string, decision: { approved?: boolean; approved_ids?: string[]; queries?: string[] }, signal?: AbortSignal) {
+  return postJson<ResearchTask>(`/api/research/tasks/${encodeURIComponent(taskId)}/resume`, decision, signal);
+}
+
+export async function prepareWorkspace(workspaceId: string, name: string, paperIds: string[], signal?: AbortSignal) {
+  await postJson("/api/workspaces/register", { workspace_id: workspaceId, name }, signal);
+  if (paperIds.length) {
+    for (let offset = 0; offset < paperIds.length; offset += 50) {
+      const result = await postJson<{ failed: number; results: { status: string; message?: string }[] }>("/api/tools/add_papers_to_workspace", {
+        workspace_id: workspaceId, paper_ids: paperIds.slice(offset, offset + 50),
+      }, signal);
+      if (result.failed) throw new Error(result.results.find(item => item.status === "failed")?.message || "工作区同步失败");
+    }
+  }
+}
+
+export async function workspacePapers(workspaceId: string, signal?: AbortSignal): Promise<Paper[]> {
+  const response = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/papers`, { signal });
+  if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
+  const body = await response.json() as { papers: { paper: Paper }[] };
+  return body.papers.map(item => item.paper);
 }
 
 export function resumeResearch(taskId: string, queries: string[], signal?: AbortSignal) {

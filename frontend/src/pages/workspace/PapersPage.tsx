@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Popconfirm, Segmented, Upload } from "antd";
-import { DeleteOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
+import { ArrowRightOutlined, DeleteOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { analyzePapers, uploadPaper } from "../../api";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
@@ -69,15 +69,24 @@ export default function PapersPage() {
         <h1>论文库</h1>
         <p>在当前工作区中添加的论文，可以进行精读、分析，并用于 AI 问答。</p>
       </div>
-      {entries.length ? <Link to="/search">去搜索论文</Link> : null}
+      {entries.length ? <Link className="lib-search-link" to="/search">去搜索论文<ArrowRightOutlined aria-hidden /></Link> : null}
     </header>
-    {entries.length ? <div className="ws-tools">
-      <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选工作区论文" placeholder="筛选标题、作者或年份" />
-      <span className="small-print">{needle ? `匹配 ${shown.length} / ${entries.length} 篇` : `共 ${entries.length} 篇`}</span>
-      <Upload className="ws-upload" accept=".pdf,application/pdf" maxCount={1} showUploadList={false} beforeUpload={file => { void onUpload(file); return false; }}>
-        <Button type="primary" icon={<UploadOutlined />} loading={uploading}>{uploading ? "正在解析" : "上传论文"}</Button>
-      </Upload>
-    </div> : null}
+    {entries.length ? <section className="lib-toolbar">
+      <div className="ws-tools">
+        <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选工作区论文" placeholder="筛选标题、作者或年份" />
+        <span className="small-print">{needle ? `匹配 ${shown.length} / ${entries.length} 篇` : `共 ${entries.length} 篇`}</span>
+        <Upload className="ws-upload" accept=".pdf,application/pdf" maxCount={1} showUploadList={false} beforeUpload={file => { void onUpload(file); return false; }}>
+          <Button type="primary" icon={<UploadOutlined />} loading={uploading}>{uploading ? "正在解析" : "上传论文"}</Button>
+        </Upload>
+      </div>
+      <div className="analyze-bar">
+        <span className="analyze-label">分析字段：</span>
+        <Checkbox.Group value={fields} options={FIELDS.map(([value, label]) => ({ value, label }))} onChange={value => setFields(value as string[])} />
+        <Segmented value={depth} onChange={value => setDepth(value as "standard" | "deep")} options={[{ value: "standard", label: "标准" }, { value: "deep", label: "深度" }]} />
+        <Button disabled={!picked.length || !fields.length} loading={analyzing} onClick={analyze}>分析所选</Button>
+        <span className="small-print">已选 {picked.length} / 5</span>
+      </div>
+    </section> : null}
     {uploadError ? <Alert type="error" showIcon message={uploadError} /> : null}
     {uploadNote ? <Alert type="success" showIcon message={uploadNote} /> : null}
     {!entries.length ? <section className="lib-empty">
@@ -108,12 +117,6 @@ export default function PapersPage() {
       </div>
       <p className="lib-foot">支持从搜索结果加入论文，也支持上传自己的 PDF 文件。</p>
     </section> : <>
-      <div className="analyze-bar">
-        <Checkbox.Group value={fields} options={FIELDS.map(([value, label]) => ({ value, label }))} onChange={value => setFields(value as string[])} />
-        <Segmented value={depth} onChange={value => setDepth(value as "standard" | "deep")} options={[{ value: "standard", label: "标准" }, { value: "deep", label: "深度" }]} />
-        <Button type="primary" disabled={!picked.length || !fields.length} loading={analyzing} onClick={analyze}>分析所选</Button>
-        <span className="small-print">已选 {picked.length} / 5</span>
-      </div>
       {analyzeError ? <Alert type="error" showIcon message={analyzeError} /> : null}
       {report ? <AnalyzeResult result={report} /> : null}
       {!shown.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的论文"><Button onClick={() => setFilter("")}>清除筛选</Button></Empty> : <div className="paper-list">

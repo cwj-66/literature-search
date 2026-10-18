@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
-import { AppstoreOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, BookOutlined, ExperimentOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
 import { Link, useLocation } from "react-router-dom";
 import { projects, useProjects } from "../projects";
 import { sectionOf, workspaceContext } from "../workspace";
@@ -10,6 +10,8 @@ const scrollPositions = new Map<string, number>();
 const navigation = [
   { label: "研究工作区", href: "/", key: "home", icon: <AppstoreOutlined aria-hidden /> },
   { label: "论文搜索", href: "/search", key: "search", icon: <SearchOutlined aria-hidden /> },
+  { label: "文献库", href: "/library", key: "library", icon: <BookOutlined aria-hidden /> },
+  { label: "研究台", href: "/studio", key: "studio", icon: <ExperimentOutlined aria-hidden /> },
   { label: "设置", href: "/settings", key: "settings", icon: <SettingOutlined aria-hidden /> },
 ];
 
@@ -77,17 +79,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
   }}>
     <a href="#main" className="skip-link">跳到主要内容</a>
-    {inside && project && ctx ? <WorkspaceFrame project={project} section={ctx.section}>{children}</WorkspaceFrame> : <>
-    <aside className="shell-side">
-      <Link to="/" className="shell-brand" aria-label="文献研究助手，返回工作区">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.2c.4 0 .8.2 1.1.5l2.2 2.2c.3.3.5.7.5 1.1V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5Z" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M8 4.5V8h8" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
-        <span>文献研究助手</span>
-      </Link>
-      <nav className="shell-nav" aria-label="主要导航">
-        {navigation.map(item => <Link key={item.key} to={item.href} aria-current={active === item.key ? "page" : undefined}>{item.icon}{item.label}</Link>)}
-      </nav>
-    </aside>
-    <div id="main" tabIndex={-1} className="app-main">{children}</div>
-    </>}
+    {inside && project && ctx
+      ? <div className="route-view is-shell" key={location.pathname}><WorkspaceFrame project={project} section={ctx.section}>{children}</WorkspaceFrame></div>
+      : <>
+        <aside className="shell-side">
+          <Link to="/" className="shell-brand" aria-label="文献研究助手，返回工作区">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.2c.4 0 .8.2 1.1.5l2.2 2.2c.3.3.5.7.5 1.1V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5Z" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M8 4.5V8h8" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
+            <span>文献研究助手</span>
+          </Link>
+          <nav className="shell-nav" aria-label="主要导航">
+            {navigation.map(item => <Link key={item.key} to={item.href} aria-current={active === item.key ? "page" : undefined}>{item.icon}{item.label}</Link>)}
+          </nav>
+          <p className="shell-foot">面向文献检索、精读与调研的工作台</p>
+        </aside>
+        <div id="main" tabIndex={-1} className="app-main"><div className="route-view" key={location.pathname}>{children}</div></div>
+      </>}
   </div>;
 }

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { ConfigProvider } from "antd";
+import { Button, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
@@ -39,7 +39,7 @@ export default function App() {
               <Route path="/paper" element={<PaperPage />} />
               <Route path="/recommend" element={<RecommendPage />} />
               <Route path="/graph" element={<KnowledgeGraphPage />} />
-              <Route path="*" element={<main className="page page-narrow"><h1 className="page-title">页面不存在</h1><Link to="/">返回工作台</Link></main>} />
+              <Route path="*" element={<main className="page page-narrow"><div className="page-missing"><div className="page-missing-inner"><p className="page-missing-code">404</p><h1>这个页面不存在</h1><p>链接可能已经失效，或者对应的研究工作区已被删除。</p><Button type="primary" size="large"><Link to="/">返回研究工作区</Link></Button></div></div></main>} />
             </Routes>
           </Suspense>
         </AppLayout>

@@ -41,8 +41,8 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
           type: "circle",
           style: {
             size: (datum) => (datum.data?.center ? 44 : 28),
-            fill: (datum) => (datum.data?.center ? tokens.accent : tokens.accentSoft),
-            stroke: tokens.accent,
+            fill: (datum) => (datum.data?.center ? tokens.brand : tokens.brandSoft),
+            stroke: tokens.brand,
             lineWidth: 1.5,
             labelText: (datum) => String(datum.data?.label ?? ""),
             labelPlacement: "bottom",
@@ -57,7 +57,7 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
         edge: {
           type: (datum) => (datum.data?.type === "similar" ? "quadratic" : "line"),
           style: {
-            stroke: (datum) => (datum.data?.type === "cites" ? tokens.accent : "#9a9d9f"),
+            stroke: (datum) => (datum.data?.type === "cites" ? tokens.brand : "#9a9d9f"),
             lineWidth: 1.5,
             lineDash: (datum) => (datum.data?.type === "similar" ? [5, 4] : []),
             endArrow: (datum) => Boolean(datum.data?.directed),

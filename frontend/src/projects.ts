@@ -58,6 +58,14 @@ export function findKey(project: Project | undefined, paper: { id: string; local
 }
 
 export const projects = {
+  syncPapers(id: string, incoming: Paper[]) {
+    commit({ ...state, projects: state.projects.map(project => project.id !== id ? project : {
+      ...project, papers: Object.fromEntries(incoming.map(paper => {
+        const existing = project.papers[findKey(project, paper)];
+        return [paperKey(paper), existing ? { ...existing, paper } : { paper, status: "unread" as ReadStatus, note: "", addedAt: new Date().toISOString() }];
+      })),
+    }) });
+  },
   create(name: string, description = "", extra?: { cover?: CoverId; coverImage?: string }) {
     const id = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const now = new Date().toISOString();
