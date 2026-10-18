@@ -27,7 +27,7 @@ export default function App() {
           <Suspense fallback={<div className="route-loading" role="status">正在加载页面…</div>}>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              <Route path="/w/:id" element={<StudioPage />} />
+              <Route path="/w/:id" element={<AssistantPage />} />
               <Route path="/w/:id/studio" element={<StudioPage />} />
               <Route path="/w/:id/research" element={<AssistantPage />} />
               <Route path="/w/:id/library" element={<WorkspacePapersPage />} />

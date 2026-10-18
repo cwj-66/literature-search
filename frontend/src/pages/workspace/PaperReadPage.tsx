@@ -7,7 +7,7 @@ import {
   StarOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { createConversation, fetchPaper, prepareWorkspace, startAnalysis } from "../../api";
+import { fetchPaper, prepareWorkspace, startAnalysis } from "../../api";
 import { useAnalysisPolling } from "../../useAnalysisPolling";
 import { Abstract, formatAuthors } from "../../components/PaperRow";
 import { AnalysisProgress } from "../../components/AnalysisProgress";
@@ -90,8 +90,7 @@ export default function PaperReadPage() {
     setOpeningChat(true); setError("");
     try {
       await prepareWorkspace(id, project.name, Object.keys(project.papers));
-      const chat = await createConversation(id, [key]);
-      navigate(`/w/${id}/studio?chat=${chat.id}`);
+      navigate(`/w/${id}/research?papers=${encodeURIComponent(key)}`);
     } catch (err) { setError(err instanceof Error ? err.message : "新建对话失败"); }
     finally { setOpeningChat(false); }
   }
@@ -139,7 +138,7 @@ export default function PaperReadPage() {
       <div className="read-actions">
         <Button type={result ? "default" : "primary"} icon={<PlayCircleOutlined />} loading={busy} onClick={rerun}>{result ? "重新分析" : "开始分析"}</Button>
         <Button icon={<PlusSquareOutlined />} onClick={() => navigate(`/w/${id}/compare?pick=${encodeURIComponent(key)}`)}>加入论文对比</Button>
-        <Button loading={openingChat} onClick={openChat}>到研究台提问</Button>
+        <Button loading={openingChat} onClick={openChat}>与研究助手讨论</Button>
         <Button icon={<ExportOutlined />} disabled={!result} onClick={exportAnalysis}>导出分析</Button>
       </div>
       {error ? <Alert type="error" showIcon message={error} /> : null}

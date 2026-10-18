@@ -27,7 +27,7 @@ export function workspaceContext(pathname: string, search: string): { id: string
   }
   const match = path.match(/^\/w\/([^/]+)(?:\/(library|compare|graph|studio|research|p)(?:\/([^/]+))?)?\/?$/);
   if (!match || (match[2] === "p" && !match[3])) return null;
-  const section: WorkspaceSection = !match[2] || match[2] === "studio" ? "studio"
+  const section: WorkspaceSection = match[2] === "studio" ? "studio"
     : match[2] === "p" ? "reading"
     : match[2] === "library" || match[2] === "compare" || match[2] === "graph" ? match[2]
     : "assistant";

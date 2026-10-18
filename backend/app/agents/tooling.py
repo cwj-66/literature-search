@@ -62,13 +62,14 @@ _CURRENT_OP: contextvars.ContextVar[str | None] = contextvars.ContextVar("resear
 
 
 def allowed_tools(state: dict) -> set[str]:
+    legacy = LEGACY_TOOLS if state.get("accessible_paper_ids") is None else set()
     domains = [domain for domain in state.get("domains") or [] if domain in DOMAINS or domain == "*"]
     if not domains or "*" in domains:
-        return {tool["name"] for tool in ALL_TOOLS} | LEGACY_TOOLS
+        return {tool["name"] for tool in ALL_TOOLS} | legacy
     names = set()
     for domain in domains:
         names |= DOMAIN_TOOLS[domain] | DOMAIN_DEPENDENCIES[domain]
-    return names | LEGACY_TOOLS
+    return names | legacy
 
 
 def catalog_for(state: dict) -> list[dict]:
@@ -238,6 +239,13 @@ def _confirm(kind: str, requested: list[str], **payload) -> tuple[list[str], dic
     return [ref for ref in requested if ref in granted], decision
 
 
+_MISSING = object()
+
+# 账本写入失败（副作用已发生但记录未提交）时的进程内不确定结果：重放优先取它，
+# 避免同一操作在同进程内被盲目重做；跨重启仍可能重做，属已声明的不确定窗口。
+_UNCOMMITTED: dict[str, object] = {}
+
+
 async def _once(state: dict, tool: str, args: dict, producer) -> tuple[dict, bool]:
     """执行副作用操作；同一稳定操作 ID 重放时返回账本结果。返回 (result, replayed)。"""
     task_id, op_id = state.get("task_id"), _CURRENT_OP.get()
@@ -247,8 +255,15 @@ async def _once(state: dict, tool: str, args: dict, producer) -> tuple[dict, boo
     hit = await asyncio.to_thread(store.operation_get, key)
     if hit is not None:
         return hit, True
+    pending = _UNCOMMITTED.get(key, _MISSING)
+    if pending is not _MISSING:
+        return pending, True
     result = await producer()
-    await asyncio.to_thread(store.operation_put, key, task_id, op_id, tool, args, result)
+    try:
+        await asyncio.to_thread(store.operation_put, key, task_id, op_id, tool, args, result)
+    except Exception:
+        _UNCOMMITTED[key] = result
+        raise
     return result, False
 
 
@@ -472,10 +487,14 @@ async def _tool_analyze_paper(state: dict, args: dict) -> tuple[str, dict]:
     ids = ids[:MAX_TOOL_PAPERS]
     if not ids:
         return json.dumps({"error": "请提供至少一篇论文"}, ensure_ascii=False), {}
+    if remaining_budget(state)["llm_calls_left"] <= 0:
+        return json.dumps({"error": "模型调用次数用尽，本调用未执行"}, ensure_ascii=False), {
+            "events_extra": [{"step": "tool", "name": "analyze_paper", "summary": "LLM 预算不足，调用被拦截"}],
+        }
     try:
         report, cache_hit = await store.cached_call(
             "analyze", {"ids": ids, "depth": "standard"},
-            lambda: analyze_tool.analyze_paper(ids, depth="standard"),
+            lambda: analyze_tool.analyze_paper(ids, depth="standard", llm_calls_left=remaining_budget(state)["llm_calls_left"]),
         )
     except (llm.AnalysisError, ValueError) as exc:
         return json.dumps({"error": str(exc)[:200]}, ensure_ascii=False), {"llm_calls": state.get("llm_calls", 0) + 1}
@@ -583,6 +602,9 @@ async def _tool_request_deep_analysis(state: dict, args: dict) -> tuple[str, dic
         if deep_reads >= max_deep:
             gaps.append(f"深读预算不足:{pid}")
             continue
+        if remaining_budget(acc)["llm_calls_left"] <= 0:
+            gaps.append(f"模型额度不足:{pid}")
+            continue
         if pid in read_ids:
             continue
         paper = PaperOut.model_validate(papers_by_id[pid])
@@ -667,9 +689,26 @@ def _metadata_records(name: str, report: dict) -> list[dict]:
 async def _tool_catalog(state: dict, name: str, args: dict) -> tuple[str, dict]:
     context = ToolContext(**{key: state[key] for key in ToolContext.model_fields if key in state})
     args = dict(args)
+    if name == "analyze_paper":
+        llm_left = remaining_budget(state)["llm_calls_left"]
+        if llm_left <= 0:
+            return json.dumps({"tool": name, "status": "blocked", "message": "模型调用次数用尽，本调用未执行"}, ensure_ascii=False), {
+                "operations": _operation(state, name, "budget_blocked"),
+                "events_extra": [{"step": "tool", "name": name, "summary": "LLM 预算不足，调用被拦截"}],
+                "past_extra": [[name, "blocked"]],
+            }
+        # 逐篇约消耗一次模型额度：按剩余额度截断范围，不足的留给后续轮次或缺口说明。
+        if args.get("paper_ids"):
+            args["paper_ids"] = list(args["paper_ids"])[:llm_left]
     privileged = name in {"add_papers_to_workspace", "remove_paper_from_workspace"} or (name == "analyze_paper" and args.get("depth") == "deep")
     updates: dict = {}
     if privileged:
+        if name == "analyze_paper" and args.get("depth") == "deep" and remaining_budget(state)["deep_reads_left"] <= 0:
+            return json.dumps({"tool": name, "status": "blocked", "message": "深读篇数用尽，本调用未执行"}, ensure_ascii=False), {
+                "operations": _operation(state, name, "budget_blocked"),
+                "events_extra": [{"step": "tool", "name": name, "summary": "深读预算不足，调用被拦截"}],
+                "past_extra": [[name, "blocked"]],
+            }
         ids = [ref for ref in (args.get("paper_ids") or [args.get("paper_id")]) if ref]
         approved, decision = _confirm("confirm_analysis" if name == "analyze_paper" else "confirm_workspace", ids, tool=name,
                                       workspace_id=context.workspace_id or args.get("workspace_id"), hint="确认本次操作及论文范围")
@@ -685,10 +724,15 @@ async def _tool_catalog(state: dict, name: str, args: dict) -> tuple[str, dict]:
             args["paper_id"] = approved[0]
         else:
             args["paper_ids"] = approved
+        if name == "analyze_paper" and args.get("depth") == "deep":
+            approved = approved[:remaining_budget(state)["deep_reads_left"]]
+            args["paper_ids"] = approved
         report, replayed = await _once(state, name, {"args": args, "workspace_id": context.workspace_id},
                                        lambda: research_tools.execute(name, args, context))
         report = dict(report)
         updates["operations"] = _operation(state, name, report.get("status", "completed"), replayed, paper_ids=approved)
+        if name == "analyze_paper" and args.get("depth") == "deep" and approved:
+            updates["deep_reads"] = state.get("deep_reads", 0) + len(approved)
     else:
         report = await research_tools.execute(name, args, context)
     updates.update({"events_extra": [{"step": "tool", "name": name, "summary": report.get("status", "completed")}],
@@ -860,10 +904,8 @@ async def tool_node(state: dict) -> dict:
         try:
             runner = _run_business_tool(acc, name, args)
             timeout = LLM_TOOL_TIMEOUT if name in LLM_TOOLS or name == "assess_coverage" else TOOL_TIMEOUT
-            if privileged[index]:
-                content, updates = await runner
-            else:
-                content, updates = await asyncio.wait_for(runner, timeout=timeout)
+            # HITL 确认走 interrupt 立即抛出，等待不计入此处；批准后执行统一施加调用超时。
+            content, updates = await asyncio.wait_for(runner, timeout=timeout)
         except asyncio.TimeoutError:
             content = json.dumps({"status": "failed", "error": {"code": "timeout", "retryable": True, "message": f"工具执行超过 {int(timeout)} 秒"}}, ensure_ascii=False)
             updates = {"events_extra": [{"step": "tool", "name": name, "summary": "执行超时"}]}

@@ -73,13 +73,14 @@ def get_task(task_id: str) -> dict | None:
         if not row:
             return None
         payload = json.loads(row["payload"])
+        # 权威列（status 等）覆盖 payload 中的同名快照字段，恢复占用后对外仍显示 running。
         return {
+            **payload,
             "task_id": row["task_id"],
             "thread_id": row["thread_id"],
             "status": row["status"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
-            **payload,
         }
 
 

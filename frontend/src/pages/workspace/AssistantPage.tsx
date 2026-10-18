@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { prepareWorkspace, researchDecision, startResearch, uploadPaper, workspacePapers } from "../../api";
-import { projects } from "../../projects";
+import { projects, useProjects } from "../../projects";
+import { ResearchSources } from "../../components/ResearchSources";
+import { Button } from "antd";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { CollectButton } from "../../components/CollectButton";
 import { formatAuthors, paperFacts } from "../../components/PaperRow";
@@ -83,13 +85,15 @@ function loadTurns(id: string): Turn[] {
   }
 }
 
-function Assistant({ id }: { id: string }) {
+function Assistant({ id, chatId, onTitle, onBusy }: { id: string; chatId: string; onTitle: (title: string) => void; onBusy: (busy: boolean) => void }) {
+  const storageId = `${id}:${chatId}`;
+  const { projects: allProjects } = useProjects();
   const { project } = useWorkspaceProject();
   const [draft, setDraft] = useState("");
-  const [turns, setTurns] = useState<Turn[]>(() => loadTurns(id));
+  const [turns, setTurns] = useState<Turn[]>(() => loadTurns(storageId));
   const logRef = useRef<HTMLDivElement>(null);
   const [greetAt] = useState(() => {
-    const key = `ws-ask-greet:${id}`;
+    const key = `ws-ask-greet:${storageId}`;
     const saved = Number(localStorage.getItem(key));
     if (Number.isFinite(saved) && saved > 0) return saved;
     const now = Date.now();
@@ -99,9 +103,12 @@ function Assistant({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"deep" | "standard">("deep");
   const [modeOpen, setModeOpen] = useState(false);
-  const [scope, setScope] = useState<"current" | "selected" | "workspace">("selected");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [currentId, setCurrentId] = useState("");
+  const scope = "selected" as const;
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`research-sources:${storageId}`) || "[]"); } catch { return []; }
+  });
+  useEffect(() => { try { localStorage.setItem(`research-sources:${storageId}`, JSON.stringify(selectedIds)); } catch { /* retain in memory */ } }, [storageId, selectedIds]);
+  useEffect(() => { onBusy(busy); }, [busy, onBusy]);
   const [attachNote, setAttachNote] = useState("");
   const [attaching, setAttaching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -109,7 +116,7 @@ function Assistant({ id }: { id: string }) {
   const here = `/w/${id}/research`;
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
-    try { localStorage.setItem(`ws-ask:${id}`, JSON.stringify(turns)); } catch { /* keep the in-memory thread if storage is full */ }
+    try { localStorage.setItem(`ws-ask:${storageId}`, JSON.stringify(turns)); } catch { /* keep the in-memory thread if storage is full */ }
   }, [id, turns]);
   useEffect(() => {
     setTurns(current => current.some(turn => turn.pending) ? current.map(turn => !turn.pending ? turn : turn.papers || turn.analysis ? { ...turn, pending: false } : { ...turn, pending: false, error: turn.error || "已中断，请再发一次。" }) : current);
@@ -122,6 +129,7 @@ function Assistant({ id }: { id: string }) {
   async function send() {
     const question = draft.trim();
     if (!question || busy) return;
+    if (!turns.length) onTitle(question.slice(0, 28));
     const turnId = Date.now();
     const abort = new AbortController();
     abortRef.current?.abort();
@@ -131,9 +139,13 @@ function Assistant({ id }: { id: string }) {
     setTurns(current => [...current, { id: turnId, question, pending: true, tool: "agent" }]);
     try {
       await prepareWorkspace(id, project?.name || "研究工作区", Object.keys(project?.papers ?? {}), abort.signal);
+      for (const source of allProjects.filter(p => p.id !== id && Object.keys(p.papers).some(key => selectedIds.includes(key)))) {
+        await prepareWorkspace(source.id, source.name, Object.keys(source.papers), abort.signal);
+      }
+      const history = turns.filter(t => t.task?.answer).slice(-6).map(t => `用户：${t.question}\n助手：${t.task?.answer}`).join("\n\n").slice(-16000);
       const task = await startResearch(question, { autoApprove: mode !== "deep", mode: "auto",
-        workspaceId: id, scope, currentPaperId: currentId || undefined, selectedPaperIds: selectedIds }, abort.signal);
-      setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, answeredAt: Date.now(), task } : turn));
+        workspaceId: id, scope, selectedPaperIds: selectedIds.slice(0, 50), accessiblePaperIds: selectedIds, conversationHistory: history }, abort.signal);
+      setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, answeredAt: Date.now(), task, papers: task.papers?.length ? task.papers : undefined } : turn));
       projects.syncPapers(id, await workspacePapers(id, abort.signal));
     } catch (err) {
       if (!abort.signal.aborted) setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, pending: false, error: err instanceof Error ? err.message : "研究任务失败" } : turn));
@@ -148,10 +160,10 @@ function Assistant({ id }: { id: string }) {
     try {
       const paused = turn.task.interrupt;
       const decision = paused?.type === "review_plan" ? { approved, queries: paused.queries }
-        : paused?.type === "clarify" ? (approved ? { scope, current_paper_id: currentId || undefined, selected_paper_ids: selectedIds } : { abort: true })
+        : paused?.type === "clarify" ? (approved ? { scope, selected_paper_ids: selectedIds.slice(0, 50), accessible_paper_ids: selectedIds } : { abort: true })
         : { approved_ids: approved ? paused?.paper_ids ?? [] : [] };
-      const task = await researchDecision(turn.task.task_id, decision, abort.signal);
-      setTurns(current => current.map(item => item.id === turn.id ? { ...item, task, answeredAt: Date.now(), error: undefined } : item));
+      const task = await researchDecision(turn.task.task_id, { ...decision, accessible_paper_ids: selectedIds }, abort.signal);
+      setTurns(current => current.map(item => item.id === turn.id ? { ...item, task, papers: task.papers?.length ? task.papers : undefined, answeredAt: Date.now(), error: undefined } : item));
       projects.syncPapers(id, await workspacePapers(id, abort.signal));
     } catch (err) {
       if (!abort.signal.aborted) setTurns(current => current.map(item => item.id === turn.id ? { ...item, error: err instanceof Error ? err.message : "任务恢复失败" } : item));
@@ -166,6 +178,7 @@ function Assistant({ id }: { id: string }) {
       const result = await uploadPaper(file, id);
       projects.select(id);
       projects.add(result.paper);
+      setSelectedIds(ids => [...new Set([...ids, paperKey(result.paper)])]);
       setAttachNote(result.index.status === "completed" ? `已加入论文库：${result.paper.title}` : (result.index.message || "已加入论文库，但向量入库失败"));
     } catch (err) {
       setAttachNote(err instanceof Error ? err.message : "上传失败");
@@ -175,6 +188,7 @@ function Assistant({ id }: { id: string }) {
   }
 
   return <div className="assistant">
+    <ResearchSources currentId={id} selected={selectedIds} onChange={setSelectedIds} disabled={busy} />
     <AssistantArt />
     <div className="assistant-log" ref={logRef} aria-live="polite">
       <div className="assistant-thread">
@@ -184,11 +198,12 @@ function Assistant({ id }: { id: string }) {
           <AssistantBubble time={turn.answeredAt ?? turn.id}>
             {turn.pending ? <p className="pending">正在研究并收集资料…</p> : null}
             {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer}</p> : null}
+            {turn.task?.evidence?.length ? <details className="research-evidence"><summary>查看引用依据 · {turn.task.evidence.length} 条</summary>{turn.task.evidence.map(e => <p key={e.evidence_id}><strong>[{e.evidence_id}]</strong> {e.paper_id ? <Link to={paperLocation(e.paper_id, here)}>查看论文</Link> : null}<br />{e.quote}</p>)}</details> : null}
             {turn.task?.status === "waiting" ? <div>
               <p>{turn.task.interrupt?.hint || "请确认研究计划后继续。"}</p>
               {turn.task.interrupt?.queries?.map(query => <p key={query}>{query}</p>)}
               {turn.task.interrupt?.paper_ids?.map(ref => <p key={ref}>{project?.papers[ref]?.paper.title || ref}</p>)}
-              {turn.task.interrupt?.type === "clarify" ? <p className="small-print">请先在下方选择当前论文或已选论文范围，再点击确认继续。</p> : null}
+              {turn.task.interrupt?.type === "clarify" ? <p className="small-print">请在顶部“研究资料”中选择论文，再点击确认继续。</p> : null}
               <button type="button" disabled={busy} onClick={() => void decide(turn, true)}>确认并继续</button>{" "}
               <button type="button" disabled={busy} onClick={() => void decide(turn, false)}>拒绝本次操作</button>
             </div> : null}
@@ -196,12 +211,12 @@ function Assistant({ id }: { id: string }) {
             {turn.analysis ? <><p className="small-print">已使用论文分析，提取研究内容、技术方案、创新点、实验结果和局限性。</p><AnalyzeResult result={turn.analysis} /></> : null}
             {turn.error ? <p className="inline-error" role="alert">{turn.error}</p> : null}
             {turn.papers ? <>
-              <p className="small-print">已用论文搜索{typeof turn.total === "number" ? `，找到 ${turn.total.toLocaleString("zh-CN")} 篇` : ""}。下面是前 {turn.papers.length} 篇，可以收藏到这个工作区。</p>
+              <p className="small-print">本次涉及的论文{typeof turn.total === "number" ? `，找到 ${turn.total.toLocaleString("zh-CN")} 篇` : ""}。下面是前 {turn.papers.length} 篇，可以收藏到这个工作区。</p>
               {turn.papers.map(paper => <article className="assistant-hit" key={paperKey(paper)}>
                 <h3><Link to={paperLocation(paperKey(paper), here)}>{paper.title}</Link></h3>
                 <p className="paper-byline">{formatAuthors(paper.authors)}</p>
                 <p className="paper-facts">{paperFacts(paper).map(item => <span key={item}>{item}</span>)}</p>
-                <CollectButton paper={paper} />
+                <CollectButton paper={paper} onSaved={saved => setSelectedIds(ids => [...new Set([...ids, paperKey(saved)])])} />
               </article>)}
               {!turn.papers.length ? <p className="empty-hint">没有找到相关论文。</p> : null}
               <p className="assistant-more"><Link to={`/search?q=${encodeURIComponent(turn.question)}`}>在论文搜索中查看全部</Link></p>
@@ -211,18 +226,7 @@ function Assistant({ id }: { id: string }) {
       </div>
     </div>
     {attachNote ? <p className="assistant-attach-note" role="status">{attachNote}</p> : null}
-    <div className="research-scope" aria-label="研究范围">
-      <label>研究范围 <select aria-label="研究范围" disabled={busy} value={scope} onChange={event => setScope(event.target.value as typeof scope)}>
-        <option value="selected">已选论文</option><option value="current">当前论文</option><option value="workspace">整个工作区</option>
-      </select></label>
-      {scope === "current" ? <select aria-label="当前论文" value={currentId} disabled={busy} onChange={event => setCurrentId(event.target.value)}>
-        <option value="">请选择论文</option>{Object.entries(project?.papers ?? {}).map(([key, item]) => <option key={key} value={key}>{item.paper.title}</option>)}
-      </select> : null}
-      {scope === "selected" ? <select multiple aria-label="选择研究论文" disabled={busy} value={selectedIds} onChange={event => setSelectedIds(Array.from(event.target.selectedOptions, option => option.value))}>
-        {Object.entries(project?.papers ?? {}).map(([key, item]) => <option key={key} value={key}>{item.paper.title}</option>)}
-      </select> : null}
-      <span className="small-print">未选论文时可搜索新论文或讨论通用概念。</span>
-    </div>
+    <p className="research-access-hint">{selectedIds.length ? `本对话可访问 ${selectedIds.length} 篇论文，助手按需检索和阅读。` : "尚未选择本地资料，可以直接搜索新论文。"}</p>
     <form className="assistant-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
       <button type="button" className="assistant-clip" aria-label="上传 PDF" disabled={attaching} onClick={() => fileRef.current?.click()}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 12.2 14.6 6a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a4.4 4.4 0 0 1-6.2-6.2l7.6-7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
@@ -233,12 +237,12 @@ function Assistant({ id }: { id: string }) {
       <div className="assistant-mode">
         <button type="button" className="assistant-mode-btn" aria-expanded={modeOpen} onClick={() => setModeOpen(open => !open)}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M4 12h16M12 4c2.2 2.4 3.3 5.1 3.3 8S14.2 17.6 12 20c-2.2-2.4-3.3-5.1-3.3-8S9.8 6.4 12 4Z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
-          {mode === "deep" ? "Deep Research" : "标准检索"}
+          {mode === "deep" ? "确认研究计划" : "自动执行计划"}
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
         </button>
         {modeOpen ? <div className="assistant-mode-menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setMode("deep"); setModeOpen(false); }}>Deep Research</button>
-          <button type="button" role="menuitem" onClick={() => { setMode("standard"); setModeOpen(false); }}>标准检索</button>
+          <button type="button" role="menuitem" onClick={() => { setMode("deep"); setModeOpen(false); }}>确认研究计划</button>
+          <button type="button" role="menuitem" onClick={() => { setMode("standard"); setModeOpen(false); }}>自动执行计划</button>
         </div> : null}
       </div>
       <button className="assistant-send" type="submit" disabled={!draft.trim() || busy} aria-label="发送">
@@ -249,9 +253,45 @@ function Assistant({ id }: { id: string }) {
   </div>;
 }
 
+interface SavedChat { id: string; title: string }
+function AssistantSessions({ id }: { id: string }) {
+  const [params, setParams] = useSearchParams();
+  const [chats, setChats] = useState<SavedChat[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`research-chats:${id}`) || "null");
+      if (Array.isArray(saved) && saved.length) return saved;
+      const previous = localStorage.getItem(`ws-ask:${id}`);
+      if (previous) localStorage.setItem(`ws-ask:${id}:first`, previous);
+    } catch { /* create initial conversation */ }
+    return [{ id: "first", title: "研究对话" }];
+  });
+  const [busy, setBusy] = useState(false);
+  const seeded = useRef(false);
+  const active = chats.find(c => c.id === params.get("conversation")) ?? chats[0];
+  useEffect(() => { try { localStorage.setItem(`research-chats:${id}`, JSON.stringify(chats)); } catch { /* retain in memory */ } }, [id, chats]);
+  const create = () => {
+    const chat = { id: crypto.randomUUID(), title: "新对话" };
+    const selection = params.get("papers");
+    if (selection) {
+      try { localStorage.setItem(`research-sources:${id}:${chat.id}`, JSON.stringify(selection.split(",").filter(Boolean))); } catch { /* optional initial selection */ }
+    }
+    setChats(list => [...list, chat]); setParams({ conversation: chat.id });
+  };
+  useEffect(() => { if (params.get("papers") && !seeded.current) { seeded.current = true; create(); } }, []);
+  return <div className="research-layout">
+    <aside className="research-chats" aria-label="研究对话列表">
+      <h2>研究助手</h2><Button type="primary" block disabled={busy} onClick={create}>＋ 新建对话</Button>
+      <p className="small-print">对话与资料选择保存在此浏览器</p>
+      <div className="research-chat-list">{chats.map(chat => <button type="button" key={chat.id} disabled={busy} aria-current={active.id === chat.id ? "true" : undefined} onClick={() => setParams({ conversation: chat.id })}>{chat.title}</button>)}</div>
+      <Link to={`/w/${id}/studio`}>查看原研究台历史对话</Link>
+    </aside>
+    <Assistant key={active.id} id={id} chatId={active.id} onBusy={setBusy} onTitle={title => setChats(list => list.map(c => c.id === active.id ? { ...c, title } : c))} />
+  </div>;
+}
+
 export default function AssistantPage() {
   const { id, project } = useWorkspaceProject();
-  useEffect(() => { document.title = project ? `${project.name} - AI 研究助手` : "工作区"; }, [project]);
+  useEffect(() => { document.title = project ? `${project.name} - 研究助手` : "工作区"; }, [project]);
   if (!project) return <MissingWorkspace />;
-  return <Assistant key={id} id={id} />;
+  return <AssistantSessions key={id} id={id} />;
 }

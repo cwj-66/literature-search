@@ -41,6 +41,8 @@ class AgentState(TypedDict, total=False):
     scope: str
     current_paper_id: str | None
     selected_paper_ids: list[str]
+    accessible_paper_ids: list[str] | None
+    conversation_history: str
     year_from: int | None
     year_to: int | None
     # 任务
@@ -390,7 +392,7 @@ def _status_of(state: dict) -> str:
 def public_state(state: dict) -> dict:
     items = state.get("evidence_items") or {}
     return {
-        **{key: state.get(key) for key in ("workspace_id", "scope", "current_paper_id", "selected_paper_ids")},
+        **{key: state.get(key) for key in ToolContext.model_fields},
         "parent_task_id": state.get("parent_task_id"),
         "goal": state.get("goal"),
         "mode": state.get("mode"),
@@ -406,6 +408,7 @@ def public_state(state: dict) -> dict:
         "plan_version": state.get("plan_version", 0),
         "queries": state.get("queries") or [],
         "paper_ids": [paper.get("id") for paper in state.get("papers") or []],
+        "papers": state.get("papers") or [],
         "evidence_ids": state.get("evidence_ids") or [],
         "evidence": [{**item, "quote": str(item.get("quote") or "")[:300]} for item in items.values()],
         "gaps": state.get("gaps") or [],

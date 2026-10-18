@@ -527,11 +527,14 @@ class AgentReActLoopTests(unittest.IsolatedAsyncioTestCase):
             **agent.initial_state("goal"),
             "stop_reason": "目标覆盖完成",
             "answer": "结论A。",
+            "evidence_pool": {"E0001": "原文材料"},
             "messages": [{"role": "assistant", "content": rj(answer="结论A。")}],
             "react_turns": 1,
         }
         self.assertEqual(agent.react_route(state), "done")
-        with patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=[claims_json(("结论A。", [])), judge_json(verdict("c1"))])):
+        # 新契约：空证据主张被规则预检拒绝（见验收 test_judge_cannot_verify_scientific_claim_without_evidence），
+        # 这里主张须带池内证据ID 才能进入语义复核并收尾。
+        with patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=[claims_json(("结论A。", ["E0001"])), judge_json(verdict("c1"))])):
             after_claims = await agent.claims_node(state)
             after_judge = await agent.judge_node({**state, **after_claims})
         self.assertEqual(after_judge["review"]["rounds"], 1)

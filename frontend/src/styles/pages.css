@@ -2359,3 +2359,58 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
   .conversation-head, .conversation-actions { width: 100%; }
   .conversation-scope { padding: var(--s3); }
 }
+
+/* Conversation workspace: source permissions above, history beside the dialogue. */
+#research-header-slot { margin-left: auto; margin-right: 20px; min-width: 0; }
+.research-layout { display: flex; flex: 1; min-height: 0; width: 100%; overflow: hidden; }
+.research-chats { width: 220px; flex-shrink: 0; padding: 24px 16px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; background: #fafbff; }
+.research-chats h2 { font-size: 17px; margin: 0; }
+.research-chats > a { font-size: 12px; margin-top: auto; }
+.research-chat-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.research-chat-list button { border: 0; border-radius: 8px; background: transparent; padding: 12px; text-align: left; color: var(--text); cursor: pointer; overflow-wrap: anywhere; }
+.research-chat-list button[aria-current="true"] { background: #eeedff; color: #5143df; }
+.research-layout .assistant { min-width: 0; }
+.research-layout .assistant-art { opacity: .35; width: 180px; }
+.research-layout .assistant-msg { max-width: min(90%, 760px); }
+.research-access-hint { margin: 8px 24px; font-size: 12px; color: var(--muted); }
+.research-picker { width: min(660px, calc(100vw - 48px)); }
+.research-picker-title { display: flex; justify-content: space-between; gap: 16px; }
+.research-picker > p { color: #727b8e; font-size: 12px; margin: 8px 0 16px; }
+.research-picker-columns { display: grid; grid-template-columns: 190px minmax(0, 1fr); border: 1px solid #e7eaf2; border-radius: 10px; overflow: hidden; }
+.research-picker-workspaces { background: #f8f9fc; max-height: 350px; overflow-y: auto; border-right: 1px solid #e7eaf2; }
+.research-picker-workspaces > div { display: flex; align-items: center; gap: 10px; padding: 10px; }
+.research-picker-workspaces > div.is-active { background: #eeedff; }
+.research-picker-workspaces button { background: transparent; border: 0; text-align: left; cursor: pointer; min-width: 0; flex: 1; }
+.research-picker small { display: block; color: #7b8496; font-size: 12px; font-weight: 400; margin-top: 4px; }
+.research-picker-papers { padding: 14px; min-width: 0; }
+.research-picker-papers > .ant-input-affix-wrapper { margin: 12px 0; }
+.research-picker-list { display: flex; flex-direction: column; gap: 14px; height: 245px; overflow-y: auto; }
+.research-picker-list .ant-checkbox-wrapper { align-items: flex-start; overflow-wrap: anywhere; }
+.research-picker-footer { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.research-picker-footer span { font-size: 11px; color: #7b8496; flex: 1; }
+.research-evidence { margin-top: 16px; font-size: 12px; }
+.research-evidence summary { cursor: pointer; color: #5143df; }
+@media (max-width: 1000px) {
+  .research-chats { width: 170px; padding: 16px 10px; }
+  .research-layout .assistant-log { padding: 20px 16px; }
+}
+@media (max-width: 700px) {
+  #research-header-slot { order: 3; width: 100%; margin: 8px 0 0; }
+  .ws-top:has(#research-header-slot:not(:empty)) { flex-wrap: wrap; }
+  #research-header-slot:empty { display: none; }
+  .research-source-trigger { width: 100%; }
+  .research-layout { flex-direction: column; }
+  .research-chats { width: 100%; padding: 12px; border-right: 0; border-bottom: 1px solid var(--line); gap: 8px; flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .research-chats h2, .research-chats > .small-print { display: none; }
+  .research-chats > .ant-btn { width: auto; }
+  .research-chats > a { margin: 0 0 0 auto; }
+  .research-chat-list { flex-direction: row; width: 100%; max-height: 46px; }
+  .research-chat-list button { white-space: nowrap; }
+  .research-picker-columns { grid-template-columns: 115px minmax(0, 1fr); }
+  .research-picker-workspaces > div { padding: 8px 5px; gap: 5px; }
+  .research-picker-papers { padding: 10px; }
+  .research-picker-footer { flex-wrap: wrap; gap: 8px; }
+  .research-picker-footer span { min-width: 100px; }
+  .research-layout .assistant-composer { margin: 8px; }
+  .research-layout .assistant-mode { display: none; }
+}

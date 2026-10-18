@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Popconfirm, Segmented, Upload } from "antd";
 import { ArrowRightOutlined, DeleteOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import { analyzePapers, createConversation, prepareWorkspace, removeWorkspacePapers, uploadPaper } from "../../api";
+import { analyzePapers, prepareWorkspace, removeWorkspacePapers, uploadPaper } from "../../api";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { PaperRow } from "../../components/PaperRow";
 import { STATUS_LABEL, projects } from "../../projects";
@@ -38,8 +38,7 @@ export default function PapersPage() {
     setOpeningChat(true); setAnalyzeError("");
     try {
       await prepareWorkspace(id, project.name, Object.keys(project.papers));
-      const chat = await createConversation(id, picked);
-      navigate(`/w/${id}/studio?chat=${chat.id}`);
+      navigate(`/w/${id}/research?papers=${encodeURIComponent(picked.join(","))}`);
     } catch (err) { setAnalyzeError(err instanceof Error ? err.message : "创建对话失败"); }
     finally { setOpeningChat(false); }
   }

@@ -246,7 +246,7 @@ async def _analyze_one(paper_id: str, requested: list[str], depth: str, workspac
     }, llm_calls
 
 
-async def analyze_paper(paper_ids: list[str], fields: list[str] | None = None, depth: str = "standard", workspace_id: str | None = None, papers: dict | None = None, prepared: dict | None = None, evidence_start: int = 1) -> dict:
+async def analyze_paper(paper_ids: list[str], fields: list[str] | None = None, depth: str = "standard", workspace_id: str | None = None, papers: dict | None = None, prepared: dict | None = None, evidence_start: int = 1, llm_calls_left: int | None = None) -> dict:
     if depth not in ("standard", "deep"):
         raise ValueError("分析深度只能是 standard 或 deep")
     requested = normalize_fields(fields)
@@ -261,6 +261,8 @@ async def analyze_paper(paper_ids: list[str], fields: list[str] | None = None, d
         raise ValueError(f"一次最多分析 {MAX_PAPERS} 篇论文")
     reports, calls, start = [], 0, evidence_start
     for paper_id in ids:
+        if llm_calls_left is not None and calls >= llm_calls_left:
+            break
         report, used = await _analyze_one(paper_id, requested, depth, workspace_id, papers, prepared, start)
         reports.append(report)
         calls += used

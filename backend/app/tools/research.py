@@ -109,6 +109,18 @@ def _workspace(args, ctx):
 
 async def _paper(ref, ctx, local_only=False):
     paper = await asyncio.to_thread(library.get_paper, ref)
+    if ctx.accessible_paper_ids is not None:
+        if local_only:
+            return (await asyncio.to_thread(resolve, ctx, [ref]))[0]
+        if paper is not None:
+            try:
+                return (await asyncio.to_thread(resolve, ctx, [ref]))[0]
+            except ValueError:
+                # Public discovery must not return private cached PDF metadata.
+                paper = await search.fetch_paper(library.normalize_reference(ref))
+                if paper is None:
+                    raise ValueError("论文未在本对话授权范围内，请先选择研究资料")
+                return paper
     if local_only and (ctx.workspace_id or ctx.current_paper_id or ctx.selected_paper_ids):
         return (await asyncio.to_thread(resolve, ctx, [ref]))[0]
     if paper is None and not local_only:
@@ -124,8 +136,10 @@ def _analysis(paper):
             "status": "completed" if result else "missing"}
 
 
-def _list(workspace_id):
+def _list(workspace_id, allowed=None):
     result = workspaces.list_papers(workspace_id)
+    if allowed is not None:
+        result["papers"] = [row for row in result["papers"] if row["paper"]["local_id"] in allowed]
     from app.services.papers import documents
     for row in result["papers"]:
         paper = library.get_paper(row["paper"]["local_id"])
@@ -176,7 +190,15 @@ async def execute(name: str, arguments: dict, context: ToolContext | None = None
     if name == "search_papers":
         return await search_papers(**args)
     if name == "list_workspace_papers":
-        result = await asyncio.to_thread(_list, _workspace(args, ctx))
+        if ctx.accessible_paper_ids is not None:
+            papers = await asyncio.to_thread(resolve, ctx)
+            if args.get("workspace_id"):
+                result = await asyncio.to_thread(_list, args["workspace_id"], {p.local_id for p in papers})
+            else:
+                result = {"status": "completed", "papers": [{"paper": p.model_dump(mode="json")} for p in papers],
+                          "total": len(papers), "scope": "conversation"}
+        else:
+            result = await asyncio.to_thread(_list, _workspace(args, ctx))
     elif name == "add_papers_to_workspace":
         workspace_id = _workspace(args, ctx)
         result = await add_papers_to_workspace(workspace_id, args["paper_ids"])
@@ -195,6 +217,10 @@ async def execute(name: str, arguments: dict, context: ToolContext | None = None
         elif name == "get_paper_analysis":
             result = await asyncio.to_thread(_analysis, paper)
         elif name == "find_related_papers":
+            if ctx.accessible_paper_ids is not None:
+                # Discover public candidates without scanning unselected local PDFs.
+                result = await search_papers(query=paper.title, page_size=args["limit"])
+                return {**result, "tool": name, "seed_paper_id": paper.id}
             # Existing recommendation service needs a local seed and caches its scoring results.
             if not getattr(paper, "local_id", None):
                 raise ValueError("推荐前请先将种子论文加入工作区")

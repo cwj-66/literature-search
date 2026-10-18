@@ -82,6 +82,8 @@ class AnalyzeRequest(BaseModel):
 
 
 class ResearchStart(BaseModel):
+    accessible_paper_ids: list[str] | None = Field(None, max_length=500)
+    conversation_history: str = Field("", max_length=16000)
     goal: str = Field(min_length=1, max_length=2000)
     year_from: int | None = Field(None, ge=1900, le=2100)
     year_to: int | None = Field(None, ge=1900, le=2100)
@@ -96,6 +98,7 @@ class ResearchStart(BaseModel):
 
 
 class ResearchResume(BaseModel):
+    accessible_paper_ids: list[str] | None = Field(None, max_length=500)
     approved: bool | None = None
     plan: list[dict] | None = None
     queries: list[str] | None = None

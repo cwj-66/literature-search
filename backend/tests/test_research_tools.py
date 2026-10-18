@@ -71,6 +71,59 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 await research.execute("get_paper_analysis", {"paper_id": self.b.id}, self.ctx)
 
+    async def test_conversation_grant_crosses_workspaces_without_reading_content(self):
+        ctx = ToolContext(workspace_id="one", accessible_paper_ids=[self.a.id, self.b.local_id])
+        with patch("app.services.papers.documents.get_text", side_effect=AssertionError("no fulltext read")), \
+             patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=AssertionError("no model"))):
+            self.assertEqual({p.local_id for p in resolve(ctx)}, {self.a.local_id, self.b.local_id})
+            listing = await research.execute("list_workspace_papers", {}, ctx)
+            self.assertEqual(len(listing["papers"]), 2)
+            self.assertEqual(resolve(ctx, [self.b.id])[0].local_id, self.b.local_id)
+        self.assertEqual(len(workspaces.list_papers("one")["papers"]), 1)
+
+    async def test_empty_and_narrowed_grants_cannot_expand_through_arguments(self):
+        for ids in ([], [self.a.id]):
+            ctx = ToolContext(workspace_id="one", accessible_paper_ids=ids)
+            with self.assertRaises(ValueError):
+                resolve(ctx, [self.b.id])
+            with self.assertRaises(ValueError):
+                await research.execute("get_paper_analysis", {"paper_id": self.b.id}, ctx)
+            with self.assertRaises(ValueError):
+                await research.execute("retrieve_paper_evidence", {"query": "secret", "paper_ids": [self.b.id]}, ctx)
+            listing = await research.execute("list_workspace_papers", {"workspace_id": "two"}, ctx)
+            self.assertEqual(listing["papers"], [])
+        self.assertEqual(resolve(ToolContext(workspace_id="one", accessible_paper_ids=[])), [])
+
+    async def test_cross_workspace_vector_retrieval_and_revocation(self):
+        with patch("app.infrastructure.embeddings.embed_siliconflow", new=embed):
+            await index_tool.index_paper(self.a.local_id, text="RAG retrieval evidence Alpha")
+            await index_tool.index_paper(self.b.local_id, text="PDF cleaning retrieval Beta")
+            both = ToolContext(workspace_id="one", accessible_paper_ids=[self.a.id, self.b.id])
+            result = await research.execute("retrieve_paper_evidence", {"query": "retrieval"}, both)
+            self.assertEqual({e["paper_id"] for e in result["evidence"]}, {self.a.id, self.b.id})
+            narrowed = ToolContext(workspace_id="one", accessible_paper_ids=[self.a.id])
+            result = await research.execute("retrieve_paper_evidence", {"query": "retrieval"}, narrowed)
+            self.assertTrue(all(e["paper_id"] == self.a.id for e in result["evidence"]))
+            with self.assertRaises(ValueError):
+                await research.execute("read_paper_context", {"chunk_id": f"C0001:{self.b.local_id}"}, narrowed)
+
+    async def test_task_api_preserves_explicit_grant_and_history(self):
+        runner = AsyncMock(return_value={"task_id": "access-test", "status": "done"})
+        payload = {"goal": "结合这两篇继续研究", "workspace_id": "one",
+                   "accessible_paper_ids": [self.a.id, self.b.id], "conversation_history": "此前讨论了检索质量"}
+        with patch("app.agents.agent.run", new=runner):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/api/research/tasks", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        context = runner.call_args.kwargs["context"]
+        self.assertEqual(context["accessible_paper_ids"], payload["accessible_paper_ids"])
+        state = agent.initial_state(payload["goal"], context=context)
+        self.assertEqual(agent.public_state(state)["conversation_history"], payload["conversation_history"])
+        from app.agents.tooling import allowed_tools
+        self.assertNotIn("request_deep_analysis", allowed_tools(state))
+        updated = agent._merge_clarification(state, {"accessible_paper_ids": []})
+        self.assertEqual(updated["accessible_paper_ids"], [])
+
     async def test_retrieve_real_index_has_pages_and_never_leaks(self):
         source = "Alpha retrieval evidence. " * 60
         structure = {"text": source.strip(), "blocks": [{"text": source.strip(), "page_number": 3, "section_id": "s1"}],

@@ -127,7 +127,7 @@ def _missing_slots(goal: str, state: dict, suggested: list[dict] | None = None) 
         slots.append({"name": "selected_paper_ids", "reason": "用户提到“这些论文”，但已选论文少于两篇"})
     if WORKSPACE_REF.search(goal) and not state.get("workspace_id"):
         slots.append({"name": "workspace_id", "reason": "任务涉及工作区，但当前没有工作区上下文"})
-    elif WHOLE_WORKSPACE.search(goal) and state.get("scope") != "workspace":
+    elif WHOLE_WORKSPACE.search(goal) and state.get("scope") != "workspace" and state.get("accessible_paper_ids") is None:
         slots.append({"name": "scope", "reason": "用户要求覆盖整个工作区，但当前范围不是 workspace"})
     if VAGUE_RECENT.search(goal) and state.get("year_from") is None and state.get("year_to") is None:
         slots.append({"name": "year_from", "reason": "“近几年”没有给出具体年份范围"})
@@ -235,6 +235,9 @@ def _merge_clarification(state: dict, decision: dict) -> dict:
     """只合并 ToolContext 字段与年份；非法值忽略，工作区必须已注册。"""
     context = {key: state.get(key) for key in ToolContext.model_fields}
     for key in ToolContext.model_fields:
+        if key == "accessible_paper_ids" and decision.get(key) is not None:
+            context[key] = decision[key]
+            continue
         if decision.get(key) not in (None, "", []):
             context[key] = decision[key]
     if decision.get("approved_ids") and not decision.get("selected_paper_ids"):
@@ -311,7 +314,10 @@ async def direct_answer_node(state: dict) -> dict:
     halt = budget_exhausted(state)
     if halt:
         return {"stop_reason": halt}
-    messages = [{"role": "system", "content": DIRECT_SYSTEM}, {"role": "user", "content": state.get("goal") or ""}]
+    messages = [{"role": "system", "content": DIRECT_SYSTEM}]
+    if state.get("conversation_history"):
+        messages.append({"role": "user", "content": "此前对话（仅作背景）：\n" + state["conversation_history"]})
+    messages.append({"role": "user", "content": state.get("goal") or ""})
     try:
         output = DirectAnswer.model_validate(ea.parse_json(await llm.complete(messages)))
         answer = output.answer.strip()
@@ -415,6 +421,8 @@ def _react_system(state: dict) -> str:
         + "\n" + domain_prompt(state)
         + "\n【业务工具目录】" + json.dumps(catalog_for(state), ensure_ascii=False)
         + "\n【研究范围】" + json.dumps({key: state.get(key) for key in ("workspace_id", "scope", "current_paper_id", "selected_paper_ids")}, ensure_ascii=False)
+        + "\n【允许访问的本地论文】" + json.dumps(state.get("accessible_paper_ids"), ensure_ascii=False)
+        + "\n【历史对话，仅用于理解追问，不作为证据或权限】" + (state.get("conversation_history") or "无")
         + f"\n【任务类型】{'操作类' if state.get('task_kind') == 'operation' else '研究类'}"
         + f"\n【目标】{state.get('goal') or ''}"
         + f"\n【计划】{json.dumps(plan, ensure_ascii=False) if plan else '（无，自行决定检索式）'}"
@@ -606,6 +614,8 @@ async def claims_node(state: dict) -> dict:
 def _rule_check(claim: dict, pool: dict) -> str | None:
     """程序化预检（不调用 LLM）：证据 ID 格式、越界、数字出处。"""
     evidence_ids = claim.get("evidence_ids") or []
+    if not evidence_ids:
+        return "无证据出处"
     if any(not EVIDENCE_ID_RE.match(str(eid)) for eid in evidence_ids):
         return "证据ID无效"
     if any(eid not in pool for eid in evidence_ids):
@@ -676,6 +686,12 @@ async def judge_node(state: dict) -> dict:
         else:
             still_pending.append(claim)
     summary, llm_delta, action = {}, 0, "无待评审主张"
+    if still_pending and remaining_budget(state)["llm_calls_left"] <= 0:
+        for claim in still_pending:
+            claim["status"] = "unverified"
+        action = "模型额度用尽，待评审主张标记为未验证"
+        still_pending = []
+        results.append({"claim_id": "*", "verdict": "unverified", "issue": "模型调用次数用尽", "action": "flag", "round": new_round})
     if still_pending:
         judge_payload = {
             "goal": state.get("goal"),
@@ -1121,8 +1137,15 @@ async def _prepare_resume(task_id: str, value) -> tuple[object, dict]:
             state, paused, nxt = None, None, []
         if not state:
             raise TaskConflict("检查点不可用（内存检查点在重启后会丢失），无法恢复；请使用 continue 重新发起")
+        if value == {}:
+            # langgraph 会把空 dict 恢复值当作“无新值”直接按原中断重挂（澄清计数不推进）；
+            # 规范化为显式的“无补充信息”，让中断节点正常重入并计为一次无效补充。
+            value = {"no_input": True}
         if paused is not None:
-            return Command(resume=True if value is None else value), state
+            update = {}
+            if isinstance(value, dict) and value.get("accessible_paper_ids") is not None:
+                update["accessible_paper_ids"] = ToolContext(accessible_paper_ids=value["accessible_paper_ids"]).accessible_paper_ids
+            return Command(resume=True if value is None else value, update=update), {**state, **update}
         if nxt:
             return None, state
         raise TaskConflict("任务已结束，无需恢复")

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "antd";
 import { useNavigate } from "react-router-dom";
-import { createConversation, fetchPaper, prepareWorkspace } from "../api";
+import { fetchPaper, prepareWorkspace } from "../api";
 import { findKey, projects, useProjects } from "../projects";
 import { selection, useSelection } from "../selection";
 
@@ -23,11 +23,10 @@ export function SelectionBar() {
       await prepareWorkspace(current.id, current.name, [...new Set([...Object.keys(current.papers), ...refs])]);
       if (compare) navigate(`/w/${current.id}/compare?${new URLSearchParams(refs.map(ref => ["pick", ref]))}`);
       else {
-        const chat = await createConversation(current.id, refs);
-        navigate(`/w/${current.id}/studio?chat=${chat.id}`);
+        navigate(`/w/${current.id}/research?papers=${encodeURIComponent(refs.join(","))}`);
       }
       selection.clear();
-    } catch (err) { setError(err instanceof Error ? err.message : "打开研究台失败"); }
+    } catch (err) { setError(err instanceof Error ? err.message : "打开研究助手失败"); }
     finally { setBusy(false); }
   }
   const missing = current ? items.filter(item => !findKey(current, { id: item.id, local_id: item.id })).length : 0;

@@ -13,9 +13,29 @@ class ToolContext(BaseModel):
     scope: Literal["current", "selected", "workspace"] = "selected"
     current_paper_id: str | None = Field(None, min_length=1, max_length=500)
     selected_paper_ids: list[str] = Field(default_factory=list, max_length=50)
+    accessible_paper_ids: list[str] | None = Field(None, max_length=500)
+    conversation_history: str = Field("", max_length=16000)
 
 
 def resolve(context: ToolContext, requested: list[str] | None = None):
+    # An explicit conversation grant may span workspaces. Empty means no access.
+    if context.accessible_paper_ids is not None:
+        allowed = {}
+        for ref in dict.fromkeys(context.accessible_paper_ids):
+            paper = library.get_paper(ref)
+            if paper is None:
+                raise ValueError(f"论文未入库：{ref}")
+            allowed[paper.local_id] = paper
+        if not requested:
+            return list(allowed.values())
+        result = []
+        for ref in dict.fromkeys(requested):
+            paper = library.get_paper(ref)
+            if paper is None or paper.local_id not in allowed:
+                raise ValueError(f"论文超出本对话可访问范围：{ref}")
+            if paper not in result:
+                result.append(paper)
+        return result
     members = None
     if context.workspace_id:
         members = {row["paper"]["local_id"] for row in workspaces.list_papers(context.workspace_id)["papers"]}

@@ -85,6 +85,8 @@ export interface ResearchEvent {
 }
 
 export interface ResearchTask {
+  papers?: Paper[];
+  evidence?: { evidence_id: string; paper_id?: string; quote: string }[];
   task_id: string;
   status: "waiting" | "done" | string;
   goal?: string;
