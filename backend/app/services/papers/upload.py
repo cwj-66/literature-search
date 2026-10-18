@@ -9,6 +9,7 @@ from app.infrastructure import mineru
 from app.schemas import PaperOut
 from app.services.papers import documents, library
 from app.tools import index_paper as index_tool
+from app.tools.parse_paper import parse_paper
 
 MAX_PDF = 50 * 1024 * 1024
 
@@ -57,13 +58,15 @@ async def ingest_pdf(data: bytes, filename: str | None, workspace_id: str | None
         raise UploadError("请在研究项目中上传")
     name = display_name(filename)
     try:
-        markdown = (await mineru.parse_pdf(data, "paper.pdf")).strip()
+        structure = await parse_paper(data, "paper.pdf")
+        markdown = structure["markdown"].strip()
     except mineru.MinerUError as exc:
         raise UploadError(exc.message, 502) from exc
     if not markdown:
         raise UploadError("MinerU 没有解析出正文", 502)
-    if len(markdown) > index_tool.MAX_TEXT:
-        markdown = markdown[:index_tool.MAX_TEXT]
+    body = structure["text"] if structure and structure.get("text") else markdown
+    if len(body) > index_tool.MAX_TEXT:
+        raise UploadError("全文超过索引长度限制，未截断保存，请人工处理")
     title, abstract = title_and_abstract(markdown, name)
     paper = PaperOut(
         id="upload:" + hashlib.sha256(data).hexdigest()[:32],
@@ -73,6 +76,6 @@ async def ingest_pdf(data: bytes, filename: str | None, workspace_id: str | None
         sources=["upload"],
     )
     saved, created = await asyncio.to_thread(library.save_paper, paper, paper.id)
-    await asyncio.to_thread(documents.save, saved.local_id, saved.id, markdown, name)
-    indexed = await index_tool.index_paper(saved.local_id, text=markdown, title=saved.title, workspace_id=workspace_id)
+    await asyncio.to_thread(documents.save, saved.local_id, saved.id, body, name, structure)
+    indexed = await index_tool.index_paper(saved.local_id, text=body, title=saved.title, workspace_id=workspace_id)
     return {"paper": saved, "created": created, "index": indexed}

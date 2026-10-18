@@ -24,6 +24,17 @@ def connection():
                 key TEXT PRIMARY KEY,
                 local_id TEXT NOT NULL REFERENCES papers(local_id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS workspace_papers (
+                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                local_id TEXT NOT NULL REFERENCES papers(local_id) ON DELETE CASCADE,
+                added_at TEXT NOT NULL,
+                PRIMARY KEY (workspace_id, local_id)
+            );
             CREATE TABLE IF NOT EXISTS analysis_tasks (
                 task_id TEXT PRIMARY KEY,
                 paper_ref TEXT NOT NULL,

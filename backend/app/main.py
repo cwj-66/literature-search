@@ -27,6 +27,14 @@ from app.services.retrieval import hybrid, recommend
 from app.services.retrieval.search import SourceFailure, fetch_paper, normalize_query, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
 import app.tools.analyze_paper as analyze_tool
 import app.tools.index_paper as index_tool
+import app.tools.parse_paper as parse_tool
+import app.tools.search_papers as search_tool
+import app.tools.add_papers_to_workspace as workspace_tool
+from app.services.papers import workspaces
+from app.services.papers import processing
+from app.tools import research as research_tools, BACKGROUND_TOOLS
+from app.tools.research_scope import ToolContext
+from pydantic import BaseModel, Field, ValidationError
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 logging.basicConfig(level=logging.INFO)
@@ -39,9 +47,14 @@ async def lifespan(_app: FastAPI):
     for task_id in pending:
         queue.put_nowait(task_id)
     worker = asyncio.create_task(analysis.worker(queue)) if os.getenv("ANALYSIS_WORKER", "1") != "0" else None
+    import_worker = asyncio.create_task(processing.worker()) if os.getenv("PAPER_PROCESSING_WORKER", "1") != "0" else None
     try:
         yield
     finally:
+        if import_worker:
+            import_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await import_worker
         if worker:
             worker.cancel()
             with suppress(asyncio.CancelledError):
@@ -288,6 +301,55 @@ async def analyze_paper_tool(payload: analyze_tool.AnalyzePaperRequest):
         raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
 
 
+@app.post("/api/tools/search_papers")
+async def search_papers_tool(payload: search_tool.SearchPapersRequest):
+    return await search_tool.search_papers(**payload.model_dump())
+
+
+async def _workspace_call(fn, *args):
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except workspaces.WorkspaceNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="工作区存储暂不可用，请稍后重试") from None
+
+
+@app.post("/api/tools/add_papers_to_workspace")
+async def add_papers_to_workspace_tool(payload: workspace_tool.AddPapersToWorkspaceRequest):
+    try:
+        return await research_tools.execute("add_papers_to_workspace", payload.model_dump())
+    except workspaces.WorkspaceNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="工作区存储暂不可用，请稍后重试") from None
+
+
+@app.get("/api/workspaces")
+async def list_workspaces():
+    return await _workspace_call(workspaces.list_workspaces)
+
+
+@app.post("/api/workspaces/register")
+async def register_workspace(payload: workspaces.RegisterWorkspaceRequest):
+    return await _workspace_call(workspaces.register, payload.workspace_id, payload.name)
+
+
+@app.get("/api/workspaces/{workspace_id}/papers")
+async def workspace_papers(workspace_id: str):
+    return await _workspace_call(workspaces.list_papers, workspace_id)
+
+
+@app.post("/api/workspaces/{workspace_id}/papers/remove")
+async def remove_workspace_papers(workspace_id: str, payload: workspaces.PaperReferences):
+    return await _workspace_call(workspaces.remove, workspace_id, payload.paper_ids)
+
+
+@app.post("/api/workspaces/{workspace_id}/delete")
+async def delete_workspace(workspace_id: str):
+    return await _workspace_call(workspaces.delete, workspace_id)
+
+
 @app.post("/api/papers/upload")
 async def upload_paper(file: UploadFile = File(), workspace_id: str = Form()):
     data = await file.read(upload.MAX_PDF + 1)
@@ -302,6 +364,19 @@ async def upload_paper(file: UploadFile = File(), workspace_id: str = Form()):
         raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
 
 
+@app.post("/api/tools/parse_paper")
+async def parse_paper_tool(file: UploadFile = File()):
+    try:
+        data = await file.read(parse_tool.MAX_PDF + 1)
+        return await parse_tool.parse_paper(data, file.filename or "paper.pdf")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except parse_tool.mineru.MinerUError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from None
+    finally:
+        await file.close()
+
+
 @app.post("/api/tools/index_paper")
 async def index_paper_tool(payload: index_tool.IndexPaperRequest):
     try:
@@ -310,6 +385,36 @@ async def index_paper_tool(payload: index_tool.IndexPaperRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from None
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="向量库暂不可用，请稍后重试") from None
+
+
+class ToolInvocation(BaseModel):
+    arguments: dict = Field(default_factory=dict)
+    context: ToolContext = Field(default_factory=ToolContext)
+
+
+@app.get("/api/tools")
+async def tool_catalog():
+    return {"chat_tools": research_tools.CHAT_TOOLS,
+            "background_capabilities": [{"name": tool["name"], "description": tool["description"]} for tool in BACKGROUND_TOOLS]}
+
+
+@app.post("/api/research/tools/{tool_name}")
+@app.post("/api/tools/{tool_name}")
+async def invoke_research_tool(tool_name: str, payload: ToolInvocation):
+    if tool_name not in research_tools.CATALOG:
+        raise HTTPException(status_code=404, detail="未知聊天研究工具")
+    try:
+        return await research_tools.execute(tool_name, payload.arguments, payload.context)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except workspaces.WorkspaceNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except (SourceFailure, llm.AnalysisError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="研究工具存储暂不可用") from None
 
 
 @app.post("/api/research/tasks")

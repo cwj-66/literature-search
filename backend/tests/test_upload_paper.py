@@ -115,7 +115,7 @@ class IngestTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_ingest_saves_paper_and_calls_index_tool(self):
         markdown = "# 本地论文\n\n摘要\n\n这是一篇上传的论文。\n"
-        with patch("app.services.papers.upload.mineru.parse_pdf", new=AsyncMock(return_value=markdown)), \
+        with patch("app.services.papers.upload.parse_paper", new=AsyncMock(return_value={"markdown": markdown, "text": markdown})), \
              patch("app.infrastructure.embeddings.embed_siliconflow", new=fake_embed()):
             result = await upload.ingest_pdf(b"%PDF-1.4 hello", "local_notes.pdf", "pdemo")
         self.assertEqual(result["index"]["status"], "completed")
@@ -136,7 +136,7 @@ class IngestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(again["paper"].id, paper.id)
 
     async def _again(self, markdown):
-        with patch("app.services.papers.upload.mineru.parse_pdf", new=AsyncMock(return_value=markdown)), \
+        with patch("app.services.papers.upload.parse_paper", new=AsyncMock(return_value={"markdown": markdown, "text": markdown})), \
              patch("app.infrastructure.embeddings.embed_siliconflow", new=fake_embed()):
             return await upload.ingest_pdf(b"%PDF-1.4 hello", "local_notes.pdf", "pdemo")
 
@@ -156,7 +156,7 @@ class IngestTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             rejected = await client.post("/api/papers/upload", data={"workspace_id": "pdemo"}, files={"file": ("a.txt", b"hello", "text/plain")})
             self.assertEqual(rejected.status_code, 400)
-            with patch("app.services.papers.upload.mineru.parse_pdf", new=AsyncMock(return_value=markdown)), \
+            with patch("app.services.papers.upload.parse_paper", new=AsyncMock(return_value={"markdown": markdown, "text": markdown})), \
                  patch("app.infrastructure.embeddings.embed_siliconflow", new=fake_embed()):
                 response = await client.post(
                     "/api/papers/upload",

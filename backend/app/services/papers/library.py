@@ -70,6 +70,9 @@ def save_paper(paper: PaperOut, reference: str) -> tuple[LocalPaperOut, bool]:
             keys.update(r[0] for r in db.execute("SELECT key FROM paper_keys WHERE local_id = ?", (row["local_id"],)))
         db.execute("INSERT INTO papers VALUES (?, ?, ?) ON CONFLICT(local_id) DO UPDATE SET data = excluded.data", (local_id, paper.model_dump_json(), imported_at))
         for row in rows[1:]:
+            db.execute("""INSERT OR IGNORE INTO workspace_papers (workspace_id, local_id, added_at)
+                SELECT workspace_id, ?, added_at FROM workspace_papers WHERE local_id = ?""",
+                (local_id, row["local_id"]))
             db.execute("""UPDATE analysis_tasks SET local_id = ?, paper_ref = CASE WHEN paper_ref = ? THEN ? ELSE paper_ref END
                 WHERE local_id = ?""", (local_id, row["local_id"], local_id, row["local_id"]))
             db.execute("UPDATE analysis_results SET local_id = ? WHERE local_id = ?", (local_id, row["local_id"]))

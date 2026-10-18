@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import json
 import logging
 import os
 import zipfile
@@ -66,7 +67,26 @@ def markdown_from_zip(blob: bytes) -> str:
     return text
 
 
-async def parse_pdf(data: bytes, filename: str = "paper.pdf") -> str:
+def structured_from_zip(blob: bytes) -> dict:
+    """Read MinerU's Markdown and v1 content list without extracting files."""
+    markdown = markdown_from_zip(blob)
+    with zipfile.ZipFile(io.BytesIO(blob)) as archive:
+        names = sorted(
+            (name for name in archive.namelist() if name.lower().endswith("_content_list.json")),
+            key=lambda name: (len(name), name),
+        )
+        if not names:
+            return {"markdown": markdown, "content_list": None}
+        try:
+            content = json.loads(archive.read(names[0]).decode("utf-8"))
+        except (ValueError, UnicodeError) as exc:
+            raise MinerUError("MinerU 的结构化内容不是有效的 JSON") from exc
+        if not isinstance(content, list) or any(not isinstance(item, dict) for item in content):
+            raise MinerUError("MinerU 的结构化内容格式不正确")
+    return {"markdown": markdown, "content_list": content}
+
+
+async def parse_pdf_structured(data: bytes, filename: str = "paper.pdf") -> dict:
     polls = int(os.getenv("MINERU_POLL_LIMIT", "120"))
     interval = float(os.getenv("MINERU_POLL_INTERVAL", "2"))
     timeout = httpx.Timeout(120.0, connect=15.0)
@@ -115,7 +135,7 @@ async def parse_pdf(data: bytes, filename: str = "paper.pdf") -> str:
                     downloaded = await client.get(_allowed(str(zip_url)))
                     if downloaded.status_code != 200:
                         raise MinerUError("下载 MinerU 解析结果失败")
-                    return markdown_from_zip(downloaded.content)
+                    return structured_from_zip(downloaded.content)
                 if state == "failed":
                     raise MinerUError(str(selected.get("err_msg") or "MinerU 解析失败"))
     except MinerUError:
@@ -123,4 +143,11 @@ async def parse_pdf(data: bytes, filename: str = "paper.pdf") -> str:
     except httpx.HTTPError as exc:
         log.warning("mineru request failed: %s", exc)
         raise MinerUError("无法连接 MinerU") from exc
+    except ValueError as exc:
+        raise MinerUError("MinerU 返回了无法解析的内容或配置无效") from exc
     raise MinerUError("MinerU 解析超时，请稍后重试")
+
+
+async def parse_pdf(data: bytes, filename: str = "paper.pdf") -> str:
+    """Compatibility API for consumers that only need Markdown."""
+    return (await parse_pdf_structured(data, filename))["markdown"]
