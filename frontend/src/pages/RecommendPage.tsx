@@ -3,15 +3,43 @@ import { Alert, Button, Empty, Skeleton } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { fetchLibrary, fetchNetwork, fetchRecommendations } from "../api";
+import { compareBlockReason, useAnalysisStates } from "../components/AnalysisBadge";
+import { CollectButton } from "../components/CollectButton";
 import { PaperContext } from "../components/PaperContext";
 import { PaperRow } from "../components/PaperRow";
 import { RelationGraph } from "../components/RelationGraph";
+import { findKey, useProjects } from "../projects";
 import type { Paper, PaperNetwork, RecommendationItem, Recommendations } from "../types";
 import { paperKey } from "../types";
-import { paperLocation, recommendLocation, safeReturn } from "../workspace";
+import { paperLocation, recommendLocation, safeReturn, workspacePaperPath } from "../workspace";
 
 function scoreText(value: number | null) {
-  return value == null ? "暂无" : value.toFixed(2);
+  return value == null ? "未知／暂不可用" : value.toFixed(2);
+}
+
+function citationText(value: number | null) {
+  if (value == null) return "未知／暂不可用";
+  return value >= 1 ? "有记录" : "无记录";
+}
+
+function asPaper(item: RecommendationItem): Paper {
+  return {
+    id: item.id,
+    title: item.title,
+    authors: item.authors ?? [],
+    abstract: item.abstract ?? null,
+    year: item.year,
+    venue: item.venue ?? null,
+    sources: [],
+    url: item.url ?? null,
+    pdf_url: null,
+    citation_count: item.citation_count ?? null,
+    arxiv_id: item.id.startsWith("arxiv:") ? item.id.slice(6) : null,
+    doi: item.id.startsWith("doi:") ? item.id.slice(4) : null,
+    semantic_scholar_id: item.id.startsWith("s2:") ? item.id.slice(3) : null,
+    ccf_rank: null,
+    cas_partition: null,
+  };
 }
 
 function RelationLabel({ item }: { item: RecommendationItem }) {
@@ -20,6 +48,32 @@ function RelationLabel({ item }: { item: RecommendationItem }) {
     {item.relations.includes("similar") ? <span className="relation relation-similar">主题相似 · 算法推算</span> : null}
     {!item.relations.length ? <span className="relation relation-weak">弱关联</span> : null}
   </span>;
+}
+
+function RecommendCard({ item, from }: { item: RecommendationItem; from: string }) {
+  const { current } = useProjects();
+  const paper = asPaper(item);
+  const key = findKey(current, paper);
+  const states = useAnalysisStates(key ? [key] : []);
+  const reason = key ? compareBlockReason(states[key]) : "未分析";
+  const ready = Boolean(key && current && reason === null);
+  return <li className="recommend-item">
+    <div className="recommend-top"><RelationLabel item={item} /><span className="muted">{item.year ?? "年份未知"}</span></div>
+    <h3 className="paper-title"><Link to={paperLocation(item.id, from)}>{item.title}</Link></h3>
+    <div className="strength" aria-label={`关联强度 ${item.strength}`}>
+      <span className="strength-bar"><i style={{ width: `${Math.max(0, Math.min(100, item.strength))}%` }} /></span>
+      <span>关联强度 {item.strength}</span>
+      <span className="muted">语义 {scoreText(item.semantic_score)} · 关键词 {item.keyword_score.toFixed(2)} · 引用 {citationText(item.citation_score)}</span>
+      <span className="muted">被引 {item.citation_count == null ? "未知／暂不可用" : item.citation_count}</span>
+    </div>
+    {item.reasons.length ? <ul className="reasons">{item.reasons.map(reasonItem => <li key={reasonItem.type}>{reasonItem.text}</li>)}</ul> : null}
+    <div className="recommend-actions">
+      <CollectButton paper={paper} />
+      {ready ? <Link to={`/w/${current!.id}/compare?pick=${encodeURIComponent(key)}`}>加入研究内容对比</Link> : null}
+      {key && current && !ready ? <Link to={workspacePaperPath(current.id, key, from)}>前往分析</Link> : null}
+      {ready ? null : <span className="muted">{!key ? "收藏后完成单篇分析，才能加入研究内容对比" : reason === "状态读取中" ? "正在确认分析状态" : "完成单篇分析后，才能加入研究内容对比"}</span>}
+    </div>
+  </li>;
 }
 
 function StartPicker() {
@@ -118,20 +172,11 @@ export default function RecommendPage() {
             <summary>推荐分数如何计算</summary>
             <p>{recommendations.formula}</p>
             <p>{recommendations.note}</p>
-            <p className="muted">算法 {recommendations.algorithm_version} · 计算于 {new Date(recommendations.computed_at).toLocaleString("zh-CN")}</p>
+            <p className="muted">算法 {recommendations.algorithm_version} · 计算于 {new Date(recommendations.computed_at).toLocaleString("zh-CN")}。结果会保存以便再次查看，推荐论文不会自动进入论文库。</p>
           </details> : null}
           {loading && !recommendations ? <div className="row-skeletons">{[0, 1, 2].map(i => <Skeleton key={i} active paragraph={{ rows: 2 }} />)}</div> : null}
           {recommendations && !recommendations.items.length ? <Empty description="没有找到可推荐的论文" /> : null}
-          <ol className="recommend-items">{recommendations?.items.map(item => <li key={item.id} className="recommend-item">
-            <div className="recommend-top"><RelationLabel item={item} /><span className="muted">{item.year ?? "年份未知"}</span></div>
-            <h3 className="paper-title"><Link to={paperLocation(item.id, current)}>{item.title}</Link></h3>
-            <div className="strength" aria-label={`关联强度 ${item.strength}`}>
-              <span className="strength-bar"><i style={{ width: `${Math.max(4, Math.min(100, item.strength * 100))}%` }} /></span>
-              <span>关联强度 {item.strength}</span>
-              <span className="muted">语义 {scoreText(item.semantic_score)} · 关键词 {item.keyword_score.toFixed(2)} · 引用{item.citation_score >= 1 ? "有记录" : "无记录"}</span>
-            </div>
-            {item.reasons.length ? <ul className="reasons">{item.reasons.map(reason => <li key={reason.type}>{reason.text}</li>)}</ul> : null}
-          </li>)}</ol>
+          <ol className="recommend-items">{recommendations?.items.map(item => <RecommendCard key={item.id} item={item} from={current} />)}</ol>
         </section>
         <section className="panel network-panel" aria-labelledby="network-title">
           <h2 id="network-title">关系网络</h2>

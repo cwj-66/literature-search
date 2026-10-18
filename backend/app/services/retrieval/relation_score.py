@@ -4,7 +4,7 @@ import math
 import os
 import re
 
-ALGORITHM = "rel-v1"
+ALGORITHM = "rel-v2"
 SIMILAR_COSINE = 0.55
 SIMILAR_SHARED = 2
 EMBED_LIMIT = 40
@@ -52,20 +52,27 @@ def load_weights() -> dict[str, float]:
     return {key: value / total for key, value in raw.items()}
 
 
-def formula(weights: dict[str, float], semantic_available: bool) -> str:
+def formula(weights: dict[str, float], semantic_available: bool, citation_available: bool = True) -> str:
+    active = []
     if semantic_available:
-        return (
-            f"关联强度 = 100 × ({weights['semantic']:.2f}×语义余弦"
-            f" + {weights['keyword']:.2f}×关键词重合 + {weights['citation']:.2f}×引用标记)"
-        )
-    usable = weights["keyword"] + weights["citation"]
+        active.append("semantic")
+    active.append("keyword")
+    if citation_available:
+        active.append("citation")
+    usable = sum(weights[name] for name in active)
     if usable <= 0:
-        return "语义向量暂不可用，且关键词与引用权重都为 0，无法计算关联强度"
-    return (
-        "语义向量暂不可用，该项不计入。"
-        f"关联强度 = 100 × ({weights['keyword'] / usable:.2f}×关键词重合"
-        f" + {weights['citation'] / usable:.2f}×引用标记)"
-    )
+        return "语义向量与引用信息暂不可用，无法计算关联强度"
+    labels = {"semantic": "语义余弦", "keyword": "关键词重合", "citation": "引用标记"}
+    body = " + ".join(f"{weights[name] / usable:.2f}×{labels[name]}" for name in active)
+    text = f"关联强度 = 100 × ({body})"
+    missing = []
+    if not semantic_available:
+        missing.append("语义向量")
+    if not citation_available:
+        missing.append("引用信息")
+    if missing:
+        text += "。" + "、".join(missing) + "未知／暂不可用，不按 0 分计入"
+    return text
 
 
 def cosine(left: list[float], right: list[float]) -> float:
@@ -142,16 +149,17 @@ def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
-def strength(semantic: float | None, keyword: float, citation: float, weights: dict[str, float]) -> int:
+def strength(semantic: float | None, keyword: float, citation: float | None, weights: dict[str, float]) -> int:
     keyword = _clamp(keyword)
-    citation = 1.0 if citation >= 1 else 0.0
-    if semantic is None:
-        usable = weights["keyword"] + weights["citation"]
-        if usable <= 0:
-            return 0
-        raw = (weights["keyword"] * keyword + weights["citation"] * citation) / usable
-    else:
-        raw = weights["semantic"] * _clamp(semantic) + weights["keyword"] * keyword + weights["citation"] * citation
+    active = {"keyword": keyword}
+    if semantic is not None:
+        active["semantic"] = _clamp(semantic)
+    if citation is not None:
+        active["citation"] = 1.0 if citation >= 1 else 0.0
+    usable = sum(weights[name] for name in active)
+    if usable <= 0:
+        return 0
+    raw = sum(weights[name] * value for name, value in active.items()) / usable
     return max(0, min(100, int(round(raw * 100))))
 
 
@@ -161,9 +169,15 @@ def judge(
     seed_count: int,
     directions: set[str],
     weights: dict[str, float],
+    citation_known: bool = True,
 ) -> dict:
     keyword_score = len(shared) / seed_count if seed_count else 0.0
-    citation_score = 1.0 if directions else 0.0
+    if directions:
+        citation_score = 1.0
+    elif citation_known:
+        citation_score = 0.0
+    else:
+        citation_score = None
     semantic_score = None if semantic is None else round(_clamp(semantic), 4)
     similar = (semantic_score is not None and semantic_score >= SIMILAR_COSINE) or len(shared) >= SIMILAR_SHARED
     relations = []
@@ -189,6 +203,8 @@ def judge(
         citation_text = "Semantic Scholar 参考文献记录当前论文引用了该论文"
     elif "in" in directions:
         citation_text = "Semantic Scholar 被引列表记录该论文引用了当前论文"
+    elif citation_score is None:
+        citation_text = "引用信息未知／暂不可用"
     else:
         citation_text = ""
     if citation_text:

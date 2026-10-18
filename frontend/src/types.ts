@@ -68,10 +68,16 @@ export interface Conversation extends ConversationSummary {
   messages: ConversationMessage[];
 }
 
+export interface CompareEvidence {
+  paragraph_id: string;
+  quote: string;
+  section?: string | null;
+}
+
 export interface CompareTable {
   dimensions: string[];
   notes: string[];
-  rows: { paper_id: string; title: string; cells: { dimension: string; text: string; missing: boolean; evidence_ids: string[] }[] }[];
+  rows: { paper_id: string; title: string; cells: { dimension: string; text: string; missing: boolean; evidence_ids: string[]; evidence?: CompareEvidence[] }[] }[];
 }
 
 export interface ResearchEvent {
@@ -212,10 +218,15 @@ export interface RecommendationItem {
   id: string;
   title: string;
   year: number | null;
+  authors?: string[];
+  venue?: string | null;
+  abstract?: string | null;
+  url?: string | null;
+  citation_count?: number | null;
   strength: number;
   semantic_score: number | null;
   keyword_score: number;
-  citation_score: number;
+  citation_score: number | null;
   reasons: RecommendationReason[];
   relations: string[];
 }

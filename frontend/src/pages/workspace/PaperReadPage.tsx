@@ -14,7 +14,7 @@ import { AnalysisProgress } from "../../components/AnalysisProgress";
 import { projects } from "../../projects";
 import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind, Paper } from "../../types";
 import { ccfLabel, SOURCE_LABEL } from "../../types";
-import { safeReturn } from "../../workspace";
+import { recommendLocation, safeReturn, workspacePaperPath } from "../../workspace";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
 
 const ACTIVE = new Set(["pending", "preparing", "analyzing"]);
@@ -138,6 +138,7 @@ export default function PaperReadPage() {
       <div className="read-actions">
         <Button type={result ? "default" : "primary"} icon={<PlayCircleOutlined />} loading={busy} onClick={rerun}>{result ? "重新分析" : "开始分析"}</Button>
         <Button icon={<PlusSquareOutlined />} onClick={() => navigate(`/w/${id}/compare?pick=${encodeURIComponent(key)}`)}>加入论文对比</Button>
+        <Button onClick={() => navigate(recommendLocation(key, workspacePaperPath(id, key)))}>相关推荐</Button>
         <Button loading={openingChat} onClick={openChat}>与研究助手讨论</Button>
         <Button icon={<ExportOutlined />} disabled={!result} onClick={exportAnalysis}>导出分析</Button>
       </div>

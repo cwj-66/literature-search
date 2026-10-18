@@ -21,7 +21,6 @@ from app.schemas import (
     ResearchResume, ResearchStart, SearchResponse,
 )
 from app.services.analysis import analysis, analysis_store, attribution
-from app.services.analysis.evidence_analysis import UNKNOWN
 from app.services.knowledge_graph import knowledge_graph
 from app.services.papers import ccf, library, metadata, upload
 from app.services.retrieval import hybrid, recommend
@@ -274,27 +273,55 @@ async def project_qa(payload: QARequest):
         raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
 
 
-def _empty_fields() -> AnalysisFields:
-    return AnalysisFields(
-        research_problem=UNKNOWN, main_content=UNKNOWN, technical_method=UNKNOWN,
-        innovations=[UNKNOWN], experimental_results=UNKNOWN, limitations=UNKNOWN,
-        keywords=[UNKNOWN], analysis_basis="abstract", claims=[],
-    )
+_RUNNING = {"pending", "preparing", "analyzing"}
+
+
+def _analysis_block(task: dict | None, result: dict | None) -> str | None:
+    status = task.get("status") if task else None
+    if status in _RUNNING:
+        return "分析中"
+    if status == "failed":
+        return "分析失败"
+    if not result:
+        return "未分析"
+    return None
 
 
 @app.post("/api/compare")
 async def compare_papers(payload: CompareRequest):
     try:
-        rows = []
+        ordered: list[str] = []
         for paper_id in payload.paper_ids:
+            if paper_id not in ordered:
+                ordered.append(paper_id)
+        if len(ordered) < 2:
+            raise HTTPException(status_code=400, detail="请选择 2–5 篇不同的论文")
+        rows = []
+        blocked = []
+        for paper_id in ordered:
             paper = await asyncio.to_thread(library.get_paper, paper_id)
             if paper is None:
                 raise HTTPException(status_code=404, detail="对比论文必须先加入文献库")
             target = await asyncio.to_thread(analysis.resolve_target, paper_id)
-            _, result = await asyncio.to_thread(analysis_store.get_state, target.aliases, target.local_id)
-            fields = AnalysisFields.model_validate(result) if result else _empty_fields()
+            task, result = await asyncio.to_thread(analysis_store.get_state, target.aliases, target.local_id)
+            reason = _analysis_block(task, result)
+            if reason:
+                blocked.append(f"{paper.title}（{reason}）")
+                continue
+            try:
+                fields = AnalysisFields.model_validate(result)
+            except ValidationError:
+                blocked.append(f"{paper.title}（分析失败）")
+                continue
             rows.append((paper, fields))
-        return attribution.comparison_table(rows, payload.dimensions)
+        if blocked:
+            raise HTTPException(status_code=409, detail="以下论文尚未完成分析，不能生成对比表：" + "、".join(blocked))
+        table = attribution.comparison_table(rows, payload.dimensions)
+        for line, paper_id in zip(table["rows"], ordered):
+            line["paper_id"] = paper_id
+            for cell in line["cells"]:
+                cell["paper_id"] = paper_id
+        return table
     except analysis.ResolveError as exc:
         raise _analysis_error(exc) from None
     except (sqlite3.Error, OSError):

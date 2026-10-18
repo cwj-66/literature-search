@@ -14,14 +14,12 @@ from app.services.retrieval.hybrid import retrieve
 EVIDENCE_NS = "E"
 CLAIM_NS = "A"
 VERDICTS = ("supported", "insufficient", "contradictory", "unverifiable")
-DEFAULT_DIMS = ["研究问题", "核心机制", "作者声称的贡献", "数据集", "评价指标", "实验条件", "主要结果", "局限性"]
-KIND_DIM = {
-    "research_problem": "研究问题",
-    "technical_method": "核心机制",
-    "innovation": "作者声称的贡献",
-    "evaluation": "主要结果",
-    "limitation": "局限性",
-}
+MISSING = "未提取到"
+COMPARE_NOTE = "内容来自各论文已保存的分析结果；实验任务、数据集或指标不同，不直接按数字排名。"
+DEFAULT_DIMS = [
+    "研究问题", "核心方法", "作者声称的贡献", "数据集与实验任务",
+    "实验条件及对比基线", "评价指标", "主要结果", "局限性",
+]
 
 
 class EvidenceItem(BaseModel):
@@ -46,11 +44,18 @@ class JudgeOutput(BaseModel):
     reviews: list[JudgeItem]
 
 
+class CompareEvidence(BaseModel):
+    paragraph_id: str
+    quote: str
+    section: str | None = None
+
+
 class CompareCell(BaseModel):
     paper_id: str
     dimension: str
     text: str
     evidence_ids: list[str] = Field(default_factory=list)
+    evidence: list[CompareEvidence] = Field(default_factory=list)
     missing: bool = False
 
 
@@ -212,46 +217,121 @@ async def answer_question(question: str, paper_ids: list[str] | None = None, rou
     }
 
 
-def cell_from_fields(paper: PaperOut, fields: AnalysisFields, dimension: str, start: int = 1) -> CompareCell:
-    if dimension == "数据集":
-        claims = [c for c in fields.claims if c.kind == "evaluation" and c.dataset]
-        values = [c.dataset for c in claims if c.dataset]
-    elif dimension == "评价指标":
-        claims = [c for c in fields.claims if c.kind == "evaluation" and c.metric]
-        values = [c.metric for c in claims if c.metric]
-    elif dimension == "实验条件":
-        claims = [c for c in fields.claims if c.kind == "evaluation" and c.conditions]
-        values = [c.conditions for c in claims if c.conditions]
-    else:
-        kinds = [kind for kind, name in KIND_DIM.items() if name == dimension]
-        claims = [c for c in fields.claims if c.kind in kinds]
-        values = [c.text for c in claims]
-    text = "；".join(value for value in values if value and value != ea.UNKNOWN)
+def usable(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text or text == ea.UNKNOWN:
+        return None
+    return text
+
+
+def claim_texts(claims: list[AnalysisClaim]) -> tuple[list[str], list[AnalysisClaim]]:
+    values, kept = [], []
+    for claim in claims:
+        text = usable(claim.text)
+        if text:
+            values.append(text)
+            kept.append(claim)
+    return values, kept
+
+
+def located_evidence(claims: list[AnalysisClaim], fields: AnalysisFields) -> list[CompareEvidence]:
+    sections = {item.id: item.section for item in fields.source_paragraphs}
+    found: list[CompareEvidence] = []
+    seen: set[tuple[str, str]] = set()
+    for claim in claims:
+        for ref in claim.evidence:
+            paragraph_id = ref.paragraph_id.strip()
+            quote = ref.quote.strip()
+            if not paragraph_id or len(compact(quote)) < 8:
+                continue
+            key = (paragraph_id, compact(quote))
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append(CompareEvidence(paragraph_id=paragraph_id, quote=quote[:900], section=sections.get(paragraph_id)))
+            if len(found) >= 6:
+                return found
+    return found
+
+
+def dimension_values(fields: AnalysisFields, dimension: str) -> tuple[list[str], list[AnalysisClaim]]:
+    if dimension == "研究问题":
+        values, claims = claim_texts([c for c in fields.claims if c.kind == "research_problem"])
+        if values:
+            return values, claims
+        fallback = usable(fields.research_problem)
+        return ([fallback] if fallback else []), []
+    if dimension == "核心方法":
+        values, claims = claim_texts([c for c in fields.claims if c.kind in ("technical_method", "method_step")])
+        if values:
+            return values, claims
+        fallback = usable(fields.technical_method)
+        return ([fallback] if fallback else []), []
+    if dimension == "作者声称的贡献":
+        values, claims = claim_texts([c for c in fields.claims if c.kind == "innovation"])
+        if values:
+            return values, claims
+        return [text for text in (usable(item) for item in fields.innovations) if text], []
+    if dimension == "数据集与实验任务":
+        claims = [c for c in fields.claims if c.kind == "evaluation" and usable(c.dataset)]
+        return [usable(c.dataset) or "" for c in claims], claims
+    if dimension == "实验条件及对比基线":
+        claims, values = [], []
+        for claim in fields.claims:
+            if claim.kind != "evaluation":
+                continue
+            parts = [part for part in (usable(claim.conditions), usable(claim.baseline)) if part]
+            if parts:
+                claims.append(claim)
+                values.append("；".join(parts))
+        return values, claims
+    if dimension == "评价指标":
+        claims = [c for c in fields.claims if c.kind == "evaluation" and usable(c.metric)]
+        return [usable(c.metric) or "" for c in claims], claims
+    if dimension == "主要结果":
+        claims, values = [], []
+        for claim in fields.claims:
+            if claim.kind != "evaluation":
+                continue
+            text = usable(claim.result) or usable(claim.text)
+            if text:
+                claims.append(claim)
+                values.append(text)
+        if values:
+            return values, claims
+        fallback = usable(fields.experimental_results)
+        return ([fallback] if fallback else []), []
+    if dimension == "局限性":
+        values, claims = claim_texts([c for c in fields.claims if c.kind == "limitation"])
+        if values:
+            return values, claims
+        fallback = usable(fields.limitations)
+        return ([fallback] if fallback else []), []
+    return [], []
+
+
+def cell_from_fields(paper: PaperOut, fields: AnalysisFields, dimension: str) -> CompareCell:
+    values, claims = dimension_values(fields, dimension)
+    text = "；".join(dict.fromkeys(value for value in values if value))[:800]
     if not text.strip():
-        return CompareCell(paper_id=paper.id, dimension=dimension, text="未找到", missing=True)
-    ids = [f"{EVIDENCE_NS}{start + index:04d}" for index, claim in enumerate(claims) if claim.evidence]
-    return CompareCell(paper_id=paper.id, dimension=dimension, text=text[:800], evidence_ids=ids[:6], missing=False)
+        return CompareCell(paper_id=paper.id, dimension=dimension, text=MISSING, missing=True)
+    return CompareCell(
+        paper_id=paper.id, dimension=dimension, text=text,
+        evidence=located_evidence(claims, fields), missing=False,
+    )
 
 
 def comparison_table(rows: list[tuple[PaperOut, AnalysisFields]], dimensions: list[str] | None = None) -> dict:
-    dimensions = dimensions or DEFAULT_DIMS
+    dimensions = dimensions or list(DEFAULT_DIMS)
     table = []
-    notes = []
-    datasets = set()
-    metrics = set()
     for paper, fields in rows:
         line = {"paper_id": paper.id, "title": paper.title, "cells": []}
         for dimension in dimensions:
-            cell = cell_from_fields(paper, fields, dimension, start=len(table) * 10 + 1)
-            line["cells"].append(cell.model_dump())
-            if dimension == "数据集" and not cell.missing:
-                datasets.add(cell.text)
-            if dimension == "评价指标" and not cell.missing:
-                metrics.add(cell.text)
+            line["cells"].append(cell_from_fields(paper, fields, dimension).model_dump())
         table.append(line)
-    if len(datasets) > 1 or len(metrics) > 1:
-        notes.append("数据集或评价指标不一致，结果不可直接排名。")
-    return {"dimensions": dimensions, "rows": table, "notes": notes}
+    return {"dimensions": dimensions, "rows": table, "notes": [COMPARE_NOTE]}
 
 
 async def decompose(question: str) -> dict:

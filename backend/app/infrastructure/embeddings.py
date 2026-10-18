@@ -120,7 +120,9 @@ async def fetch_vectors(model: str, texts: list[str], key: str | None = None, ba
     return found
 
 
-async def embed_many(texts: list[str], model: str | None = None, key: str | None = None, base: str | None = None) -> dict[str, list[float]]:
+async def embed_many(
+    texts: list[str], model: str | None = None, key: str | None = None, base: str | None = None, persist: bool = True,
+) -> dict[str, list[float]]:
     unique = []
     for text in texts:
         if text and text not in unique:
@@ -128,11 +130,12 @@ async def embed_many(texts: list[str], model: str | None = None, key: str | None
     if not unique:
         return {}
     model = model or model_name()
-    cached = await asyncio.to_thread(load_cached, model, unique)
+    cached = await asyncio.to_thread(load_cached, model, unique) if persist else {}
     missing = [text for text in unique if text not in cached]
     if missing:
         fresh = await fetch_vectors(model, missing, key, base)
-        await asyncio.to_thread(store_vectors, model, fresh)
+        if persist:
+            await asyncio.to_thread(store_vectors, model, fresh)
         cached.update(fresh)
     return {text: cached[text] for text in unique if text in cached}
 

@@ -119,7 +119,7 @@ class QARequest(BaseModel):
 
 
 class CompareRequest(BaseModel):
-    paper_ids: list[str] = Field(min_length=3, max_length=5)
+    paper_ids: list[str] = Field(min_length=2, max_length=5)
     dimensions: list[str] | None = None
 
 
@@ -248,10 +248,15 @@ class RecommendationItem(BaseModel):
     id: str
     title: str
     year: int | None = None
+    authors: list[str] = Field(default_factory=list)
+    venue: str | None = None
+    abstract: str | None = None
+    url: str | None = None
+    citation_count: int | None = None
     strength: int = Field(ge=0, le=100)
     semantic_score: float | None = None
     keyword_score: float = Field(ge=0, le=1)
-    citation_score: float = Field(ge=0, le=1)
+    citation_score: float | None = Field(None, ge=0, le=1)
     reasons: list[ReasonOut]
     relations: list[str]
 

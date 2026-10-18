@@ -36,7 +36,15 @@ class AttributionTests(unittest.IsolatedAsyncioTestCase):
         other = fields()
         other.claims[1] = other.claims[1].model_copy(update={"dataset": "基准B", "metric": "F1"})
         table = att.comparison_table([(left, fields()), (right, other)])
-        self.assertTrue(any("不可直接排名" in note for note in table["notes"]))
+        self.assertEqual(table["dimensions"], [
+            "研究问题", "核心方法", "作者声称的贡献", "数据集与实验任务",
+            "实验条件及对比基线", "评价指标", "主要结果", "局限性",
+        ])
+        self.assertTrue(any("不直接按数字排名" in note for note in table["notes"]))
+        problem = next(cell for cell in table["rows"][0]["cells"] if cell["dimension"] == "研究问题")
+        self.assertEqual(problem["evidence"][0]["paragraph_id"], "P0001")
+        self.assertEqual(problem["evidence_ids"], [])
+        self.assertEqual(next(cell["text"] for cell in table["rows"][0]["cells"] if cell["dimension"] == "核心方法"), "证据约束解码")
         empty = AnalysisFields(
             research_problem=UNKNOWN, main_content=UNKNOWN, technical_method=UNKNOWN,
             innovations=[UNKNOWN], experimental_results=UNKNOWN, limitations=UNKNOWN,
@@ -45,6 +53,8 @@ class AttributionTests(unittest.IsolatedAsyncioTestCase):
         missing = att.comparison_table([(left, empty)])
         cell = next(c for c in missing["rows"][0]["cells"] if c["dimension"] == "研究问题")
         self.assertTrue(cell["missing"])
+        self.assertEqual(cell["text"], "未提取到")
+        self.assertEqual(cell["evidence"], [])
 
     async def test_judge_rejects_ids_outside_evidence_set(self):
         evidence = [att.EvidenceItem(evidence_id="E0001", paper_id="p1", quote="We reduce hallucination.")]

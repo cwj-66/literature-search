@@ -1,92 +1,112 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Alert, Button, Checkbox } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { compareLibrary } from "../../api";
+import { AnalysisBadge, compareBlockReason, useAnalysisStates } from "../../components/AnalysisBadge";
+import { CompareMatrix } from "../../components/CompareMatrix";
 import { CompareEmpty } from "../../components/EmptyState";
 import { formatAuthors } from "../../components/PaperRow";
 import type { CompareTable } from "../../types";
-import { paperLocation } from "../../workspace";
+import { workspacePaperPath } from "../../workspace";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
-
-function clip(text: string | null) {
-  if (!text) return "无摘要";
-  return text.length > 90 ? `${text.slice(0, 90)}…` : text;
-}
 
 export default function ComparePage() {
   const { id, project } = useWorkspaceProject();
   const [picked, setPicked] = useState<string[]>([]);
   const [table, setTable] = useState<CompareTable | null>(null);
-  const [tableIds, setTableIds] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [params] = useSearchParams();
+  const request = useRef(0);
+  const seen = useRef<string | null>(null);
   const here = `/w/${id}/compare`;
+  const signature = picked.join("|");
   useEffect(() => { document.title = project ? `${project.name} - 论文对比` : "工作区"; }, [project]);
   useEffect(() => {
+    if (seen.current === null) { seen.current = signature; return; }
+    if (seen.current === signature) return;
+    seen.current = signature;
+    request.current += 1;
+    setTable(null);
+    setError("");
+    setBusy(false);
+  }, [signature]);
+  useEffect(() => {
     const initial = params.getAll("pick").filter(key => project?.papers[key]);
-    if (initial.length) setPicked(current => [...new Set([...current, ...initial])].slice(0, 5));
+    if (!initial.length) return;
+    setPicked(current => {
+      const next = [...new Set([...current, ...initial])].slice(0, 5);
+      return next.join("|") === current.join("|") ? current : next;
+    });
   }, [params, project]);
+  const entries = Object.entries(project?.papers ?? {});
+  const states = useAnalysisStates(entries.map(([key]) => key));
   if (!project) return <MissingWorkspace />;
-  const entries = Object.entries(project.papers);
   const selected = entries.filter(([key]) => picked.includes(key));
-  const signature = picked.join("|");
+  const pending = selected.some(([key]) => states[key] === undefined);
+  const blockers = selected.flatMap(([key, item]) => {
+    const reason = compareBlockReason(states[key]);
+    return reason && reason !== "状态读取中" ? [{ key, title: item.paper.title, reason }] : [];
+  });
+  const ready = selected.length >= 2 && selected.length <= 5 && !pending && !blockers.length;
+
   function toggle(key: string) {
     setPicked(current => current.includes(key) ? current.filter(item => item !== key) : current.length >= 5 ? current : [...current, key]);
   }
   function run() {
-    if (selected.length < 3 || selected.length > 5 || busy) return;
-    const mark = signature;
+    if (!ready || busy) return;
+    const token = ++request.current;
     const ids = selected.map(([key]) => key);
-    setBusy(true); setError("");
-    compareLibrary(ids).then(data => { setTable(data); setTableIds(mark); })
-      .catch((err: Error) => setError(err.message || "生成对比表失败"))
-      .finally(() => setBusy(false));
+    setBusy(true);
+    setError("");
+    compareLibrary(ids).then(data => { if (request.current === token) setTable(data); })
+      .catch((err: Error) => { if (request.current === token) setError(err.message || "生成对比表失败"); })
+      .finally(() => { if (request.current === token) setBusy(false); });
   }
-  const cell = (row: CompareTable["rows"][number], dimension: string) => row.cells.find(item => item.dimension === dimension);
   return <main className={entries.length ? "ws-page" : "ws-page ws-empty-page"}>
     <header className="ws-page-head">
       <div>
         <h1>论文对比</h1>
-        <p>{entries.length ? "选出 2–5 篇并排查看年份、作者和摘要。选出 3–5 篇后，可以按已有的 AI 分析生成对比表。" : "选择 2–5 篇论文进行对比，分析它们的研究问题、方法、创新点和实验结果。"}</p>
+        <p>{entries.length
+          ? "选择 2–5 篇论文。选中后先看基本信息；全部完成单篇分析后，再生成研究内容对比表。打开本页或生成对比表都不会查找相关论文。"
+          : "选择 2–5 篇论文，在全部完成单篇分析后对比研究内容。"}</p>
       </div>
     </header>
     {!entries.length ? <CompareEmpty workspaceId={id} /> : <>
       <ul className="ws-pick">
         {entries.map(([key, item]) => <li key={key}>
           <Checkbox checked={picked.includes(key)} disabled={!picked.includes(key) && picked.length >= 5} onChange={() => toggle(key)}>{item.paper.title}</Checkbox>
+          <span className="ws-pick-side">
+            <AnalysisBadge state={states[key]} />
+            <Link to={workspacePaperPath(id, key, here)}>查看分析</Link>
+          </span>
         </li>)}
       </ul>
-      {selected.length < 2 ? <p className="empty-hint">{selected.length ? "再选一篇就可以并排查看。" : "勾选论文后在这里比较。"}</p> : <div className="table-scroll" tabIndex={0} aria-label="论文基本信息对比">
-        <table className="compare-table">
-          <thead><tr><th scope="col">项目</th>{selected.map(([key, item]) => <th scope="col" key={key}><Link to={paperLocation(key, here)}>{item.paper.title}</Link></th>)}</tr></thead>
-          <tbody>
-            <tr><th scope="row">年份</th>{selected.map(([key, item]) => <td key={key}>{item.paper.year ?? "未知"}</td>)}</tr>
-            <tr><th scope="row">作者</th>{selected.map(([key, item]) => <td key={key}>{formatAuthors(item.paper.authors, 3)}</td>)}</tr>
-            <tr><th scope="row">期刊／会议</th>{selected.map(([key, item]) => <td key={key}>{item.paper.venue || "未知"}</td>)}</tr>
-            <tr><th scope="row">引用</th>{selected.map(([key, item]) => <td key={key}>{item.paper.citation_count ?? "未知"}</td>)}</tr>
-            <tr><th scope="row">摘要</th>{selected.map(([key, item]) => <td key={key}>{clip(item.paper.abstract)}</td>)}</tr>
-          </tbody>
-        </table>
-      </div>}
-      <div className="ws-compare-actions">
-        <span className="small-print">AI 对比表汇总各论文已有分析；还没分析过的维度会显示为未提取到。</span>
-        <Button type="primary" disabled={selected.length < 3 || selected.length > 5} loading={busy} onClick={run}>{table && tableIds === signature ? "重新生成" : "生成 AI 对比表"}</Button>
-      </div>
-      {error ? <Alert type="error" showIcon message={error} /> : null}
-      {table && tableIds !== signature ? <Alert type="info" showIcon message="选择已变化，下表仍是上次的结果。" /> : null}
-      {table ? <section aria-label="AI 对比表">
-        {table.notes.map(note => <Alert key={note} type="warning" showIcon message={note} />)}
-        <div className="table-scroll" tabIndex={0} aria-label="AI 对比表，可横向滚动">
-          <table className="compare-table">
-            <thead><tr><th scope="col">维度</th>{table.rows.map(row => <th scope="col" key={row.paper_id}><Link to={paperLocation(row.paper_id, here)}>{row.title}</Link></th>)}</tr></thead>
-            <tbody>{table.dimensions.map(dimension => <tr key={dimension}>
-              <th scope="row">{dimension}</th>
-              {table.rows.map(row => { const value = cell(row, dimension); return <td key={row.paper_id} className={!value || value.missing ? "is-missing" : undefined}>{!value || value.missing ? "未提取到" : value.text}</td>; })}
-            </tr>)}</tbody>
+      {selected.length < 2 ? <p className="empty-hint">{selected.length ? "再选一篇就可以并排查看基本信息。" : "勾选 2–5 篇论文后在这里比较。"}</p> : <>
+        <h2 className="compare-section-title">基本信息</h2>
+        <div className="table-scroll" tabIndex={0} aria-label="论文基本信息对比">
+          <table className="compare-table" style={{ "--compare-cols": selected.length } as CSSProperties}>
+            <thead><tr><th scope="col">项目</th>{selected.map(([key, item]) => <th scope="col" key={key}><Link to={workspacePaperPath(id, key, here)}>{item.paper.title}</Link></th>)}</tr></thead>
+            <tbody>
+              <tr><th scope="row">年份</th>{selected.map(([key, item]) => <td key={key}>{item.paper.year ?? "未知"}</td>)}</tr>
+              <tr><th scope="row">作者</th>{selected.map(([key, item]) => <td key={key}>{formatAuthors(item.paper.authors, 4)}</td>)}</tr>
+              <tr><th scope="row">期刊／会议</th>{selected.map(([key, item]) => <td key={key}>{item.paper.venue || "未知"}</td>)}</tr>
+              <tr><th scope="row">被引用次数</th>{selected.map(([key, item]) => <td key={key}>{item.paper.citation_count ?? "未知／暂不可用"}</td>)}</tr>
+              <tr><th scope="row">摘要</th>{selected.map(([key, item]) => <td key={key} className="compare-abstract">{item.paper.abstract || "无摘要"}</td>)}</tr>
+            </tbody>
           </table>
         </div>
-      </section> : null}
+      </>}
+      <div className="ws-compare-actions">
+        <span className="small-print">生成对比表只读取已保存的分析结果，不会重新分析，也不会调用大模型。</span>
+        <Button type="primary" disabled={!ready} loading={busy} onClick={run}>生成对比表</Button>
+      </div>
+      {pending && selected.length >= 2 ? <p className="muted">正在确认各论文的分析状态。</p> : null}
+      {blockers.length ? <Alert type="warning" showIcon message="以下论文尚未完成分析，不能生成对比表" description={
+        <ul className="compare-blockers">{blockers.map(item => <li key={item.key}>{item.title}（{item.reason}）<Link to={workspacePaperPath(id, item.key, here)}>进入分析页</Link></li>)}</ul>
+      } /> : null}
+      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {table ? <CompareMatrix table={table} hrefFor={paperId => workspacePaperPath(id, paperId, here)} /> : null}
     </>}
   </main>;
 }

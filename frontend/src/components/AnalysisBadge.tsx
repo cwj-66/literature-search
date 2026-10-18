@@ -20,16 +20,28 @@ export function useAnalysisStates(ids: string[]) {
   return states;
 }
 
+const RUNNING = ["pending", "preparing", "analyzing"];
+
 export function analysisStatus(state: AnalysisState | "error" | undefined) {
   if (state === undefined) return { tone: "loading", label: "…" };
   if (state === "error") return { tone: "neutral", label: "状态未知" };
   const status = state.task?.status;
-  if (status && ["pending", "preparing", "analyzing"].includes(status)) return { tone: "accent", label: "分析中" };
-  if (status === "failed" && !state.result) return { tone: "danger", label: "分析失败" };
+  if (status && RUNNING.includes(status)) return { tone: "accent", label: "分析中" };
+  if (status === "failed") return { tone: "danger", label: "分析失败" };
   if (state.result) return state.result.analysis_basis === "full_text"
     ? { tone: "success", label: "全文分析" }
     : { tone: "warning", label: "摘要级分析" };
   return { tone: "neutral", label: "未分析" };
+}
+
+export function compareBlockReason(state: AnalysisState | "error" | undefined) {
+  if (state === undefined) return "状态读取中";
+  if (state === "error") return "状态未知";
+  const status = state.task?.status;
+  if (status && RUNNING.includes(status)) return "分析中";
+  if (status === "failed") return "分析失败";
+  if (!state.result) return "未分析";
+  return null;
 }
 
 export function isAnalyzed(state: AnalysisState | "error" | undefined) {

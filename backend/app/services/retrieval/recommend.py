@@ -5,7 +5,7 @@ import json
 import logging
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -22,6 +22,11 @@ from app.services.retrieval.search import SourceFailure, fetch_paper, semantic_e
 
 log = logging.getLogger(__name__)
 _LOCKS: dict[str, asyncio.Lock] = {}
+SEARCH_LIMIT = 20
+LINK_LIMIT = 20
+LOCAL_LIMIT = 20
+CANDIDATE_LIMIT = 40
+CACHE_TTL_DAYS = 7
 
 
 def lock_for(local_id: str) -> asyncio.Lock:
@@ -122,6 +127,20 @@ def cache_key(local_id: str, weights: dict[str, float], model: str) -> str:
     return f"{ALGORITHM}|{model}|{signature}|{count}|{stamp}|{analyzed or ''}"
 
 
+def cache_fresh(data: dict, now: datetime | None = None) -> bool:
+    raw = (data.get("recommendations") or {}).get("computed_at")
+    if not isinstance(raw, str):
+        return False
+    try:
+        stamp = datetime.fromisoformat(raw)
+    except ValueError:
+        return False
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    return current - stamp <= timedelta(days=CACHE_TTL_DAYS)
+
+
 def read_cache(local_id: str, key: str) -> dict | None:
     with connection() as db:
         row = db.execute(
@@ -134,7 +153,9 @@ def read_cache(local_id: str, key: str) -> dict | None:
         data = json.loads(row["payload"])
     except json.JSONDecodeError:
         return None
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict) or not cache_fresh(data):
+        return None
+    return data
 
 
 def write_cache(local_id: str, key: str, payload: dict) -> None:
@@ -192,14 +213,15 @@ async def _call(label: str, fetcher):
         return [], f"{label}失败"
 
 
-async def recall_remote(seed: PaperOut, terms: list[str]) -> tuple[list[PaperOut], list[PaperOut], list[PaperOut], list[str]]:
+async def recall_remote(seed: PaperOut, terms: list[str]) -> tuple[list[PaperOut], list[PaperOut], list[PaperOut], list[str], bool]:
     if not semantic_enabled():
-        return [], [], [], ["Semantic Scholar 已停用，引用关系暂不可用。推荐只比较本地库中的论文。"]
+        return [], [], [], ["Semantic Scholar 已停用，引用关系暂不可用。推荐只比较本地库中的论文。"], False
     warnings: list[str] = []
     query = recall_query(terms, seed.title)
     ref = s2_paper_ref(seed)
+    citation_known = False
     if not ref:
-        _warn(warnings, "当前论文缺少 arXiv、DOI 或 Semantic Scholar 标识，无法核验引用关系")
+        _warn(warnings, "当前论文缺少 arXiv、DOI 或 Semantic Scholar 标识，引用信息未知／暂不可用")
     found: list[PaperOut] = []
     outgoing: list[PaperOut] = []
     incoming: list[PaperOut] = []
@@ -208,7 +230,7 @@ async def recall_remote(seed: PaperOut, terms: list[str]) -> tuple[list[PaperOut
         if query:
             found, message = await _call(
                 "Semantic Scholar 检索",
-                lambda: search.search_semantic_scholar(client, query, 0, 20, None, None),
+                lambda: search.search_semantic_scholar(client, query, 0, SEARCH_LIMIT, None, None),
             )
             if message:
                 _warn(warnings, "Semantic Scholar 检索暂不可用，外部候选可能不全")
@@ -223,9 +245,10 @@ async def recall_remote(seed: PaperOut, terms: list[str]) -> tuple[list[PaperOut
                 "被引列表",
                 lambda: search.fetch_s2_links(client, ref, "citations"),
             )
-            if out_message or in_message:
-                _warn(warnings, "引用关系暂不可用或不完整，本次不会把仅有相似度的论文标成引用")
-    return found[:20], outgoing, incoming, warnings
+            citation_known = not out_message and not in_message
+            if not citation_known:
+                _warn(warnings, "引用信息未知／暂不可用，不会当成确定没有引用")
+    return found[:SEARCH_LIMIT], outgoing[:LINK_LIMIT], incoming[:LINK_LIMIT], warnings, citation_known
 
 
 def _edge(source: str, target: str, kind: str, label: str, directed: bool) -> dict:
@@ -238,6 +261,11 @@ def _public_item(item: dict) -> dict:
         "id": canonical_id(paper),
         "title": paper.title,
         "year": paper.year,
+        "authors": list(paper.authors),
+        "venue": paper.venue,
+        "abstract": paper.abstract,
+        "url": paper.url or paper.pdf_url,
+        "citation_count": paper.citation_count,
         "strength": item["strength"],
         "semantic_score": item["semantic_score"],
         "keyword_score": item["keyword_score"],
@@ -247,13 +275,48 @@ def _public_item(item: dict) -> dict:
     }
 
 
+def limit_candidates(groups: list[dict], limit: int = CANDIDATE_LIMIT) -> list[dict]:
+    search, cited, local = [], [], []
+    for group in groups:
+        if group.get("directions"):
+            cited.append(group)
+        elif group.get("remote"):
+            search.append(group)
+        else:
+            local.append(group)
+    local.sort(key=lambda group: (0 if group.get("shared") else 1, group["paper"].title.casefold()))
+    picked: list[dict] = []
+    seen: set[int] = set()
+
+    def take(bucket: list[dict], cap: int) -> None:
+        added = 0
+        for group in bucket:
+            if len(picked) >= limit or added >= cap:
+                return
+            marker = id(group)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            picked.append(group)
+            added += 1
+
+    take(search, SEARCH_LIMIT)
+    take(cited, LINK_LIMIT * 2)
+    take(local, LOCAL_LIMIT)
+    return picked
+
+
+def _cited(score) -> bool:
+    return isinstance(score, (int, float)) and not isinstance(score, bool) and score >= 1
+
+
 def _network(seed, center_id: str, scored: list[dict], warnings: list[str], computed_at: str) -> dict:
     selected = []
     seen = set()
-    citation_items = [item for item in scored if item["citation_score"] >= 1]
+    citation_items = [item for item in scored if _cited(item["citation_score"])]
     ranked = [item for item in scored if item["strength"] > 0]
     for item in citation_items + ranked:
-        if item["citation_score"] < 1 and "similar" not in item["relations"]:
+        if not _cited(item["citation_score"]) and "similar" not in item["relations"]:
             continue
         paper_id = canonical_id(item["paper"])
         if paper_id == center_id or paper_id in seen:
@@ -287,26 +350,26 @@ def _network(seed, center_id: str, scored: list[dict], warnings: list[str], comp
 async def compute(seed, weights: dict[str, float]) -> dict:
     keywords = await asyncio.to_thread(latest_keywords, seed.local_id)
     terms = relation_score.seed_terms(keywords, seed.title, seed.abstract)
-    local = await asyncio.to_thread(library.list_recent, 201)
-    found, outgoing, incoming, warnings = await recall_remote(seed, terms)
+    local = await asyncio.to_thread(library.list_recent, 200)
+    found, outgoing, incoming, warnings, citation_known = await recall_remote(seed, terms)
     seed_keys = identity_keys(seed) | {seed.id, seed.local_id}
     groups: list[dict] = []
-    for paper in local:
-        if getattr(paper, "local_id", None) == seed.local_id:
-            continue
-        remember(groups, paper, None, seed_keys, False)
     for paper in found:
         remember(groups, paper, None, seed_keys, True)
     for paper in outgoing:
         remember(groups, paper, "out", seed_keys, True)
     for paper in incoming:
         remember(groups, paper, "in", seed_keys, True)
+    for paper in local:
+        if getattr(paper, "local_id", None) == seed.local_id:
+            continue
+        remember(groups, paper, None, seed_keys, False)
     for group in groups:
         group["shared"] = relation_score.match_terms(terms, group["paper"].title, group["paper"].abstract)
         group["text"] = relation_score.embed_input(group["paper"].title, group["paper"].abstract)
-    chosen = select_for_embedding(groups)
+    chosen = limit_candidates(groups)
     if len(chosen) < len(groups):
-        _warn(warnings, f"候选论文较多，语义向量只计算了优先的 {len(chosen)} 篇（引用、共同关键词和检索结果优先）")
+        _warn(warnings, f"候选超过 {CANDIDATE_LIMIT} 篇，已保留外部检索、引用和本地论文中的 {len(chosen)} 篇")
     seed_text = relation_score.embed_input(seed.title, seed.abstract)
     texts = [seed_text] if seed_text else []
     for group in chosen:
@@ -316,27 +379,27 @@ async def compute(seed, weights: dict[str, float]) -> dict:
     vectors: dict[str, list[float]] = {}
     if texts:
         try:
-            vectors = await embeddings.embed_many(texts)
+            vectors = await embeddings.embed_many(texts, persist=False)
         except embeddings.EmbeddingError as exc:
             log.warning("embedding unavailable: %s", exc.message)
             semantic_available = False
-            _warn(warnings, "语义向量暂不可用，关联强度仅按关键词和引用关系计算")
+            _warn(warnings, "语义向量未知／暂不可用，不按相似度为 0 计算")
     seed_vector = vectors.get(seed_text) if semantic_available else None
     if semantic_available and seed_vector is None:
         semantic_available = False
-        _warn(warnings, "语义向量暂不可用，关联强度仅按关键词和引用关系计算")
-    chosen_ids = {id(group) for group in chosen}
+        _warn(warnings, "语义向量未知／暂不可用，不按相似度为 0 计算")
     scored = []
-    for group in groups:
-        vector = vectors.get(group["text"]) if semantic_available else None
-        if not semantic_available:
+    for group in chosen:
+        vector = vectors.get(group["text"]) if semantic_available and group["text"] else None
+        if not semantic_available or seed_vector is None or vector is None:
             semantic = None
-        elif id(group) in chosen_ids and seed_vector is not None and vector is not None:
-            semantic = relation_score.cosine(seed_vector, vector)
         else:
-            semantic = 0.0
-        judged = relation_score.judge(semantic, group["shared"], len(terms), group["directions"], weights)
+            semantic = relation_score.cosine(seed_vector, vector)
+        judged = relation_score.judge(
+            semantic, group["shared"], len(terms), group["directions"], weights, citation_known,
+        )
         scored.append({**judged, "paper": group["paper"]})
+    vectors.clear()
     scored.sort(key=lambda item: (-item["strength"], -(item["paper"].year or 0), item["paper"].title.casefold()))
     recommended = [item for item in scored if item["strength"] > 0][:10]
     list_warnings = list(warnings)
@@ -349,7 +412,7 @@ async def compute(seed, weights: dict[str, float]) -> dict:
         "paper_title": seed.title,
         "algorithm_version": ALGORITHM,
         "weights": weights,
-        "formula": relation_score.formula(weights, semantic_available),
+        "formula": relation_score.formula(weights, semantic_available, citation_known),
         "note": NOTE,
         "warnings": list_warnings,
         "computed_at": computed_at,

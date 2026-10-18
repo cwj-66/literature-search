@@ -67,6 +67,25 @@ class ScoreTests(unittest.TestCase):
         self.assertNotIn("similar", result["relations"])
         self.assertTrue(all(item["type"] != "semantic" for item in result["reasons"]))
 
+    def test_unknown_citation_is_not_scored_as_zero(self):
+        unknown = relation_score.judge(0.9, ["retrieval"], 1, set(), DEFAULT_WEIGHTS, citation_known=False)
+        self.assertIsNone(unknown["citation_score"])
+        self.assertIn("未知／暂不可用", unknown["reasons"][-1]["text"])
+        known = relation_score.judge(0.9, ["retrieval"], 1, set(), DEFAULT_WEIGHTS)
+        self.assertEqual(known["citation_score"], 0)
+        recorded = relation_score.judge(0.1, [], 1, {"out"}, DEFAULT_WEIGHTS, citation_known=False)
+        self.assertEqual(recorded["citation_score"], 1)
+
+    def test_candidate_cap_prefers_external_search(self):
+        groups = [{"remote": True, "directions": set(), "shared": [], "paper": paper(id=f"s{index}", arxiv_id=None, title=f"Search {index}")} for index in range(25)]
+        groups.extend({"remote": False, "directions": set(), "shared": ["retrieval"] if index == 0 else [], "paper": paper(id=f"l{index}", arxiv_id=None, title=f"Local {index}")} for index in range(10))
+        chosen = recommend.limit_candidates(groups, 40)
+        self.assertLessEqual(len(chosen), 40)
+        self.assertEqual(sum(1 for item in chosen if item["remote"] and not item["directions"]), 20)
+        local = [item for item in chosen if not item["remote"]]
+        self.assertLessEqual(len(local), 20)
+        self.assertEqual(local[0]["paper"].title, "Local 0")
+
     def test_embedding_budget_keeps_room_for_non_citations(self):
         groups = [{"directions": {"out"}, "shared": [], "remote": True, "name": index} for index in range(3)]
         groups.append({"directions": set(), "shared": ["retrieval"], "remote": False, "name": "keyword"})
@@ -105,7 +124,7 @@ class RecommendApiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.embed_calls = 0
         self.recall = patch.object(
-            recommend, "recall_remote", new=AsyncMock(return_value=([], [self.cited], [], [])),
+            recommend, "recall_remote", new=AsyncMock(return_value=([], [self.cited], [], [], True)),
         )
         self.embed = patch.object(embeddings, "embed_many", self.vectors)
         self.recall.start()
@@ -117,8 +136,9 @@ class RecommendApiTests(unittest.IsolatedAsyncioTestCase):
         self.env.stop()
         self.temp.cleanup()
 
-    async def vectors(self, texts):
+    async def vectors(self, texts, persist=True):
         self.embed_calls += 1
+        self.persisted = persist
         mapped = {}
         for text in texts:
             folded = text.casefold()
@@ -171,9 +191,51 @@ class RecommendApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(edge["type"] == "similar" and edge["target"] == "s2:abc" for edge in edges))
         self.assertFalse(any(edge["type"] == "cites" and "9999.00001" in edge["target"] for edge in edges))
         self.assertEqual(self.embed_calls, 1)
+        self.assertFalse(self.persisted)
+        self.assertEqual(library.list_papers(1, 50)["total"], 3)
+        self.assertIsNone(library.get_paper("s2:abc"))
         cached = await self.get(path)
         self.assertEqual(cached.status_code, 200)
         self.assertEqual(self.embed_calls, 1)
+        self.assertEqual(library.list_papers(1, 50)["total"], 3)
+
+    async def test_expired_cache_is_recomputed(self):
+        self.store()
+        path = f"/api/papers/{quote('arxiv:1', safe='')}/recommendations"
+        first = await self.get(path)
+        self.assertEqual(first.status_code, 200, first.text)
+        saved = library.get_paper("arxiv:1")
+        key = recommend.cache_key(saved.local_id, relation_score.load_weights(), embeddings.model_name())
+        payload = recommend.read_cache(saved.local_id, key)
+        payload["recommendations"]["computed_at"] = "2020-01-01T00:00:00+00:00"
+        recommend.write_cache(saved.local_id, key, payload)
+        self.assertIsNone(recommend.read_cache(saved.local_id, key))
+        again = await self.get(path)
+        self.assertEqual(again.status_code, 200, again.text)
+        self.assertEqual(self.embed_calls, 2)
+
+    async def test_unknown_citation_and_failed_vectors_are_not_zero(self):
+        self.store()
+        path = f"/api/papers/{quote('arxiv:1', safe='')}/recommendations"
+        self.recall.stop()
+        self.embed.stop()
+        try:
+            with patch.object(recommend, "recall_remote", new=AsyncMock(return_value=([], [], [], ["引用信息未知／暂不可用"], False))), \
+                    patch.object(embeddings, "embed_many", new=AsyncMock(side_effect=embeddings.EmbeddingError("失败"))):
+                response = await self.get(path)
+            self.assertEqual(response.status_code, 200, response.text)
+            items = response.json()["items"]
+            self.assertTrue(items)
+            self.assertNotIn("Graph Theory Notes", {item["title"] for item in items})
+            for item in items:
+                self.assertIsNone(item["semantic_score"])
+                self.assertIsNone(item["citation_score"])
+                self.assertTrue(any("未知／暂不可用" in reason["text"] for reason in item["reasons"]))
+                self.assertFalse(any("没有引用" in reason["text"] for reason in item["reasons"]))
+            self.assertEqual(library.list_papers(1, 50)["total"], 3)
+        finally:
+            self.recall.start()
+            self.embed.start()
 
     async def test_recall_uses_search_hits_and_reports_disabled_source(self):
         self.recall.stop()
@@ -182,13 +244,15 @@ class RecommendApiTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(recommend, "semantic_enabled", return_value=True), \
                     patch.object(search, "search_semantic_scholar", new=AsyncMock(return_value=([hit], 1))), \
                     patch.object(search, "fetch_s2_links", new=AsyncMock(return_value=[])):
-                found, outgoing, incoming, warnings = await recommend.recall_remote(paper(), ["retrieval"])
+                found, outgoing, incoming, warnings, citation_known = await recommend.recall_remote(paper(), ["retrieval"])
             self.assertEqual([item.id for item in found], ["arxiv:2"])
             self.assertEqual(outgoing, [])
             self.assertEqual(incoming, [])
             self.assertEqual(warnings, [])
+            self.assertTrue(citation_known)
             with patch.object(recommend, "semantic_enabled", return_value=False):
-                _, _, _, disabled = await recommend.recall_remote(paper(), ["retrieval"])
+                _, _, _, disabled, disabled_known = await recommend.recall_remote(paper(), ["retrieval"])
             self.assertIn("已停用", disabled[0])
+            self.assertFalse(disabled_known)
         finally:
             self.recall.start()
