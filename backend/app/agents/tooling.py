@@ -46,6 +46,10 @@ DOMAIN_DEPENDENCIES = {
     "knowledge": {"list_workspace_papers", "get_paper_analysis"},
 }
 LEGACY_TOOLS = {"save_papers_to_workspace", "request_deep_analysis"}
+OPERATION_TOOLS = {"search_papers", "get_paper_details", "list_workspace_papers",
+                   "add_papers_to_workspace", "remove_paper_from_workspace",
+                   "get_paper_references", "get_paper_citations",
+                   "query_knowledge_graph", "analyze_research_trends"}
 PRIVILEGED_TOOLS = {"add_papers_to_workspace", "remove_paper_from_workspace", "save_papers_to_workspace", "request_deep_analysis"}
 API_TOOLS = {"search_papers", "get_paper_details", "find_related_papers", "get_paper_references", "get_paper_citations", "retrieve_paper_evidence"}
 LLM_TOOLS = {"analyze_paper", "request_deep_analysis"}
@@ -66,10 +70,13 @@ def allowed_tools(state: dict) -> set[str]:
     legacy = LEGACY_TOOLS if state.get("accessible_paper_ids") is None else set()
     domains = [domain for domain in state.get("domains") or [] if domain in DOMAINS or domain == "*"]
     if not domains or "*" in domains:
-        return {tool["name"] for tool in ALL_TOOLS} | legacy
-    names = set()
-    for domain in domains:
-        names |= DOMAIN_TOOLS[domain] | DOMAIN_DEPENDENCIES[domain]
+        names = {tool["name"] for tool in ALL_TOOLS}
+    else:
+        names = set()
+        for domain in domains:
+            names |= DOMAIN_TOOLS[domain] | DOMAIN_DEPENDENCIES[domain]
+    if state.get("task_kind") == "operation":
+        return names & OPERATION_TOOLS
     return names | legacy
 
 
@@ -166,6 +173,10 @@ def _assess_cache_payload(state: dict) -> dict:
         "papers": papers,
         "read_ids": sorted(read_ids),
         "evidence_count": len(state.get("evidence_ids") or []),
+        "evidence": [{"paper_id": item.get("paper_id"), "quote": str(item.get("quote") or "")[:240],
+                      "material": item.get("material")} for item in (state.get("evidence_items") or {}).values()][:20],
+        "reading_status": state.get("workflow_reads") or {},
+        "feedback": state.get("workflow_feedback") or [],
         "gaps": (state.get("gaps") or [])[-5:],
         "source_errors": state.get("source_errors") or {},
         "search_pages": state.get("search_pages") or {},
@@ -896,6 +907,9 @@ async def tool_node(state: dict) -> dict:
             reply(name, call_id, {"status": "skipped", "message": f"{halt}，本调用未执行"})
             continue
         if name in TOOL_REGISTRY and name not in allowed:
+            if acc.get("task_kind") == "operation":
+                reply(name, call_id, {"status": "failed", "message": "该工具不属于当前操作目录，请使用已提供的工具。"})
+                continue
             acc["domains"] = ["*"]
             allowed = allowed_tools(acc)
             events.append({"step": "tool", "name": name, "summary": "工具不在当前领域目录，目录已扩展为全部工具"})

@@ -7,7 +7,7 @@ import { useSessionState } from "../../hooks";
 import type { ResearchEvent, ResearchTask } from "../../types";
 import { paperLocation } from "../../workspace";
 
-const STEP: Record<string, string> = { plan: "规划检索式", search: "检索", expand: "扩展检索", read: "补读全文", synthesize: "综合证据", stop: "结束" };
+const STEP: Record<string, string> = { route: "理解目标", plan: "研究计划", prepare: "确认研究资料", search: "检索", expand: "补充检索", read: "阅读论文", quotes: "核对原文", assess: "检查资料覆盖", synthesize: "综合证据", claims: "检查结论依据", judge: "复核回答", revise: "修订回答", finalize: "完成复核", stop: "结束" };
 
 function eventText(event: ResearchEvent) {
   if (event.step === "plan") return (event.queries || []).join("；");

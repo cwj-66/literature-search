@@ -1,22 +1,20 @@
-"""LangGraph research agent: one graph, role prompts, domain tool catalog.
+"""LangGraph assistant: deterministic evidence workflow plus explicit operations.
 
 Module boundaries:
   prompts.py  role system prompts + AGENT_PROMPT_VERSION
   state.py    AgentState, intermediate models, budgets, unified evidence registry
   store.py    task snapshots/run claims, pause-cancel flags, call cache, operation ledger
   tooling.py  domain catalog, tool handlers, HITL confirmation, tool_node
-  agent.py    graph nodes, build(), task runtime (run / background / resume / continue / SSE)
+  workflow.py discovery, per-paper reading, verified quotes, gap retrieval, synthesis
+  agent.py    routing, review, task runtime (background / resume / continue / SSE)
 
 Graph:
-  START → router ─┬─ finish（缺少必要信息且澄清次数用尽 / 用户取消）
-                  ├─ clarify（interrupt clarify）→ router（重新校验槽位）
-                  ├─ direct → gate_direct → direct_answer → gate_done → finish
-                  ├─ plan（可 interrupt review_plan）→ gate ─┐
-                  └─ react ────────────────────────→ gate ─┤
-                        react_agent ⇄ tool_node → gate_tools（暂停/取消/期限/模型预算）
-                              │ answer
-                        gate_judge → claims → judge ─ revise → react_agent（≤ MAX_JUDGE_ROUNDS）
-                                                   └ finalize → gate_done → finish
+  router → clarify / direct / plan or simple research
+  research → prepare → optional search → read → quotes → assess
+             ↑                           ↑             ├ expand → search
+             └ shared state/checkpoints  └ next paper  └ synthesize → claims → judge
+  judge → bounded repair → synthesize / finalize → finish
+  Explicit workspace operations retain the separate confirmation/tool path.
 """
 
 import asyncio
@@ -30,10 +28,10 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from app.agents import store
+from app.agents import store, workflow
 from app.agents.prompts import (
     AGENT_PROMPT_VERSION, CLAIMS_SYSTEM, DIRECT_SYSTEM, JUDGE_SOURCE_RULES, JUDGE_SYSTEM, REACT_FORMAT_RETRY,
-    REACT_SYSTEM, ROUTER_SYSTEM,
+    REACT_SYSTEM, ROUTER_SYSTEM, OPERATION_SYSTEM,
 )
 from app.agents.state import (
     CRITICAL_SLOTS, DOMAINS, EVIDENCE_ID_RE, MAX_API, MAX_ASSESS, MAX_CLAIM_CHARS, MAX_CLARIFY, MAX_DEEP,
@@ -75,7 +73,7 @@ PAPER_REF = re.compile(r"(?:arxiv:)?\d{4}\.\d{4,5}|(?:doi:)?10\.\d{4,9}/", re.IG
 PAPER_SPECIFIC = re.compile(
     r"(?:这|那|该)(?:一)?篇|该论文|(?:所选|已选|选中|当前)(?:的)?(?:论文|文献)|工作区|"
     r"(?:arxiv:)?\d{4}\.\d{4,5}|(?:doi:)?10\.\d{4,9}/", re.IGNORECASE)
-THIS_PAPER = re.compile(r"(?:这|那|该|本)(?:一)?篇|该论文|这个论文|这份论文")
+THIS_PAPER = re.compile(r"(?:这|那|该|本)(?:一)?篇|该论文|这个论文|这份论文|当前(?:的)?论文")
 THESE_PAPERS = re.compile(r"这些(?:论文|文献)|(?:所选|已选|选中)(?:的)?(?:论文|文献)")
 WORKSPACE_REF = re.compile(r"工作区")
 WORKSPACE_OP = re.compile(r"(?:加入|添加|加到|收藏|移出|移除|删除|放入).{0,12}工作区|工作区.{0,8}(?:有哪些|成员|列表|里有)")
@@ -163,6 +161,7 @@ async def router_node(state: dict) -> dict:
     llm_delta = 0
     domains: list[str] = []
     suggested: list[dict] = []
+    research_intent = state.get("research_intent", "auto")
     if requested in ("plan", "react"):
         mode = requested
         route_info = {"mode": mode, "rationale": "用户指定模式", "source": "override"}
@@ -177,6 +176,7 @@ async def router_node(state: dict) -> dict:
             mode = decision["mode"]
             domains = [domain for domain in decision.get("domains") or [] if domain in DOMAINS or domain == "*"]
             suggested = decision.get("missing_slots") or []
+            research_intent = decision.get("research_intent", "auto")
             route_info = {"mode": mode, "rationale": decision.get("rationale") or "", "source": "llm"}
             if mode == "direct" and PAPER_SPECIFIC.search(goal):
                 mode = "react"
@@ -188,12 +188,13 @@ async def router_node(state: dict) -> dict:
     route_info["requested"] = requested
     if mode == "plan":
         domains = ["*"]
-    task_kind = "chat" if mode == "direct" else ("operation" if WORKSPACE_OP.search(goal) else "research")
+    task_kind = "chat" if mode == "direct" else ("operation" if WORKSPACE_OP.search(goal) or domains == ["knowledge"] else "research")
     updates = {
         "mode": mode,
         "route": route_info,
         "task_kind": task_kind,
         "domains": domains,
+        "research_intent": research_intent,
         "llm_calls": state.get("llm_calls", 0) + llm_delta,
     }
     years = _recent_years(goal) if state.get("year_from") is None and state.get("year_to") is None else None
@@ -405,12 +406,18 @@ async def plan_node(state: dict) -> dict:
         key = store.cache_key("plan", {"goal": state["goal"], "year_from": state.get("year_from"), "year_to": state.get("year_to")})
         planned = store.cache_get(key)
         cache_hit = planned is not None
-        if planned is None:
+        local_read = bool(state.get("selected_paper_ids") or state.get("current_paper_id") or state.get("accessible_paper_ids")) and (
+            state.get("research_intent") == "read" or (
+                state.get("research_intent", "auto") == "auto" and not workflow.SEARCH_HINT.search(state["goal"])))
+        if local_read:
+            planned = {"queries": [state["goal"]], "rationale": "读取指定论文并提取问题相关原文"}
+            cache_hit = True
+        elif planned is None:
             planned = await attribution.decompose(state["goal"])
             if not str(planned.get("rationale") or "").startswith("模型规划不可用"):
                 store.cache_put(key, planned)
         queries = planned["queries"]
-        plan = [{"action": "search", "query": query} for query in queries]
+        plan = [{"action": "read" if local_read else "search", "query": query} for query in queries]
         llm_calls = state.get("llm_calls", 0) + (0 if cache_hit else 1)
         events = with_event(state, {"step": "plan", "queries": queries, "rationale": planned.get("rationale")})
     rejected = False
@@ -440,8 +447,8 @@ def _react_system(state: dict) -> str:
     plan = state.get("plan") or []
     queries = state.get("queries") or []
     return (
-        REACT_SYSTEM
-        + "\n" + domain_prompt(state)
+        (OPERATION_SYSTEM if state.get("task_kind") == "operation" else REACT_SYSTEM)
+        + ("\n" + domain_prompt(state) if state.get("task_kind") != "operation" else "")
         + "\n【业务工具目录】" + json.dumps(catalog_for(state), ensure_ascii=False)
         + "\n【研究范围】" + json.dumps({key: state.get(key) for key in ("workspace_id", "scope", "current_paper_id", "selected_paper_ids")}, ensure_ascii=False)
         + "\n【允许访问的本地论文】" + json.dumps(state.get("accessible_paper_ids"), ensure_ascii=False)
@@ -578,14 +585,14 @@ def _review_skeleton() -> dict:
             "coverage_note": None, "multi_paper_note": None, "final_status": None}
 
 
-def _pool_excerpt(state: dict, evidence_ids: list, limit: int = 300) -> list[dict]:
+def _pool_excerpt(state: dict, evidence_ids: list, limit: int = 900) -> list[dict]:
     pool = state.get("evidence_pool") or {}
     return [{"evidence_id": eid, "quote": str(pool.get(eid) or "")[:limit], "material": material_of(state, eid)}
             for eid in evidence_ids if eid in pool]
 
 
 def _claim_evidence_table(state: dict) -> list[dict]:
-    return [{"evidence_id": eid, "quote": str(quote)[:200], "material": material_of(state, eid)}
+    return [{"evidence_id": eid, "quote": str(quote)[:900], "material": material_of(state, eid)}
             for eid, quote in list((state.get("evidence_pool") or {}).items())[:20]]
 
 
@@ -647,7 +654,8 @@ def _rule_check(claim: dict, pool: dict) -> str | None:
     if any(eid not in pool for eid in evidence_ids):
         return "证据越界"
     quotes = [str(pool.get(eid) or "") for eid in evidence_ids]
-    for match in llm.NUMBER.finditer(claim.get("text") or ""):
+    claim_text = re.sub(r"\[E\d{4}\]", "", claim.get("text") or "")
+    for match in llm.NUMBER.finditer(claim_text):
         token = match.group(0)
         if llm.significant(token):
             needle = token[:-1] if token.endswith("%") else token
@@ -669,6 +677,8 @@ def _coverage_note(state: dict) -> str | None:
 def _multi_paper_note(state: dict, claims: list[dict]) -> str | None:
     """对比/综述类目标要求科研证据（original/abstract）覆盖至少两篇论文；单篇问题豁免。"""
     goal = state.get("goal") or ""
+    if state.get("research_intent") == "discover" or state.get("result_limit") == 1:
+        return None
     if not (COMPARATIVE_HINT.search(goal) or len(state.get("plan") or []) >= 2):
         return None
     attribution_map = state.get("evidence_papers") or {}
@@ -875,13 +885,16 @@ def finalize_answer_node(state: dict) -> dict:
         if not text:
             continue
         status = claim.get("status")
-        if status in ("dropped", "contradicted"):
+        invalid_citation = status == "rule_failed" and any(
+            not EVIDENCE_ID_RE.match(str(eid)) or eid not in (state.get("evidence_pool") or {})
+            for eid in claim.get("evidence_ids") or [])
+        if status in ("dropped", "contradicted") or invalid_citation:
             label = "与证据矛盾" if status == "contradicted" else "证据不足"
             answer, found = _replace_claim(answer, text, f"（该结论{label}，已移除）。")
             if not found:
                 unlocated.append(f"{claim['claim_id']}「{text[:60]}」{label}，应视为已移除")
             mark(claim["claim_id"], text, verify=False)
-        elif status in ("downgraded", "pending"):
+        elif status in ("downgraded", "pending", "rule_failed"):
             answer, found = _replace_claim(answer, text, text.rstrip("。") + "（该结论证据不足，待核实）。")
             if not found:
                 unlocated.append(f"{claim['claim_id']}「{text[:60]}」证据不足，待核实")
@@ -975,12 +988,12 @@ def finish_node(state: dict) -> dict:
     reason = state.get("stop_reason") or budget_exhausted(state) or "没有可继续的动作"
     if task_id and (state.get("cancelled") or is_cancel_requested(task_id)):
         store.clear_flag(task_id)
-    if limited(state) and state.get("papers"):
-        reason = "来源限流，返回部分结果"
+    if limited(state):
+        reason = "来源限流，返回部分结果" if state.get("papers") else "来源限流，未取得候选论文"
     updates = {"stop_reason": reason, "events": with_event(state, {"step": "stop", "reason": reason})}
     answer = state.get("answer")
     finalized = any(event.get("step") == "finalize" for event in state.get("events") or [])
-    if state.get("mode") != "direct" and state.get("react_turns"):
+    if state.get("mode") != "direct" and (state.get("react_turns") or state.get("workflow_stage")):
         if not answer:
             partial = _partial_answer(state, reason)
             if partial:
@@ -1007,6 +1020,18 @@ def build(checkpointer=None):
             log.warning("LangSmith tracing unavailable, running without tracing: %s", type(exc).__name__)
 
     graph = StateGraph(AgentState)
+    def guarded(node):
+        async def run_node(state):
+            updates = gate_node(state)
+            if updates.get("stop_reason"):
+                return updates
+            access = await asyncio.to_thread(workflow.check_access, state)
+            if access:
+                return access
+            result = node({**state, **updates})
+            return await result if asyncio.iscoroutine(result) else result
+        return run_node
+
     graph.add_node("router", router_node)
     graph.add_node("clarify", clarify_node)
     graph.add_node("gate_direct", gate_node)
@@ -1014,6 +1039,15 @@ def build(checkpointer=None):
     graph.add_node("react", react_node)
     graph.add_node("plan", plan_node)
     graph.add_node("gate", gate_node)
+    graph.add_node("prepare_research", guarded(workflow.prepare_node))
+    graph.add_node("search_literature", guarded(workflow.search_node))
+    graph.add_node("read_paper", guarded(workflow.read_node))
+    graph.add_node("extract_quotes", guarded(workflow.quote_node))
+    graph.add_node("assess_evidence", guarded(workflow.assess_node))
+    graph.add_node("select_next_papers", guarded(workflow.select_next_node))
+    graph.add_node("expand_research", guarded(workflow.expand_node))
+    graph.add_node("synthesize_evidence", guarded(workflow.synthesize_node))
+    graph.add_node("repair_answer", guarded(workflow.repair_node))
     graph.add_node("react_agent", react_agent)
     graph.add_node("tool_node", tool_node)
     graph.add_node("gate_tools", gate_node)
@@ -1031,13 +1065,34 @@ def build(checkpointer=None):
     graph.add_edge("direct_answer", "gate_done")
     graph.add_edge("react", "gate")
     graph.add_edge("plan", "gate")
-    graph.add_conditional_edges("gate", gate_route, {"finish": "finish", "continue": "react_agent"})
+    def research_entry(state):
+        if gate_route(state) == "finish":
+            return "finish"
+        return "operation" if state.get("task_kind") == "operation" else "research"
+
+    graph.add_conditional_edges("gate", research_entry, {"finish": "finish", "operation": "react_agent", "research": "prepare_research"})
+    graph.add_conditional_edges("prepare_research", workflow.prepare_route, {"finish": "finish", "search": "search_literature", "read": "read_paper"})
+    graph.add_edge("search_literature", "read_paper")
+    graph.add_edge("read_paper", "extract_quotes")
+    graph.add_conditional_edges("extract_quotes", workflow.read_route, {"finish": "finish", "read": "read_paper", "assess": "assess_evidence"})
+    graph.add_conditional_edges("assess_evidence", workflow.assess_route, {"finish": "finish", "more_read": "select_next_papers", "expand": "expand_research", "synthesize": "synthesize_evidence"})
+    graph.add_edge("select_next_papers", "read_paper")
+    graph.add_edge("expand_research", "search_literature")
+    graph.add_conditional_edges("synthesize_evidence", workflow.synthesis_route, {"finish": "finish", "claims": "gate_judge"})
     graph.add_conditional_edges("react_agent", react_route, {"tools": "tool_node", "done": "gate_judge"})
     graph.add_edge("tool_node", "gate_tools")
     graph.add_conditional_edges("gate_tools", gate_route, {"finish": "finish", "continue": "react_agent"})
     graph.add_conditional_edges("gate_judge", gate_route, {"finish": "finish", "continue": "claims"})
     graph.add_edge("claims", "judge")
-    graph.add_conditional_edges("judge", judge_route, {"revise": "revise", "finalize": "finalize"})
+    def review_entry(state):
+        decision = judge_route(state)
+        if decision == "revise" and state.get("workflow_stage"):
+            return "repair"
+        return decision
+
+    graph.add_conditional_edges("judge", review_entry, {"revise": "revise", "repair": "repair_answer", "finalize": "finalize"})
+    graph.add_conditional_edges("repair_answer", workflow.repair_route, {
+        "finish": "finish", "assess": "assess_evidence", "synthesize": "synthesize_evidence"})
     graph.add_edge("revise", "react_agent")
     graph.add_edge("finalize", "gate_done")
     graph.add_edge("gate_done", "finish")
@@ -1121,7 +1176,9 @@ def _compact_update(update: dict) -> dict:
             compact[key] = {"count": len(value), "last_role": msg_role(value[-1]) if value else None}
         elif key in ("events", "past_steps") and isinstance(value, list):
             compact[key] = value[-3:]
-        elif key in ("evidence_pool", "evidence_items", "evidence_sources", "evidence_papers") and isinstance(value, dict):
+        elif key in ("evidence_pool", "evidence_items", "evidence_sources", "evidence_papers", "workflow_calls") and isinstance(value, dict):
+            compact[key] = {"count": len(value)}
+        elif key == "workflow_rows":
             compact[key] = {"count": len(value)}
         else:
             compact[key] = value
@@ -1197,15 +1254,27 @@ async def _prepare_resume(task_id: str, value) -> tuple[object, dict]:
 async def _run_segment(task_id: str, graph_input, max_seconds, recovering: bool = False) -> dict:
     """执行一段图运行（直到完成或中断），逐节点心跳与广播，结束时落快照。"""
     channel = _CHANNELS.get(task_id) or _Channel()
-    config = {"configurable": {"thread_id": task_id}}
+    config = {"configurable": {"thread_id": task_id}, "recursion_limit": 128}
     store.set_deadline(task_id, max_seconds)
     try:
         compiled = await graph()
+        if isinstance(graph_input, dict):
+            live_state = dict(graph_input)
+        else:
+            snapshot, _, _ = await _snapshot(task_id)
+            live_state = dict(snapshot or {})
+            command_updates = getattr(graph_input, "update", None)
+            if isinstance(command_updates, dict):
+                live_state.update(command_updates)
         async for chunk in compiled.astream(graph_input, config, stream_mode="updates"):
             for node, update in chunk.items():
                 if node == "__interrupt__":
                     continue
                 await asyncio.to_thread(store.touch_task, task_id)
+                if isinstance(update, dict):
+                    live_state.update(update)
+                    # Polling clients need the same stage/evidence progress as SSE clients.
+                    await asyncio.to_thread(save_task, task_id, task_id, "running", {**public_state(live_state), "status": "running"})
                 channel.publish({"type": "node", "node": node, "update": _compact_update(update if isinstance(update, dict) else {})})
         state, paused, _ = await _snapshot(task_id)
         state = state or {}

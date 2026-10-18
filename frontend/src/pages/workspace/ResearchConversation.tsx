@@ -16,6 +16,12 @@ import { useWorkspaceProject } from "./shared";
 
 
 const WELCOME = ["你好！我是你的 AI 研究助手。", "我可以帮你搜索和阅读学术论文、梳理研究方向、提炼关键信息，并将有价值的论文加入当前工作区。你想研究什么主题呢？"];
+const RESEARCH_STEP: Record<string, string> = {
+  route: "理解研究目标", plan: "制定研究计划", prepare: "确认研究资料", search: "寻找相关论文",
+  read: "阅读论文", quotes: "核对原文依据", assess: "检查资料是否充分", expand: "补充检索",
+  synthesize: "整理研究结论", claims: "检查结论依据", judge: "复核回答", revise: "修订回答",
+  finalize: "完成复核", stop: "研究结束",
+};
 
 function formatClock(time: number) {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).format(time);
@@ -228,8 +234,20 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                 onCopy={turn.task?.answer ? () => void copy(turn.task!.answer!) : undefined}
                 actions={!turn.pending && (turn.error || turn.note || turn.task?.status === "failed" || turn.task?.stop_reason?.includes("取消"))
                   ? <Button size="small" icon={<ReloadOutlined />} aria-label="重试原问题" disabled={busy || disabled} onClick={() => void send(turn)}>重试原问题</Button> : null}>
-                {turn.pending ? <p className="pending">正在研究并收集资料…</p> : null}
+                {turn.pending ? <p className="pending">{RESEARCH_STEP[turn.task?.events?.at(-1)?.step ?? ""] ?? "正在研究并收集资料"}…</p> : null}
+                {turn.task?.events?.some(event => RESEARCH_STEP[event.step]) ? <details className="research-evidence">
+                  <summary>查看研究过程</summary>
+                  <ol>{turn.task.events.filter(event => RESEARCH_STEP[event.step]).map((event, index) => <li key={index}>
+                    {RESEARCH_STEP[event.step]}{event.reason ? `：${event.reason}` : ""}
+                  </li>)}</ol>
+                </details> : null}
                 {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer}</p> : null}
+                {turn.task?.reading_status && Object.keys(turn.task.reading_status).length ? <p className="small-print">
+                  已检查 {Object.keys(turn.task.reading_status).length} 篇论文：
+                  {Object.values(turn.task.reading_status).filter(row => row.basis === "full_text").length} 篇取得正文依据，
+                  {Object.values(turn.task.reading_status).filter(row => row.basis === "abstract").length} 篇仅有摘要，
+                  {Object.values(turn.task.reading_status).filter(row => row.basis === "unavailable").length} 篇缺少相关内容。
+                </p> : null}
                 {(() => {
                   const referencedIds = turn.task?.referenced_evidence_ids ?? (turn.task?.answer?.match(/E\d{4,}/g) ?? []);
                   const evidence = (turn.task?.evidence ?? []).filter(e => referencedIds.includes(e.evidence_id));

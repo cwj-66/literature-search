@@ -255,5 +255,5 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         content, updates = await agent._run_business_tool(state, "list_workspace_papers", {})
         records = json.loads(content)["record_evidence"]
         self.assertEqual(records[0]["material"], "metadata")
-        self.assertEqual(updates["evidence_papers"], {})
+        self.assertTrue(all(source["material"] == "metadata" for source in updates["evidence_sources"].values()))
         self.assertEqual(updates["evidence_sources"]["E0001"]["tool"], "list_workspace_papers")

@@ -68,7 +68,7 @@ class DirectChatTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(goal=goal), patch.object(llm, "complete", new=AsyncMock(return_value=routed("direct"))):
                 result = await agent.router_node(agent.initial_state(goal))
             self.assertEqual(result["mode"], "react")
-            self.assertEqual(agent.route_route(result), "react")
+            self.assertEqual(agent.route_route(result), "react" if "arxiv:" in goal else "clarify")
 
     async def test_research_and_complex_tasks_keep_existing_routes(self):
         for goal, mode in (("帮我找十篇 RAG 论文", "react"), ("对比近三年幻觉抑制方法并写综述", "plan")):

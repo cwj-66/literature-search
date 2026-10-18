@@ -56,6 +56,18 @@ class AgentState(TypedDict, total=False):
     route: dict | None
     task_kind: str
     domains: list[str]
+    research_intent: str
+    workflow_stage: str
+    workflow_action: str
+    workflow_local_ids: list[str]
+    workflow_discovered_ids: list[str]
+    workflow_reads: dict
+    workflow_searches: list[str]
+    workflow_feedback: list[str]
+    workflow_calls: dict
+    workflow_rows: list[dict]
+    workflow_paper_id: str | None
+    workflow_batch_ids: list[str]
     missing_slots: list[dict]
     clarify_resolved: bool
     clarify_count: int
@@ -123,6 +135,7 @@ class TaskRoute(BaseModel):
     rationale: str = ""
     domains: list[str] = Field(default_factory=list)
     missing_slots: list[dict] = Field(default_factory=list)
+    research_intent: Literal["auto", "discover", "read", "mixed"] = "auto"
 
 
 class DirectAnswer(BaseModel):
@@ -262,7 +275,9 @@ def add_evidence(state: dict, items: list[dict]) -> tuple[dict, list[dict]]:
         if key in seen:
             added.append(records[seen[key]])
             continue
-        eid = f"E{len(pool) + 1:04d}"
+        # Eviction must never recycle an ID still referenced by earlier claims.
+        next_id = max((int(key[1:]) for key in pool if EVIDENCE_ID_RE.match(key)), default=0) + 1
+        eid = f"E{next_id:04d}"
         record: EvidenceItem = {
             "evidence_id": eid, "paper_id": item.get("paper_id"), "quote": quote, "material": material,
             "tool": item.get("tool"), "section": item.get("section"), "page_number": item.get("page_number"),
@@ -352,6 +367,18 @@ def initial_state(goal: str, year_from: int | None = None, year_to: int | None =
         "route": None,
         "task_kind": "research",
         "domains": [],
+        "research_intent": "auto",
+        "workflow_stage": "",
+        "workflow_action": "",
+        "workflow_local_ids": [],
+        "workflow_discovered_ids": [],
+        "workflow_reads": {},
+        "workflow_searches": [],
+        "workflow_feedback": [],
+        "workflow_calls": {},
+        "workflow_rows": [],
+        "workflow_paper_id": None,
+        "workflow_batch_ids": [],
         "missing_slots": [],
         "clarify_resolved": False,
         "clarify_count": 0,
@@ -415,6 +442,10 @@ def public_state(state: dict) -> dict:
         "route": state.get("route"),
         "task_kind": state.get("task_kind"),
         "domains": state.get("domains") or [],
+        "workflow_stage": state.get("workflow_stage"),
+        "research_intent": state.get("research_intent"),
+        "discovered_paper_ids": state.get("workflow_discovered_ids") or [],
+        "reading_status": state.get("workflow_reads") or {},
         "missing_slots": state.get("missing_slots") or [],
         "clarify_count": state.get("clarify_count", 0),
         "year_from": state.get("year_from"),
@@ -426,7 +457,7 @@ def public_state(state: dict) -> dict:
         "paper_ids": [paper.get("id") for paper in state.get("papers") or []],
         "papers": state.get("papers") or [],
         "evidence_ids": state.get("evidence_ids") or [],
-        "evidence": [{**item, "quote": str(item.get("quote") or "")[:300]} for item in items.values()],
+        "evidence": [{**item, "quote": str(item.get("quote") or "")[:900]} for item in items.values()],
         "referenced_evidence_ids": list(dict.fromkeys(
             eid for claim in state.get("claims") or []
             if claim.get("status") not in {"dropped", "contradicted"}
@@ -442,6 +473,7 @@ def public_state(state: dict) -> dict:
         "coverage": state.get("coverage"),
         "assessments": state.get("assessments", 0),
         "api_calls": state.get("api_calls", 0),
+        "search_count": state.get("search_count", 0),
         "llm_calls": state.get("llm_calls", 0),
         "extra_search": state.get("extra_search", 0),
         "deep_reads": state.get("deep_reads", 0),

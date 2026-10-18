@@ -300,13 +300,13 @@ class AgentToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(llm_mock.call_count, 2)
         self.assertIn("fallback", content1)
         self.assertEqual(first["coverage"]["next_action"], "read_next")  # 规则回退：未读且未深读
-        self.assertEqual(second["llm_calls"], 0)
+        self.assertEqual(second["llm_calls"], 1)  # 失败尝试也计入调用预算
 
     async def test_retrieve_tool_binds_evidence_ids(self):
         chunk = {"text": "Retrieval reduces hallucination with citations.", "chunk_id": "c1", "section": "intro", "paragraph_ids": ["p1"]}
         with patch("app.services.retrieval.hybrid.retrieve", new=AsyncMock(return_value=[chunk])):
             content, updates = await agent._tool_retrieve_paper_evidence(
-                {**agent.initial_state("goal"), "papers": [paper(1).model_dump()]},
+                {**agent.initial_state("goal"), "papers": [paper(1, abstract="Retrieval reduces hallucination in generation tasks.").model_dump()]},
                 {"paper_id": "arxiv:1", "aspect": "hallucination"},
             )
         self.assertEqual(updates["evidence_papers"].get("E0001"), "arxiv:1")
@@ -323,7 +323,7 @@ class AgentToolTests(unittest.IsolatedAsyncioTestCase):
         }
         with patch("app.tools.analyze_paper.analyze_paper", new=AsyncMock(return_value=report)):
             content, updates = await agent._tool_analyze_paper(
-                {**agent.initial_state("goal"), "papers": [paper(1).model_dump()]},
+                {**agent.initial_state("goal"), "papers": [paper(1, abstract="Retrieval reduces hallucination in generation tasks.").model_dump()]},
                 {"paper_ids": ["arxiv:1"]},
             )
         self.assertEqual(updates["llm_calls"], 1)
@@ -395,7 +395,7 @@ class AgentJudgeTests(unittest.IsolatedAsyncioTestCase):
             after_judge = await agent.judge_node({**state, **after_claims})
         self.assertFalse(after_judge["review"]["semantics_done"])
         self.assertTrue(any(item["verdict"] == "pass" for item in after_judge["review"]["results"]))
-        self.assertEqual(after_judge["claims"][0]["status"], "pending")
+        self.assertEqual(after_judge["claims"][0]["status"], "unverified")
 
     async def test_contradiction_triggers_revision_with_feedback_message(self):
         with patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=[
@@ -541,17 +541,11 @@ class AgentReActLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(agent.judge_route(after_judge), "finalize")
 
     async def test_react_iteration_cap_stops_loop(self):
-        compiled = await agent.graph()
-        state = agent.initial_state("如何降低RAG幻觉", auto_approve=True)
-        state["max_llm_calls"] = 200
-        state["max_api_calls"] = 200
-        state["max_extra_search"] = 200
-        always_tools = rj(("search_papers", {"query": "q"}))
-        with patch("app.services.analysis.attribution.decompose", new=AsyncMock(return_value=planned("q1"))), \
-             patch("app.infrastructure.llm.complete", new=AsyncMock(return_value=always_tools)), \
-             patch("app.services.retrieval.search.search_papers", new=AsyncMock(return_value=found(1))):
-            result = await compiled.ainvoke(state, {"configurable": {"thread_id": "cap-test"}})
-        self.assertLessEqual(result["react_turns"], agent.MAX_REACT)
+        # Only the explicit operation path still uses ReAct; research uses a bounded workflow.
+        state = {**agent.initial_state("列出工作区论文", auto_approve=True),
+                 "task_kind": "operation", "react_turns": agent.MAX_REACT}
+        with patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=AssertionError("cap must precede model"))):
+            result = await agent.react_agent(state)
         self.assertEqual(result["stop_reason"], "达到最大迭代次数")
 
 

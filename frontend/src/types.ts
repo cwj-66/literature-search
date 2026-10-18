@@ -91,6 +91,10 @@ export interface ResearchEvent {
 }
 
 export interface ResearchTask {
+  workflow_stage?: string;
+  research_intent?: "auto" | "discover" | "read" | "mixed";
+  discovered_paper_ids?: string[];
+  reading_status?: Record<string, { status: string; basis: "full_text" | "abstract" | "unavailable"; evidence_count: number }>;
   papers?: Paper[];
   evidence?: { evidence_id: string; paper_id?: string; quote: string }[];
   referenced_evidence_ids?: string[];

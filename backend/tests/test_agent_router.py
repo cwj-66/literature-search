@@ -101,36 +101,23 @@ class AgentRouterTests(RouterTestBase):
         self.assertEqual(mocks[0].call_count, 1)  # 计划分解被调用
 
     async def test_simple_goal_routes_to_react_without_plan(self):
-        """简单问题 → LLM 判 react → 无计划事件、无中断，首轮检索直接用原始问题。"""
-        goal = "什么是检索增强生成"
-        side = [
-            route_json("react", "单一概念解释"),
-            rj(("search_papers", {"query": goal}), ("retrieve_paper_evidence", {"paper_id": "arxiv:1"})),
-            rj(answer="结论A。[E0001]"),
-            claims_json(("结论A。", ["E0001"])),
-            judge_keep("c1"),
-        ]
-        managers = self.managers(side)
-        search_mock = managers[2].new
+        """Simple research skips planning but still executes the evidence workflow."""
+        search = AsyncMock(return_value={"papers": [], "source_errors": {}})
+        side = [route_json("react"), json.dumps({"coverage": "insufficient", "missing": ["papers"], "next_action": "stop"})]
+        managers = self.managers(side, search=search)
         mocks = [m.start() for m in managers]
         try:
-            result = await agent.run(goal, auto_approve=True, task_id="rt-react")
+            result = await agent.run("搜索检索增强论文", auto_approve=True, task_id="rt-react")
         finally:
             for m in reversed(managers):
                 m.stop()
         self.assertEqual(result["status"], "done")
         self.assertEqual(result["mode"], "react")
-        self.assertEqual(result["route"]["source"], "llm")
-        self.assertEqual(mocks[0].call_count, 0)  # 规划分解未被调用
-        self.assertEqual(search_mock.call_args_list[0][0][0], goal)  # 首轮检索用原始问题
+        self.assertEqual(mocks[0].call_count, 0)
+        search.assert_awaited_once()
+        self.assertTrue({"prepare", "search", "assess", "synthesize"} <= {e["step"] for e in result["events"]})
         self.assertFalse(any(e["step"] == "plan" for e in result["events"]))
-        self.assertTrue(any(e["step"] == "route" and e["mode"] == "react" for e in result["events"]))
-        self.assertTrue(any(e["step"] == "react" for e in result["events"]))
-        self.assertEqual(result["queries"], [goal])
-        # react 直通仍走完整质量链路
-        self.assertEqual(result["stop_reason"], "目标覆盖完成")
-        self.assertEqual(result["judge_round"], 1)
-        self.assertEqual(result["review"]["to_verify"], [])
+        self.assertIn("不能确认", result["answer"])
 
     async def test_override_plan_forces_interrupt_for_simple_goal(self):
         """override：简单问题强制 plan → 仍触发审批中断。"""
@@ -147,21 +134,20 @@ class AgentRouterTests(RouterTestBase):
         self.assertEqual(mocks[1].call_count, 0)  # override 不调用路由 LLM
 
     async def test_override_react_skips_interrupt_for_complex_goal(self):
-        """override：复杂问题强制 react → 不触发中断，直接执行完毕。"""
-        side = [rj(answer="结论A。"), claims_json(("结论A。", [])), judge_keep("c1")]
-        managers = self.managers(side)
+        """Forcing simple execution skips plan review, not mandatory evidence stages."""
+        side = [json.dumps({"coverage": "insufficient", "missing": [], "next_action": "stop"})]
+        managers = self.managers(side, search=AsyncMock(return_value={"papers": [], "source_errors": {}}))
         mocks = [m.start() for m in managers]
         try:
-            result = await agent.run("梳理检索增强在大模型幻觉抑制上的研究脉络并对比主要方法", task_id="rt-ov-react", mode="react")
+            result = await agent.run("比较相关论文", task_id="rt-ov-react", mode="react")
         finally:
             for m in reversed(managers):
                 m.stop()
         self.assertEqual(result["status"], "done")
         self.assertEqual(result["route"]["source"], "override")
-        self.assertEqual(result["mode"], "react")
         self.assertIsNone(result["interrupt"])
         self.assertEqual(mocks[0].call_count, 0)
-        self.assertEqual(mocks[1].call_count, 3)  # react 决策 + claims + judge
+        self.assertEqual(mocks[1].call_count, 1)
 
     async def test_router_llm_failure_falls_back_to_plan(self):
         """路由 LLM 失败 → 回退 plan（更彻底），事件记录回退，失败尝试计 1 次调用。"""
@@ -227,114 +213,20 @@ class AgentRouterTests(RouterTestBase):
         self.assertIn("跳过计划", react_event["reason"])
 
     async def test_react_end_to_end_saves_llm_budget(self):
-        """react 端到端：比 plan 路径省一次规划 LLM 调用。"""
-        goal = "检索增强是什么"
-        side = [
-            route_json("react"),
-            rj(("search_papers", {"query": goal}), ("retrieve_paper_evidence", {"paper_id": "arxiv:1"})),
-            rj(answer="结论A。[E0001]"),
-            claims_json(("结论A。", ["E0001"])),
-            judge_keep("c1"),
-        ]
-        managers = self.managers(side)
+        """A simple research request avoids the planning call, without bypassing evidence."""
+        assess = json.dumps({"coverage": "insufficient", "missing": [], "next_action": "stop"})
+        search = AsyncMock(return_value={"papers": [], "source_errors": {}})
+        managers = self.managers([route_json("react"), assess, assess], search=search)
         mocks = [m.start() for m in managers]
         try:
-            result = await agent.run(goal, auto_approve=True, task_id="rt-e2e")
+            simple = await agent.run("检索增强是什么", auto_approve=True, task_id="simple-budget")
+            self.assertEqual(mocks[0].call_count, 0)
+            planned = await agent.run("检索增强是什么", auto_approve=True, task_id="planned-budget", mode="plan")
         finally:
             for m in reversed(managers):
                 m.stop()
-        self.assertEqual(result["status"], "done")
-        self.assertEqual(result["mode"], "react")
-        # llm_calls = 路由1 + react2 + claims1 + judge1 = 5（无 decompose）
-        self.assertEqual(result["llm_calls"], 5)
-        self.assertEqual(mocks[0].call_count, 0)
-
-
-class AgentPrivilegedToolTests(RouterTestBase):
-    """特权工具 HITL：interrupt 确认 → 仅在授权范围内执行，重放幂等。"""
-
-    async def test_save_papers_interrupts_and_saves_only_approved_subset(self):
-        save_mock = MagicMock(return_value=(paper(1), True))
-        side = [
-            route_json("plan"),
-            rj(("save_papers_to_workspace", {"paper_ids": ["arxiv:1", "arxiv:2"]})),
-            rj(answer="结论A。"),
-            claims_json(("结论A。", [])),
-            judge_keep("c1"),
-        ]
-        managers = self.managers(side, extra={"app.services.papers.library.save_paper": save_mock})
-        mocks = [m.start() for m in managers]
-        try:
-            paused = await agent.run("如何降低RAG幻觉", auto_approve=True, task_id="pv-save")
-            self.assertEqual(paused["status"], "waiting")
-            self.assertEqual(paused["interrupt"]["type"], "confirm_workspace")
-            self.assertEqual(paused["interrupt"]["paper_ids"], ["arxiv:1", "arxiv:2"])
-            resumed = await agent.resume_task("pv-save", {"approved_ids": ["arxiv:1"]})
-        finally:
-            for m in reversed(managers):
-                m.stop()
-        self.assertEqual(resumed["status"], "done")
-        saved_ids = [call[0][1] for call in save_mock.call_args_list]
-        self.assertEqual(saved_ids, ["arxiv:1"])  # 只保存批准的子集，不得扩大授权
-        save_event = next(e for e in resumed["events"] if e.get("name") == "save_papers_to_workspace")
-        self.assertEqual(save_event["approved"], 1)
-
-    async def test_save_papers_rejected_saves_nothing(self):
-        save_mock = MagicMock(return_value=(paper(1), True))
-        side = [
-            route_json("plan"),
-            rj(("save_papers_to_workspace", {"paper_ids": ["arxiv:1"]})),
-            rj(answer="未能保存论文。"),
-            claims_json(("未能保存论文。", [])),
-            judge_keep("c1"),
-        ]
-        managers = self.managers(side, extra={"app.services.papers.library.save_paper": save_mock})
-        start = [m.start() for m in managers]
-        try:
-            paused = await agent.run("如何降低RAG幻觉", auto_approve=True, task_id="pv-reject")
-            self.assertEqual(paused["status"], "waiting")
-            resumed = await agent.resume_task("pv-reject", {"approved_ids": []})
-        finally:
-            for m in reversed(managers):
-                m.stop()
-        self.assertEqual(resumed["status"], "done")
-        self.assertEqual(save_mock.call_count, 0)
-        self.assertTrue(any(gap == "用户未批准保存论文" for gap in resumed["gaps"]))
-
-    async def test_deep_analysis_approved_subset_only(self):
-        prepared = object()
-        report = {
-            "llm_calls": 1, "status": "completed",
-            "papers": [{
-                "paper_id": "arxiv:1", "title": "Paper 1", "status": "completed",
-                "fields": [{"label": "研究内容", "status": "found", "content": "c",
-                            "evidence": [{"quote": "Retrieval reduces hallucination in generation tasks.", "section": "s"}], "missing": []}],
-            }],
-        }
-        side = [
-            route_json("plan"),
-            rj(("request_deep_analysis", {"paper_ids": ["arxiv:1", "arxiv:2"]})),
-            rj(answer="结论A。[E0001]"),
-            claims_json(("结论A。", ["E0001"])),
-            judge_keep("c1"),
-        ]
-        managers = self.managers(side, extra={
-            "app.services.analysis.fulltext.prepare": AsyncMock(return_value=prepared),
-            "app.services.retrieval.hybrid.index_prepared": MagicMock(),
-            "app.tools.analyze_paper.analyze_paper": AsyncMock(return_value=report),
-        })
-        analyze_mock = managers[-1].new
-        start = [m.start() for m in managers]
-        try:
-            paused = await agent.run("如何降低RAG幻觉", auto_approve=True, task_id="pv-deep")
-            self.assertEqual(paused["interrupt"]["type"], "confirm_analysis")
-            resumed = await agent.resume_task("pv-deep", {"approved_ids": ["arxiv:2"]})
-        finally:
-            for m in reversed(managers):
-                m.stop()
-        self.assertEqual(resumed["status"], "done")
-        # 只对批准的 arxiv:2 执行了分析，且建立了证据
-        analyzed_ids = [call[0][0] for call in analyze_mock.call_args_list]
-        self.assertEqual(analyzed_ids, [["arxiv:2"]])
-        self.assertEqual(resumed["deep_reads"], 1)
-        self.assertIn("E0001", resumed["evidence_ids"])
+        self.assertEqual(simple["status"], "done")
+        self.assertEqual(planned["status"], "done")
+        self.assertEqual(mocks[0].call_count, 1)
+        self.assertTrue(any(e["step"] == "prepare" for e in simple["events"]))
+        self.assertTrue(any(e["step"] == "plan" for e in planned["events"]))

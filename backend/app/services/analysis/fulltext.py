@@ -339,8 +339,9 @@ def stored_text(paper: PaperOut) -> PreparedText | None:
     )
 
 
-async def prepare(paper: PaperOut) -> PreparedText | None:
-    stored = stored_text(paper)
+async def prepare(paper: PaperOut, *, use_stored: bool = True) -> PreparedText | None:
+    # Public discovery must not read an unselected local PDF with the same DOI/ID.
+    stored = stored_text(paper) if use_stored else None
     if stored:
         return stored
     jobs = _jobs(paper)

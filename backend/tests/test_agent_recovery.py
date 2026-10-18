@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.agents import agent
+from app.agents import agent, workflow
 from app.infrastructure import llm
 from app.main import app
 from app.schemas import PaperOut
@@ -57,16 +57,16 @@ class AgentCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["queries"], ["q1"])
         self.assertEqual(second["queries"], ["q1"])
         self.assertEqual(first["llm_calls"], 1)
-        self.assertEqual(second["llm_calls"], 1)
+        self.assertEqual(second["llm_calls"], 0)
 
     async def test_search_cache_hit_does_not_rebill_api_calls(self):
         search_mock = AsyncMock(return_value=dict(EMPTY_SEARCH))
         with patch("app.services.retrieval.search.search_papers", new=search_mock):
-            first = await agent.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
-            second = await agent.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
+            first = await workflow.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
+            second = await workflow.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
         self.assertEqual(search_mock.call_count, 1)
         self.assertEqual(first["api_calls"], 1)
-        self.assertEqual(second["api_calls"], 0)
+        self.assertEqual(second.get("api_calls", 0), 0)
         self.assertTrue(second["events"][-1]["cached"])
         self.assertFalse(first["events"][-1]["cached"])
 
@@ -74,27 +74,27 @@ class AgentCacheTests(unittest.IsolatedAsyncioTestCase):
         limited = {"papers": [], "source_errors": {"arxiv": "arXiv 上游返回 429（限流）"}, "source_retry_after": {"arxiv": 60}}
         search_mock = AsyncMock(return_value=limited)
         with patch("app.services.retrieval.search.search_papers", new=search_mock):
-            await agent.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
-            await agent.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
+            await workflow.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
+            await workflow.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
         self.assertEqual(search_mock.call_count, 2)
 
     async def test_assess_cache_hit_avoids_llm_call_and_counting(self):
         llm_mock = AsyncMock(side_effect=[assess_synthesize()])
         state = {**agent.initial_state("goal"), "papers": [paper(1).model_dump()]}
         with patch("app.infrastructure.llm.complete", new=llm_mock):
-            first = await agent.assess_node(state)
-            second = await agent.assess_node(state)
+            first = await workflow.assess_node(state)
+            second = await workflow.assess_node(state)
         self.assertEqual(llm_mock.call_count, 1)
         self.assertEqual(first["llm_calls"], 1)
-        self.assertEqual(second["llm_calls"], 0)
+        self.assertEqual(second.get("llm_calls", 0), 0)
         self.assertEqual(second["coverage"]["next_action"], "synthesize")
 
     async def test_llm_failures_are_never_cached(self):
         llm_mock = AsyncMock(side_effect=llm.AnalysisError("模型调用失败"))
         state = {**agent.initial_state("goal"), "papers": [paper(1).model_dump()]}
         with patch("app.infrastructure.llm.complete", new=llm_mock):
-            await agent.assess_node(state)
-            await agent.assess_node(state)
+            await workflow.assess_node(state)
+            await workflow.assess_node(state)
         self.assertEqual(llm_mock.call_count, 2)
 
 
