@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "antd";
-import { Graph, NodeEvent, type IElementEvent } from "@antv/g6";
+import { EdgeEvent, Graph, NodeEvent, type IElementEvent } from "@antv/g6";
 import { KIND_COLOR, KIND_LABEL, RELATIONS, type EntityGraph } from "../graphData";
 
 const cameras = new Map<string, { position: [number, number]; zoom: number; signature: string; nodes: Record<string, [number, number]> }>();
 
-export function ExplorerCanvas({ data, selected, onSelect, scope, resetKey }: {
-  data: EntityGraph; selected: string; onSelect: (id: string) => void; scope: string; resetKey: number;
+export function ExplorerCanvas({ data, selected, onSelect, onSelectEdge, scope, resetKey }: {
+  data: EntityGraph; selected: string; onSelect: (id: string) => void; onSelectEdge?: (id: string) => void; scope: string; resetKey: number;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const instance = useRef<Graph | null>(null);
   const callback = useRef(onSelect);
+  const edgeCallback = useRef(onSelectEdge);
   callback.current = onSelect;
+  edgeCallback.current = onSelectEdge;
   const selection = useRef(selected);
   const lastFocused = useRef(selected);
   selection.current = selected;
@@ -36,14 +38,16 @@ export function ExplorerCanvas({ data, selected, onSelect, scope, resetKey }: {
       },
       layout: restored ? undefined : { type: "force", preventOverlap: true, nodeSize: 110, linkDistance: 145, maxIteration: 350, gravity: 4, animation: false },
       node: {
-        type: d => d.data?.kind === "paper" ? "rect" : d.data?.kind === "keyword" ? "diamond" : "circle",
+        type: d => d.data?.kind === "keyword" ? "ellipse" : d.data?.kind === "author" ? "circle" : "rect",
         style: {
-          size: d => d.data?.kind === "paper" ? [40, 30] : d.data?.kind === "keyword" ? 28 : 22,
-          radius: 7, fill: d => KIND_COLOR[d.data?.kind as keyof typeof KIND_COLOR],
-          stroke: "#fff", lineWidth: 2,
+          size: d => d.data?.kind === "paper" ? [128, 42] : d.data?.kind === "keyword" ? [112, 36] : d.data?.kind === "venue" ? [108, 34] : 34,
+          radius: (d: { data?: { kind?: string } }) => d.data?.kind === "author" ? 17 : 10,
+          fill: d => d.data?.kind === "paper" ? "#e7f0ff" : d.data?.kind === "keyword" ? "#e5f8ef" : d.data?.kind === "author" ? "#f3e9ff" : "#fff6e8",
+          stroke: d => KIND_COLOR[d.data?.kind as keyof typeof KIND_COLOR], lineWidth: 1.6,
           labelText: d => { const text = String(d.data?.label ?? ""); return text.length > 42 ? `${text.slice(0, 41)}…` : text; },
-          labelPlacement: "bottom", labelOffsetY: 8, labelFontSize: 14, labelLineHeight: 18,
-          labelFill: "#334155", labelWordWrap: true, labelMaxWidth: 150, labelMaxLines: 2,
+          labelPlacement: "center", labelFontSize: 12, labelLineHeight: 16,
+          labelFill: d => KIND_COLOR[d.data?.kind as keyof typeof KIND_COLOR] ?? "#334155",
+          labelWordWrap: true, labelMaxWidth: 108, labelMaxLines: 2,
           labelBackground: true, labelBackgroundFill: "#fff", labelBackgroundOpacity: .85,
           cursor: "pointer",
         },
@@ -74,6 +78,10 @@ export function ExplorerCanvas({ data, selected, onSelect, scope, resetKey }: {
     graph.on(NodeEvent.CLICK, event => {
       const id = (event as IElementEvent).target.id;
       if (id) callback.current(id === selection.current ? "" : id);
+    });
+    graph.on(EdgeEvent.CLICK, event => {
+      const id = (event as IElementEvent).target.id;
+      if (id) edgeCallback.current?.(id);
     });
     graph.render().then(async () => {
       settled = true;

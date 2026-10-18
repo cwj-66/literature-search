@@ -9,6 +9,8 @@ export interface EntityNode {
   local_id?: string; aliases?: string[]; url?: string | null; external?: boolean; authors?: string[];
   abstract?: string | null; venue?: string | null; sources?: string[];
   provenance?: string; analysis?: GraphAnalysis | null;
+  citation_status?: "not_queried" | "failed" | "none_in_scope" | "linked" | "partial" | "missing_id" | string;
+  citation_note?: string;
 }
 export interface EntityEdge { source: string; target: string; relation: string; provenance?: string; generated_at?: string; result_id?: string; analysis_basis?: string; source_url?: string | null }
 export interface EntityGraph { nodes: EntityNode[]; edges: EntityEdge[]; total_papers: number; scope: string; missing_references?: string[] }

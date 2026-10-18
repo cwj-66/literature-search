@@ -26,8 +26,9 @@ class KnowledgeGraphTests(unittest.IsolatedAsyncioTestCase):
 
     def paper(self, i=1, year=2023, **kwargs):
         ref = f"arxiv:2301.{i:05d}"
-        return library.save_paper(PaperOut(id=ref, title=f"Paper {i}", year=year,
-            authors=["Alice", "Bob"], venue="Test Conference", abstract="Real saved abstract", **kwargs), ref)[0]
+        values = dict(id=ref, title=f"Paper {i}", year=year, authors=["Alice", "Bob"], venue="Test Conference", abstract="Real saved abstract")
+        values.update(kwargs)
+        return library.save_paper(PaperOut(**values), ref)[0]
 
     def analyze(self, paper, payload, stamp="2026-10-17T00:00:00Z", result="r1"):
         with connection() as db, db:
@@ -96,6 +97,80 @@ class KnowledgeGraphTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await client.get("/api/knowledge-graph?limit=2001")).status_code, 422)
             self.assertEqual((await client.get("/api/knowledge-graph?limit=2000")).status_code, 200)
         self.assertEqual(library.list_papers(1, 20)["total"], 1)
+
+
+    def test_aliases_share_one_topic_and_analysis_adds_keywords(self):
+        first, second = self.paper(1, authors=["Ada"], author_ids=["author-ada"]), self.paper(2, authors=["Ada"], author_ids=["author-other"])
+        plain = self.paper(3, authors=["Sam"], venue="Workshop")
+        self.analyze(first, {"keywords": ["RAG"]}, result="rag")
+        self.analyze(second, {"keywords": ["Retrieval-Augmented Generation", "Hallucinations"]}, result="alias")
+        before = knowledge_graph.build(references=[plain.id])
+        self.assertFalse(any(edge["relation"] == "has_keyword" for edge in before["edges"]))
+        self.assertTrue(any(edge["relation"] == "authored_by" for edge in before["edges"]))
+        self.analyze(plain, {"keywords": ["hallucination"]}, result="hall")
+        graph = knowledge_graph.build(references=[first.id, second.id, plain.id])
+        keywords = [node for node in graph["nodes"] if node["kind"] == "keyword"]
+        labels = {node["label"] for node in keywords}
+        self.assertEqual(labels, {"RAG", "Hallucination"})
+        rag = next(node["id"] for node in keywords if node["label"] == "RAG")
+        self.assertEqual(sum(edge["relation"] == "has_keyword" and edge["target"] == rag for edge in graph["edges"]), 2)
+        authors = [node["id"] for node in graph["nodes"] if node["kind"] == "author" and node["label"] == "Ada"]
+        self.assertEqual(len(authors), 2)
+        self.assertEqual(len({edge["target"] for edge in graph["edges"] if edge["relation"] == "authored_by" and edge["source"] in {f"paper:{first.local_id}", f"paper:{second.local_id}"}}), 2)
+        same = self.paper(4, authors=["A. Ada"], author_ids=["author-ada"])
+        merged = knowledge_graph.build(references=[first.id, same.id])
+        ada_targets = {edge["target"] for edge in merged["edges"] if edge["relation"] == "authored_by"}
+        self.assertEqual(len(ada_targets), 1)
+        self.assertEqual(knowledge_graph.build(references=[first.id])["total_papers"], 1)
+
+    def test_failed_citation_lookup_is_not_reported_as_no_citations(self):
+        paper = self.paper()
+        failed = {"recommendations": {"warnings": ["引用信息未知／暂不可用"]}, "network": {"edges": []}}
+        with connection() as db, db:
+            db.execute("INSERT INTO paper_relations VALUES (?,?,?,?)", (paper.local_id, "failed", json.dumps(failed), "2026-10-17T00:00:00+00:00"))
+        graph = knowledge_graph.build(references=[paper.id])
+        node = next(item for item in graph["nodes"] if item["kind"] == "paper")
+        self.assertEqual(node["citation_status"], "failed")
+        self.assertIn("暂不可用", node["citation_note"])
+        self.assertNotEqual(node["citation_status"], "none_in_scope")
+        other = self.paper(2)
+        with connection() as db, db:
+            db.execute("INSERT INTO paper_relations VALUES (?,?,?,?)", (other.local_id, "empty", json.dumps({"network": {"edges": []}}), "2026-10-17T00:00:00+00:00"))
+        checked = knowledge_graph.build(references=[other.id])
+        checked_node = next(item for item in checked["nodes"] if item["kind"] == "paper")
+        self.assertEqual(checked_node["citation_status"], "none_in_scope")
+        self.assertIn("不表示", checked_node["citation_note"])
+
+    async def test_fill_citations_keeps_direction_and_does_not_import_or_call_model(self):
+        from app.infrastructure import llm
+        from app.services.retrieval import search
+
+        left, right = self.paper(1), self.paper(2)
+        outside = PaperOut(id="arxiv:9999.00001", title="Outside", arxiv_id="9999.00001")
+        cited = PaperOut(id=right.id, title=right.title, arxiv_id=right.arxiv_id)
+
+        async def links(_client, _ref, kind):
+            if kind == "references":
+                return [cited, outside]
+            raise search.SourceFailure("被引列表暂不可用")
+
+        with patch("app.infrastructure.llm.complete", new=unittest.mock.AsyncMock(side_effect=AssertionError("graph must not call the model"))), \
+                patch("app.services.retrieval.search.fetch_s2_links", new=links), \
+                patch("app.services.retrieval.search.semantic_enabled", return_value=True):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                opened = await client.post("/api/knowledge-graph", json=[left.id, right.id])
+                self.assertEqual(opened.status_code, 200)
+                llm.complete.assert_not_called()
+                filled = await client.post("/api/knowledge-graph/citations", json={"paper_ids": [left.id, right.id]})
+        self.assertEqual(filled.status_code, 200, filled.text)
+        self.assertIsNone(library.get_paper(outside.id))
+        self.assertEqual(library.list_papers(1, 20)["total"], 2)
+        graph = knowledge_graph.build(references=[left.id, right.id])
+        cites = [edge for edge in graph["edges"] if edge["relation"] == "cites"]
+        self.assertEqual([(edge["source"], edge["target"]) for edge in cites], [(f"paper:{left.local_id}", f"paper:{right.local_id}")])
+        left_node = next(node for node in graph["nodes"] if node.get("local_id") == left.local_id)
+        self.assertEqual(left_node["citation_status"], "partial")
+        self.assertIn("失败", left_node["citation_note"])
 
 
 if __name__ == "__main__":

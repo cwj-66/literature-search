@@ -39,17 +39,20 @@ export function withWorkspaceMetadata(raw: EntityGraph, project: Project): Entit
       authors: paper.authors, abstract: paper.abstract, year: paper.year, venue: paper.venue,
       url: paper.url, sources: paper.sources, provenance: "workspace_metadata", analysis: null });
     present.add(paper.id);
-    for (const [kind, values, relation] of [["author", paper.authors, "authored_by"], ["venue", paper.venue ? [paper.venue] : [], "published_in"]] as const) {
-      for (const label of values) {
-        if (!label.trim()) continue;
-        const identity = `${kind}:${normalize(label)}`;
-        let target = entities.get(identity);
-        if (!target) {
-          target = `workspace-${identity}`; entities.set(identity, target);
-          nodes.push({ id: target, kind, label: label.trim(), provenance: "workspace_metadata" });
-        }
-        edges.push({ source: id, target, relation, provenance: "workspace_metadata" });
+    for (const label of paper.authors) {
+      if (!label.trim()) continue;
+      const target = `workspace-author:${key}:${normalize(label)}`;
+      nodes.push({ id: target, kind: "author", label: label.trim(), provenance: "workspace_metadata" });
+      edges.push({ source: id, target, relation: "authored_by", provenance: "workspace_metadata" });
+    }
+    if (paper.venue?.trim()) {
+      const identity = `venue:${normalize(paper.venue)}`;
+      let target = entities.get(identity);
+      if (!target) {
+        target = `workspace-${identity}`; entities.set(identity, target);
+        nodes.push({ id: target, kind: "venue", label: paper.venue.trim(), provenance: "workspace_metadata" });
       }
+      edges.push({ source: id, target, relation: "published_in", provenance: "workspace_metadata" });
     }
   }
   return { ...raw, nodes, edges: [...new Map(edges.map(e => [`${e.source}|${e.target}|${e.relation}`, e])).values()], total_papers: nodes.filter(n => n.kind === "paper").length };

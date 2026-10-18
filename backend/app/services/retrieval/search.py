@@ -146,11 +146,15 @@ def map_s2_paper(payload: dict) -> PaperOut | None:
     external = payload.get("externalIds") or {}
     arxiv_id = clean(external.get("ArXiv")) if isinstance(external, dict) else None
     doi = clean(external.get("DOI")) if isinstance(external, dict) else None
-    authors = [
-        name
-        for author in (payload.get("authors") or [])
-        if isinstance(author, dict) and (name := clean(author.get("name")))
-    ]
+    authors, author_ids = [], []
+    for author in payload.get("authors") or []:
+        if not isinstance(author, dict):
+            continue
+        name = clean(author.get("name"))
+        if not name:
+            continue
+        authors.append(name)
+        author_ids.append(clean(author.get("authorId")))
     open_access = payload.get("openAccessPdf") or {}
     pdf_url = open_access.get("url") if isinstance(open_access, dict) else None
     venue = clean(payload.get("venue"))
@@ -169,6 +173,7 @@ def map_s2_paper(payload: dict) -> PaperOut | None:
         id=f"s2:{paper_id}",
         title=title,
         authors=authors,
+        author_ids=author_ids,
         abstract=clean(payload.get("abstract")),
         year=year,
         venue=venue,
@@ -382,7 +387,8 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
             short = header_delay is None or (math.isfinite(header_delay) and header_delay <= SHORT_RETRY_LIMIT)
             if not short or attempt >= SHORT_ATTEMPTS:
                 break
-            wait = header_delay if header_delay is not None else float(2 ** (attempt - 1))
+            # Retries share the provider quota too, even with Retry-After: 0.
+            wait = max(interval, header_delay if header_delay is not None else float(2 ** (attempt - 1)))
             logger.warning("%s upstream HTTP 429; retrying in %.0fs", label, max(0, wait))
             await asyncio.sleep(max(0, wait))
         if response.status_code == 429:
@@ -738,12 +744,15 @@ def map_openalex_work(item: dict) -> PaperOut | None:
     arxiv_id = arxiv_id or arxiv_id_from_url(access.get("oa_url")) or arxiv_id_from_url(ids.get("arxiv"))
     if not title or not arxiv_id:
         return None
-    authors = []
+    authors, author_ids = [], []
     for row in item.get("authorships") or []:
         author = row.get("author") if isinstance(row, dict) else None
         name = clean(author.get("display_name")) if isinstance(author, dict) else None
-        if name:
-            authors.append(name)
+        if not name or not isinstance(author, dict):
+            continue
+        authors.append(name)
+        raw_id = clean(author.get("id"))
+        author_ids.append(raw_id.rstrip("/").rsplit("/", 1)[-1] if raw_id else None)
     doi = clean(item.get("doi"))
     if doi and doi.lower().startswith("https://doi.org/"):
         doi = doi[16:]
@@ -755,6 +764,7 @@ def map_openalex_work(item: dict) -> PaperOut | None:
         id=f"arxiv:{arxiv_id}",
         title=title,
         authors=authors,
+        author_ids=author_ids,
         abstract=abstract_from_inverted(item.get("abstract_inverted_index")),
         year=year if isinstance(year, int) else None,
         venue="arXiv（预印本）",

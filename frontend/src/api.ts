@@ -182,6 +182,10 @@ export function analyzePapers(body: { paper_ids: string[]; fields?: string[]; de
   return postJson<AnalyzePaperResult>("/api/tools/analyze_paper", body, signal);
 }
 
+export function fillGraphCitations(paperIds: string[], signal?: AbortSignal) {
+  return postJson<{ queried: number; failed: number; linked: number; items: { id: string; title: string; status: string; note: string }[] }>("/api/knowledge-graph/citations", { paper_ids: paperIds }, signal);
+}
+
 export function compareLibrary(paperIds: string[], signal?: AbortSignal) {
   return postJson<CompareTable>("/api/compare", { paper_ids: paperIds }, signal);
 }

@@ -42,6 +42,24 @@ def identity_keys(paper: PaperOut) -> set[str]:
     return keys
 
 
+def _author_bundle(paper: PaperOut) -> tuple[list[str], list[str | None]]:
+    names, ids = [], []
+    raw = list(paper.author_ids)
+    for index, name in enumerate(paper.authors):
+        if not name or not name.strip():
+            continue
+        author_id = raw[index] if index < len(raw) else None
+        names.append(name.strip())
+        ids.append(author_id.strip() if isinstance(author_id, str) and author_id.strip() else None)
+    return names, ids
+
+
+def _prefer_authors(left: PaperOut, right: PaperOut) -> tuple[list[str], list[str | None]]:
+    bundles = [_author_bundle(left), _author_bundle(right)]
+    bundles.sort(key=lambda item: (sum(bool(author_id) for author_id in item[1]), len(item[0])), reverse=True)
+    return bundles[0]
+
+
 def prefer_venue(left: PaperOut, right: PaperOut) -> str | None:
     for paper in (left, right):
         if "semantic_scholar" in paper.sources and paper.venue:
@@ -53,7 +71,7 @@ def combine(left: PaperOut, right: PaperOut) -> PaperOut:
     arxiv_id = left.arxiv_id or right.arxiv_id
     doi = left.doi or right.doi
     s2_id = left.semantic_scholar_id or right.semantic_scholar_id
-    authors = left.authors if len(left.authors) >= len(right.authors) else right.authors
+    authors, author_ids = _prefer_authors(left, right)
     url = f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else (left.url or right.url)
     pdf_url = f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else (left.pdf_url or right.pdf_url)
     if arxiv_id or doi or s2_id:
@@ -66,6 +84,7 @@ def combine(left: PaperOut, right: PaperOut) -> PaperOut:
         id=paper_id,
         title=left.title or right.title,
         authors=authors,
+        author_ids=author_ids,
         abstract=longer_text(left.abstract, right.abstract),
         year=left.year or right.year,
         venue=prefer_venue(left, right),

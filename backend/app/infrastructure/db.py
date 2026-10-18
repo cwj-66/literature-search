@@ -93,6 +93,13 @@ def connection():
                 computed_at TEXT NOT NULL,
                 PRIMARY KEY (source_local_id, cache_key)
             );
+            CREATE TABLE IF NOT EXISTS citation_queries (
+                local_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                message TEXT,
+                payload TEXT NOT NULL,
+                queried_at TEXT NOT NULL
+            );
         """)
         yield db
     finally:

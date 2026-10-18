@@ -92,6 +92,20 @@ async def get_workspace_knowledge_graph(references: list[str] = Body(max_length=
         raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
 
 
+class CitationFillRequest(BaseModel):
+    paper_ids: list[str] = Field(default_factory=list, max_length=80)
+
+
+@app.post("/api/knowledge-graph/citations")
+async def fill_graph_citations(payload: CitationFillRequest):
+    if any(not ref.strip() or len(ref) > 300 for ref in payload.paper_ids):
+        raise HTTPException(status_code=422, detail="论文标识不能为空或超过 300 字符")
+    try:
+        return await knowledge_graph.fill_citations(payload.paper_ids)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
+
+
 @app.get("/api/papers/search", response_model=SearchResponse)
 async def search(
     q: str = Query(min_length=1, max_length=300),

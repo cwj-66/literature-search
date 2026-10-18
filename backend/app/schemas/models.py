@@ -7,6 +7,7 @@ class PaperOut(BaseModel):
     id: str
     title: str
     authors: list[str] = Field(default_factory=list)
+    author_ids: list[str | None] = Field(default_factory=list)
     abstract: str | None = None
     year: int | None = None
     venue: str | None = None
