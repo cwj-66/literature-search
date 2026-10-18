@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
-import { Checkbox, Input, Popover, Button } from "antd";
-import { createPortal } from "react-dom";
+import { useState } from "react";
+import { Checkbox, Input, Drawer, Button } from "antd";
+import { BookOutlined, PlusOutlined } from "@ant-design/icons";
+import { Link } from "react-router-dom";
 import { useProjects } from "../projects";
+import { CollectButton } from "./CollectButton";
+import { paperLocation } from "../workspace";
 
 export function ResearchSources({ selected, onChange, disabled, currentId }: {
   selected: string[]; onChange: (ids: string[]) => void; disabled: boolean; currentId: string;
@@ -10,8 +13,8 @@ export function ResearchSources({ selected, onChange, disabled, currentId }: {
   const [active, setActive] = useState(currentId);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [target, setTarget] = useState<HTMLElement | null>(null);
-  useEffect(() => { setTarget(document.getElementById("research-header-slot")); }, []);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const project = projects.find(p => p.id === active) ?? projects[0];
   const picked = new Set(selected);
   const count = projects.filter(p => Object.keys(p.papers).some(id => picked.has(id))).length;
@@ -42,8 +45,35 @@ export function ResearchSources({ selected, onChange, disabled, currentId }: {
     </div>
     <div className="research-picker-footer"><Button disabled={disabled || !selected.length} onClick={() => onChange([])}>清空选择</Button><span>最多 500 篇；全选仅包含当前已有论文</span><Button type="primary" onClick={() => setOpen(false)}>完成</Button></div>
   </div>;
-  const control = <Popover trigger="click" placement="bottom" open={open} onOpenChange={setOpen} content={content}>
-    <Button className="research-source-trigger" disabled={disabled}>研究资料 · {count} 个工作区 · {selected.length} 篇⌄</Button>
-  </Popover>;
-  return target ? createPortal(control, target) : control;
+  const papers = [...new Map(projects.flatMap(p => Object.entries(p.papers))).entries()].filter(([id]) => picked.has(id));
+  const panel = <div className="research-source-panel-inner">
+    <div className="research-source-panel-head">
+      <div className="research-source-icon"><BookOutlined /></div>
+      <div className="research-source-panel-title">
+        <strong>本对话的研究资料</strong>
+        <span>{selected.length} 篇{count ? ` · 来自 ${count} 个工作区` : ""}</span>
+      </div>
+      <span className="research-source-badge">{selected.length}</span>
+    </div>
+    <p className="research-source-panel-hint">助手按需检索和阅读所选资料。</p>
+    <div className="research-source-panel-tools">
+      <Button size="small" type="primary" ghost aria-label={selected.length ? "管理研究资料" : "添加研究资料"} icon={<PlusOutlined />} disabled={disabled} onClick={() => setOpen(true)}>{selected.length ? "管理研究资料" : "添加研究资料"}</Button>
+      {papers.length ? <button type="button" className="research-source-collapse" aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? "展开列表" : "收起列表"}</button> : null}
+    </div>
+    {!collapsed ? <ul className="research-source-list">
+      {papers.map(([key, item]) => <li key={key} className="research-source-row">
+        <Link to={paperLocation(key, `/w/${currentId}/research`)} title={item.paper.title} className="research-source-row-title">{item.paper.title}</Link>
+        <CollectButton iconOnly paper={item.paper} />
+      </li>)}
+      {!papers.length ? <li className="small-print">尚未选择本地资料，可以直接搜索新论文。</li> : null}
+    </ul> : null}
+  </div>;
+  return <>
+    <aside className="research-source-panel" aria-label="本对话研究资料">{panel}</aside>
+    <button type="button" className="research-source-fab" aria-label={`本对话的研究资料 ${selected.length} 篇`} onClick={() => setPanelOpen(true)}>
+      <BookOutlined /><span>研究资料 · {selected.length} 篇</span>
+    </button>
+    <Drawer className="research-source-mobile-drawer" title="本对话的研究资料" open={panelOpen} onClose={() => setPanelOpen(false)} width="min(320px, 92vw)">{panel}</Drawer>
+    <Drawer title="选择研究资料" open={open} onClose={() => setOpen(false)} width="min(720px, 100vw)">{content}</Drawer>
+  </>;
 }

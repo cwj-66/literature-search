@@ -23,6 +23,9 @@ MAX_CLARIFY = 2
 MAX_SECONDS = int(os.getenv("RESEARCH_MAX_SECONDS", "900"))
 
 MAX_ASSESS_PAPERS = 15
+MAX_EVIDENCE_ITEMS = 60
+MAX_CANDIDATE_PAPERS = 120
+MIN_MERGE_SCORE = 1
 ABSTRACT_CHARS = 300
 MAX_CLAIM_CHARS = 1000
 SEARCH_PAGE_SIZE = 20
@@ -93,6 +96,8 @@ class AgentState(TypedDict, total=False):
     evidence_papers: dict
     evidence_sources: dict
     evidence_items: dict
+    result_limit: int | None
+    sort_order: str | None
     gaps: list
     coverage: dict | None
     need_evidence: bool
@@ -272,6 +277,15 @@ def add_evidence(state: dict, items: list[dict]) -> tuple[dict, list[dict]]:
         seen[key] = eid
         ids.append(eid)
         added.append(record)
+    if len(records) > MAX_EVIDENCE_ITEMS:
+        # 超出上限丢弃最旧证据，保持证据池有界
+        for eid in list(records.keys())[:len(records) - MAX_EVIDENCE_ITEMS]:
+            pool.pop(eid, None)
+            papers.pop(eid, None)
+            sources.pop(eid, None)
+            records.pop(eid, None)
+            if eid in ids:
+                ids.remove(eid)
     updates = {"evidence_pool": pool, "evidence_papers": papers, "evidence_sources": sources,
                "evidence_items": records, "evidence_ids": list(dict.fromkeys(ids))}
     return updates, added
@@ -377,6 +391,8 @@ def initial_state(goal: str, year_from: int | None = None, year_to: int | None =
         "plan_version": 0,
         "query_index": 0,
         "need_evidence": False,
+        "result_limit": None,
+        "sort_order": None,
     }
 
 
@@ -411,6 +427,10 @@ def public_state(state: dict) -> dict:
         "papers": state.get("papers") or [],
         "evidence_ids": state.get("evidence_ids") or [],
         "evidence": [{**item, "quote": str(item.get("quote") or "")[:300]} for item in items.values()],
+        "referenced_evidence_ids": list(dict.fromkeys(
+            eid for claim in state.get("claims") or []
+            if claim.get("status") not in {"dropped", "contradicted"}
+            for eid in (claim.get("evidence_ids") or []))),
         "gaps": state.get("gaps") or [],
         "pending_processing": state.get("pending_processing") or [],
         "operations": state.get("operations") or [],

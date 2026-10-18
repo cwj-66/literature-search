@@ -17,7 +17,8 @@ from pydantic import ValidationError
 from app.agents import store
 from app.agents.prompts import ASSESS_SYSTEM, DOMAIN_PROMPTS
 from app.agents.state import (
-    ABSTRACT_CHARS, DOMAINS, MAX_ASSESS, MAX_ASSESS_PAPERS, MAX_DEEP, MAX_EXTRA_SEARCH, MAX_TOOL_PAPERS,
+    ABSTRACT_CHARS, DOMAINS, MAX_ASSESS, MAX_ASSESS_PAPERS, MAX_CANDIDATE_PAPERS, MAX_DEEP, MAX_EXTRA_SEARCH,
+    MAX_TOOL_PAPERS, MIN_MERGE_SCORE,
     SEARCH_PAGE_SIZE, CoverageAssessment, QuoteVerifier, add_evidence, budget_exhausted, msg_attr,
     remaining_budget, with_event,
 )
@@ -367,6 +368,8 @@ async def _tool_search_papers(state: dict, args: dict) -> tuple[str, dict]:
     year_from = state.get("year_from") if state.get("year_from") is not None else validated.year_from
     year_to = state.get("year_to") if state.get("year_to") is not None else validated.year_to
     source, sort = validated.source, validated.sort
+    if state.get("sort_order") == "asc":
+        sort = "date_asc"
     page_size = args.get("page_size", SEARCH_PAGE_SIZE)
     key = store.cache_key("search", {
         "query": query, "page": page, "page_size": page_size,
@@ -388,9 +391,17 @@ async def _tool_search_papers(state: dict, args: dict) -> tuple[str, dict]:
     pages = dict(state.get("search_pages") or {})
     pages[query] = page
     known = {paper["id"]: paper for paper in state.get("papers") or []}
+    existing = set(known)
+    words = re.findall(r"[\w]+", query, flags=re.UNICODE) if state.get("sort_order") == "asc" else []
     for paper in result.get("papers") or []:
         payload = paper.model_dump() if hasattr(paper, "model_dump") else paper
+        # date_asc 宽匹配返回的条目里可能混入明显无关候选，入池前按关键词得分过滤；池中已有论文不降级
+        if words and payload["id"] not in existing and search.keyword_score(payload, words) < MIN_MERGE_SCORE:
+            continue
         known[payload["id"]] = payload
+    if len(known) > MAX_CANDIDATE_PAPERS:
+        # 候选池超出上限时丢弃最旧的候选
+        known = dict(list(known.items())[-MAX_CANDIDATE_PAPERS:])
     errors = result.get("source_errors") or {}
     queries = list(state.get("queries") or [])
     extra_search = state.get("extra_search", 0)

@@ -225,6 +225,21 @@ async def complete(messages: list[dict]) -> str:
     return content
 
 
+def _tracing_enabled() -> bool:
+    return os.getenv("LANGCHAIN_TRACING_V2", "").strip().lower() in ("1", "true") \
+        and bool(os.getenv("LANGCHAIN_API_KEY", "").strip())
+
+
+try:
+    from langsmith import traceable as _traceable
+except ImportError:
+    _traceable = None
+
+if _traceable is not None and _tracing_enabled():
+    # LangSmith 追踪默认关闭；仅当环境变量显式启用时为 LLM 调用记录 span
+    complete = _traceable(run_type="llm", name="llm.complete")(complete)
+
+
 async def repair(messages: list[dict], raw: str, exc: Exception) -> AnalysisFields:
     follow = [*messages, {"role": "assistant", "content": raw[:8000]}, {
         "role": "user",

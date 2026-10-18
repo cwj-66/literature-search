@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents import agent
+from app.assistant_chats import router as assistant_chat_router
 from app.infrastructure import llm
 from app.schemas import (
     AnalyzeRequest, AnalysisFields, AnalysisResponse, CompareRequest, ImportRequest, ImportResult,
@@ -66,6 +67,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="文献检索", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.include_router(conversation_router)
+app.include_router(assistant_chat_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],

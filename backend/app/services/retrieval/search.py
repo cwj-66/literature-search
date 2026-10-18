@@ -215,6 +215,8 @@ def merge_papers(groups: list[list[PaperOut]], sort: str) -> list[PaperOut]:
     merged = [(paper, rank) for paper, rank, _ in buckets.values()]
     if sort == "date":
         merged.sort(key=lambda item: item[0].year or 0, reverse=True)
+    elif sort == "date_asc":
+        merged.sort(key=lambda item: (item[0].year is None, item[0].year or 0))
     else:
         merged.sort(key=lambda item: item[1])
     return [paper for paper, _ in merged]
@@ -466,13 +468,30 @@ async def search_arxiv(client: httpx.AsyncClient, query: str, offset: int, limit
     return papers, total
 
 
+def keyword_score(paper, words) -> int:
+    """标题/摘要与检索词的关键词得分；兼容 PaperOut 与 dict 条目。"""
+    title = paper.get("title") if isinstance(paper, dict) else paper.title
+    abstract = paper.get("abstract") if isinstance(paper, dict) else paper.abstract
+    title = (title or "").casefold()
+    text = title + " " + (abstract or "").casefold()
+    return sum(3 * title.count(word.casefold()) + text.count(word.casefold()) for word in words)
+
+
+MIN_RELEVANT_SCORE = 1
+
+
+def oldest_relevant(papers, words, target: int) -> list:
+    """date_asc：先丢弃与检索词零重叠的明显无关候选，再按年份升序取最早 target 条；无年份排最后。"""
+    relevant = [paper for paper in papers if keyword_score(paper, words) >= MIN_RELEVANT_SCORE]
+    pool = relevant if relevant else list(papers)
+    pool.sort(key=lambda paper: ((paper.get("year") if isinstance(paper, dict) else paper.year) is None,
+                                 (paper.get("year") if isinstance(paper, dict) else paper.year) or 0))
+    return pool[:target]
+
+
 def rank_bulk(papers, words, sort):
     if sort == "relevance":
-        def score(paper):
-            title = paper.title.casefold()
-            text = title + " " + (paper.abstract or "").casefold()
-            return sum(3 * title.count(word.casefold()) + text.count(word.casefold()) for word in words)
-        return sorted(papers, key=score, reverse=True)
+        return sorted(papers, key=lambda paper: keyword_score(paper, words), reverse=True)
     return papers
 
 
@@ -485,13 +504,16 @@ async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int
     words = re.findall(r"[\w]+", query, flags=re.UNICODE)
     if not words:
         raise SourceFailure("请输入有效的检索关键词")
+    # date_asc 先多取几页，回到调用侧做相关性过滤后再取最早
+    cap = min(target * 5, 200) if sort == "date_asc" else target
     params = {"query": " + ".join(words), "fields": S2_FIELDS,
-              "sort": "publicationDate:desc" if sort == "date" else "citationCount:desc"}
+              "sort": "publicationDate:asc" if sort == "date_asc"
+              else ("publicationDate:desc" if sort == "date" else "citationCount:desc")}
     year = s2_year(year_from, year_to)
     if year:
         params["year"] = year
     state = _CACHE_STATUS.get()
-    if state is not None and sort != "date":
+    if state is not None and sort not in ("date", "date_asc"):
         state["note"] = "相关性为每批候选的关键词排序，后续结果按需继续获取"
     papers = []
     seen = set()
@@ -526,7 +548,7 @@ async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int
         token = payload.get("token")
         if not token:
             return papers, len(papers)
-        if len(papers) >= target:
+        if len(papers) >= cap:
             return papers, total
         if token in tokens:
             raise SourceFailure("Semantic Scholar 返回了重复的分页游标，请稍后重试")
@@ -577,6 +599,10 @@ async def search_s2_relevance(client, query: str, offset: int, limit: int, year_
 
 
 async def search_semantic_scholar(client: httpx.AsyncClient, query: str, offset: int, limit: int, year_from: int | None, year_to: int | None, sort: str = "relevance") -> tuple[list[PaperOut], int]:
+    if sort == "date_asc":
+        papers, total = await search_s2_bulk(client, query, year_from, year_to, sort, offset + limit)
+        words = re.findall(r"[\w]+", query, flags=re.UNICODE)
+        return oldest_relevant(papers, words, offset + limit)[offset:offset + limit], total
     if sort == "date":
         papers, total = await search_s2_bulk(client, query, year_from, year_to, sort, offset + limit)
         return papers[offset:offset + limit], total
@@ -830,6 +856,25 @@ async def arxiv_substitutes(client, query, sort, year_from, year_to, limit):
 
 async def arxiv_with_index_fallback(client, query, target, sort, year_from, year_to):
     failure = None
+    if sort == "date_asc":
+        # 先按相关性取回一个窗口，过滤明显无关候选后再按年份升序取最早
+        words = re.findall(r"[\w]+", query, flags=re.UNICODE)
+        if not contains_cjk(query):
+            try:
+                window = min(target * 5, 200)
+                papers, total = await unique_prefix(lambda start, size: search_arxiv(client, query, start, size, "relevance", year_from, year_to), window, 10000, year_from, year_to)
+                return oldest_relevant(papers, words, target), total
+            except (SourceFailure, httpx.HTTPError) as exc:
+                failure = exc
+        papers, via = await arxiv_substitutes(client, query, sort, year_from, year_to, target)
+        if papers:
+            return remember_arxiv_substitute(oldest_relevant(papers, words, target), via, failure)
+        if failure is not None:
+            raise failure
+        state = _CACHE_STATUS.get()
+        if state is not None:
+            state["note"] = "arXiv 只索引英文题录，中文检索未向 arXiv 发送请求"
+        return [], 0
     if not contains_cjk(query):
         try:
             return await unique_prefix(lambda start, size: search_arxiv(client, query, start, size, sort, year_from, year_to), target, 10000, year_from, year_to)
@@ -875,8 +920,8 @@ async def search_papers_stream(query: str, page: int, page_size: int, sort: str,
             jobs.append(asyncio.create_task(worker("arxiv", lambda: arxiv_with_index_fallback(client, query, target, sort, year_from, year_to))))
         if source == "semantic_scholar" or (source == "all" and semantic_enabled()):
             pending.append("semantic_scholar")
-            if sort == "date":
-                s2_call = lambda: search_semantic_scholar(client, query, 0, target, year_from, year_to, "date")
+            if sort in ("date", "date_asc"):
+                s2_call = lambda: search_semantic_scholar(client, query, 0, target, year_from, year_to, sort)
             else:
                 s2_call = lambda: search_semantic_scholar(client, query, offset, page_size, year_from, year_to, "relevance")
             jobs.append(asyncio.create_task(worker("semantic_scholar", s2_call)))

@@ -190,9 +190,9 @@ export function compareLibrary(paperIds: string[], signal?: AbortSignal) {
   return postJson<CompareTable>("/api/compare", { paper_ids: paperIds }, signal);
 }
 
-export function startResearch(goal: string, options: { autoApprove: boolean; yearFrom?: number | null; yearTo?: number | null; workspaceId?: string; scope?: "current" | "selected" | "workspace"; currentPaperId?: string; selectedPaperIds?: string[]; accessiblePaperIds?: string[]; conversationHistory?: string; mode?: "auto" | "react" | "plan" }, signal?: AbortSignal) {
+export function startResearch(goal: string, options: { autoApprove: boolean; background?: boolean; yearFrom?: number | null; yearTo?: number | null; workspaceId?: string; scope?: "current" | "selected" | "workspace"; currentPaperId?: string; selectedPaperIds?: string[]; accessiblePaperIds?: string[]; conversationHistory?: string; mode?: "auto" | "react" | "plan" }, signal?: AbortSignal) {
   return postJson<ResearchTask>("/api/research/tasks", {
-    goal, auto_approve: options.autoApprove, year_from: options.yearFrom ?? null, year_to: options.yearTo ?? null,
+    goal, background: options.background ?? false, auto_approve: options.autoApprove, year_from: options.yearFrom ?? null, year_to: options.yearTo ?? null,
     workspace_id: options.workspaceId, scope: options.scope ?? "selected", current_paper_id: options.currentPaperId,
     accessible_paper_ids: options.accessiblePaperIds, conversation_history: options.conversationHistory ?? "",
     selected_paper_ids: options.selectedPaperIds ?? [], mode: options.mode ?? "auto",
@@ -200,7 +200,7 @@ export function startResearch(goal: string, options: { autoApprove: boolean; yea
 }
 
 export type ResearchDecision = {
-  accessible_paper_ids?: string[]; approved?: boolean; approved_ids?: string[]; queries?: string[]; abort?: boolean;
+  background?: boolean; accessible_paper_ids?: string[]; approved?: boolean; approved_ids?: string[]; queries?: string[]; abort?: boolean;
   scope?: "current" | "selected" | "workspace"; current_paper_id?: string; selected_paper_ids?: string[];
 };
 
@@ -231,4 +231,13 @@ export function resumeResearch(taskId: string, queries: string[], signal?: Abort
   return postJson<ResearchTask>(`/api/research/tasks/${encodeURIComponent(taskId)}/resume`, {
     queries, plan: queries.map(query => ({ action: "search", query })),
   }, signal);
+}
+
+export async function fetchResearchTask(taskId: string, signal?: AbortSignal): Promise<ResearchTask> {
+  const r = await fetch(`/api/research/tasks/${encodeURIComponent(taskId)}`, { signal });
+  if (!r.ok) throw new ApiError(await errorMessage(r), r.status);
+  return r.json();
+}
+export function cancelResearchTask(taskId: string) {
+  return postJson(`/api/research/tasks/${encodeURIComponent(taskId)}/cancel`, {});
 }

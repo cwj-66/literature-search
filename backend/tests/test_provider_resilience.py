@@ -143,6 +143,25 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(search._COOLDOWN.get("Semantic Scholar", 0), 0)
         self.assertEqual(provider_cache.retry_at("Semantic Scholar"), 0)
 
+    async def test_keyed_retry_respects_quota_even_with_zero_retry_after(self):
+        calls = 0
+
+        def handler(request):
+            nonlocal calls
+            calls += 1
+            self.assertEqual(request.headers.get("x-api-key"), "test-approved-key")
+            if calls == 1:
+                return httpx.Response(429, headers={"Retry-After": "0"})
+            return httpx.Response(200, json=PAYLOAD)
+
+        with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_API_KEY": "test-approved-key"}), \
+             patch.object(search.asyncio, "sleep", new=AsyncMock()) as sleep:
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                papers, _ = await search.search_semantic_scholar(client, "deep learning", 0, 10, None, None)
+        self.assertEqual(calls, 2)
+        self.assertEqual(len(papers), 1)
+        self.assertGreaterEqual(sleep.await_args_list[-1].args[0], 1.1)
+
     async def test_arxiv_outage_uses_only_indexed_arxiv_papers_with_explicit_notice(self):
         indexed = PaperOut(id="s2:" + "a" * 40, arxiv_id="2301.12345", title="Deep learning", sources=["semantic_scholar"])
         other = PaperOut(id="s2:" + "b" * 40, title="Other publisher", sources=["semantic_scholar"])

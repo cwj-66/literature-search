@@ -37,7 +37,7 @@ from app.agents.prompts import (
 )
 from app.agents.state import (
     CRITICAL_SLOTS, DOMAINS, EVIDENCE_ID_RE, MAX_API, MAX_ASSESS, MAX_CLAIM_CHARS, MAX_CLARIFY, MAX_DEEP,
-    MAX_EXTRA_SEARCH, MAX_JUDGE_ROUNDS, MAX_LLM, MAX_REACT, SCIENTIFIC_MATERIALS, SLOT_NAMES, AgentState,
+    MAX_EXTRA_SEARCH, MAX_JUDGE_ROUNDS, MAX_LLM, MAX_REACT, MAX_CANDIDATE_PAPERS, SCIENTIFIC_MATERIALS, SLOT_NAMES, AgentState,
     ClaimsOutput, CoverageAssessment, DirectAnswer, JudgeBatch, ReactOutput, TaskRoute, budget_exhausted,
     hard_stop, initial_state, is_cancel_requested, material_of, msg_attr, msg_role, public_state,
     remaining_budget, with_event,
@@ -84,6 +84,9 @@ RECENT_YEARS = re.compile(r"(?:近|最近|过去)\s*([0-9一二两三四五六�
 VAGUE_RECENT = re.compile(r"(?:近|最近)(?:几|些)年")
 COMPARATIVE_HINT = re.compile(r"对比|比较|综述|梳理|差异|各自|横向|区别")
 CN_DIGITS = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+QUANTITY_HINT = re.compile(r"([0-9一二两三四五六七八九十]{1,3})\s*篇(?:论文|文献|文章)?")
+EARLIEST_HINT = re.compile(r"最早|最先")
+SORT_WORDS = re.compile(r"最早|最先|最新")
 
 
 # ---------------------------------------------------------------------------
@@ -298,15 +301,35 @@ def clarify_route(state: dict) -> Literal["router", "finish"]:
 # ---------------------------------------------------------------------------
 
 
+def _result_hint(goal: str) -> tuple[int | None, str | None, str]:
+    """解析数量词与“最早/最新”排序词：返回 (数量上限, "asc" 或 None, 去掉数量/排序短语后的检索式)。"""
+    text = goal or ""
+    match = QUANTITY_HINT.search(text)
+    count = _cn_number(match.group(1)) if match else None
+    if count is None or not 1 <= count <= MAX_CANDIDATE_PAPERS:
+        count = None
+    order = "asc" if EARLIEST_HINT.search(text) else None
+    query = SORT_WORDS.sub("", QUANTITY_HINT.sub("", text)).strip() if (match or order or SORT_WORDS.search(text)) else text
+    if not query:
+        query = text
+    return count, order, query
+
+
 def react_node(state: dict) -> dict:
     goal = state.get("goal") or ""
-    return {
-        "queries": [goal],
-        "plan": [{"action": "search", "query": goal}],
+    count, order, query = _result_hint(goal)
+    updates = {
+        "queries": [query],
+        "plan": [{"action": "search", "query": query}],
         "plan_version": 1,
         "events": with_event(state, {"step": "react", "reason": "简单任务跳过计划，直接进入检索执行"}),
-        "past_steps": [["react", goal]],
+        "past_steps": [["react", query]],
     }
+    if count is not None:
+        updates["result_limit"] = count
+    if order:
+        updates["sort_order"] = order
+    return updates
 
 
 async def direct_answer_node(state: dict) -> dict:
@@ -429,6 +452,9 @@ def _react_system(state: dict) -> str:
         + f"\n【已用检索式】{json.dumps(queries, ensure_ascii=False)}"
         + f"\n【剩余预算】{json.dumps(remaining_budget(state), ensure_ascii=False)}"
         + (f"\n【已知缺口】{json.dumps((state.get('gaps') or [])[-5:], ensure_ascii=False)}" if state.get("gaps") else "")
+        + (f"\n【数量约束】用户要求 {state.get('result_limit')} 篇，最终答案只给出该数量的论文"
+           + ("，优先给出最早的" if state.get("sort_order") == "asc" else "")
+           + "；候选不足时如实说明。" if state.get("result_limit") else "")
     )
 
 
@@ -964,8 +990,21 @@ def finish_node(state: dict) -> dict:
     return updates
 
 
+def _tracing_enabled() -> bool:
+    return os.getenv("LANGCHAIN_TRACING_V2", "").strip().lower() in ("1", "true") \
+        and bool(os.getenv("LANGCHAIN_API_KEY", "").strip())
+
+
 def build(checkpointer=None):
     from langgraph.graph import END, START, StateGraph
+
+    if _tracing_enabled():
+        try:
+            from langsmith import Client
+            Client()
+            log.info("LangSmith tracing enabled: project=%s", os.getenv("LANGCHAIN_PROJECT", "default"))
+        except Exception as exc:
+            log.warning("LangSmith tracing unavailable, running without tracing: %s", type(exc).__name__)
 
     graph = StateGraph(AgentState)
     graph.add_node("router", router_node)
