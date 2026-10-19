@@ -281,7 +281,7 @@ export interface KnowledgeTheme {
   size: number;
   centrality: number;
   density: number;
-  quadrant: ThemeQuadrant;
+  quadrant: ThemeQuadrant | null;
   by_year: Record<string, number>;
 }
 
@@ -297,11 +297,14 @@ export interface ThemeEvolutionLink {
 
 export interface KnowledgeThemesResponse {
   themes: KnowledgeTheme[];
-  evolution: { periods: string[]; links: ThemeEvolutionLink[] };
+  evolution: { periods: string[]; links: ThemeEvolutionLink[]; reason?: string };
   years: number[];
   total_papers: number;
   analyzed_papers: number;
   scope_note: string;
+  scope?: "workspace" | "expanded";
+  status?: "ok" | "insufficient";
+  status_reason?: string;
 }
 
 export interface PaperNetwork {

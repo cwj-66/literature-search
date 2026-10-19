@@ -70,13 +70,25 @@ class KnowledgeGraphTests(unittest.IsolatedAsyncioTestCase):
             db.execute("INSERT INTO paper_relations VALUES (?,?,?,?)", (a.local_id, "test", json.dumps({"network": {"edges": edges}}), "2026-10-17"))
         graph = knowledge_graph.build(references=[a.id, b.id])
         cites = [e for e in graph["edges"] if e["relation"] == "cites"]
+        similars = [e for e in graph["edges"] if e["relation"] == "similar"]
         self.assertEqual(len(cites), 1)
         self.assertEqual((cites[0]["source"], cites[0]["target"]), ("paper:" + a.local_id, "paper:" + b.local_id))
         self.assertEqual(cites[0]["provenance"], "citation_cache")
-        self.assertFalse(any(e["relation"] == "similar" for e in graph["edges"]))
+        self.assertEqual(len(similars), 1)
+        self.assertEqual(set((similars[0]["source"], similars[0]["target"])), {"paper:" + a.local_id, "paper:" + b.local_id})
+        self.assertNotEqual(similars[0]["relation"], "cites")
+        self.assertFalse(any(node["kind"] == "paper" and node["paper_id"] == c.id for node in graph["nodes"]))
+
+    async def test_opening_graph_does_not_compute_recommendations(self):
+        paper = self.paper()
+        with patch("app.services.retrieval.recommend.bundle", side_effect=AssertionError("must read cache only")):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/api/knowledge-graph", json=[paper.id])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total_papers"], 1)
 
     def test_latest_analysis_unknown_year_and_malformed_payload(self):
-        a, b = self.paper(1, year=None), self.paper(2)
+        a, b = self.paper(1, year=None), self.paper(2, title="Note", abstract="")
         self.analyze(a, {"keywords": ["Old"]})
         self.analyze(a, {"keywords": ["New"]}, "2026-10-18", "r2")
         self.analyze(b, ["invalid payload"], result="r3")
@@ -101,7 +113,7 @@ class KnowledgeGraphTests(unittest.IsolatedAsyncioTestCase):
 
     def test_aliases_share_one_topic_and_analysis_adds_keywords(self):
         first, second = self.paper(1, authors=["Ada"], author_ids=["author-ada"]), self.paper(2, authors=["Ada"], author_ids=["author-other"])
-        plain = self.paper(3, authors=["Sam"], venue="Workshop")
+        plain = self.paper(3, authors=["Sam"], venue="Workshop", title="Note", abstract="")
         self.analyze(first, {"keywords": ["RAG"]}, result="rag")
         self.analyze(second, {"keywords": ["Retrieval-Augmented Generation", "Hallucinations"]}, result="alias")
         before = knowledge_graph.build(references=[plain.id])
@@ -140,6 +152,56 @@ class KnowledgeGraphTests(unittest.IsolatedAsyncioTestCase):
         checked_node = next(item for item in checked["nodes"] if item["kind"] == "paper")
         self.assertEqual(checked_node["citation_status"], "none_in_scope")
         self.assertIn("不表示", checked_node["citation_note"])
+
+    def test_unanalyzed_rag_title_shares_keyword_with_analyzed_paper(self):
+        analyzed = self.paper(1, title="Corrective Retrieval Augmented Generation")
+        self.analyze(analyzed, {"keywords": ["RAG"]}, result="rag")
+        other = self.paper(2, title="MultiHop-RAG: Benchmarking Retrieval-Augmented Generation for Multi-hop Queries")
+        graph = knowledge_graph.build(references=[analyzed.id, other.id])
+        rag = next(node["id"] for node in graph["nodes"] if node["kind"] == "keyword" and node["label"] == "RAG")
+        sources = {edge["source"] for edge in graph["edges"] if edge["relation"] == "has_keyword" and edge["target"] == rag}
+        self.assertEqual(sources, {f"paper:{analyzed.local_id}", f"paper:{other.local_id}"})
+        fallback = next(edge for edge in graph["edges"] if edge["source"] == f"paper:{other.local_id}" and edge["relation"] == "has_keyword")
+        self.assertEqual(fallback["provenance"], "metadata")
+        self.assertEqual(library.list_papers(1, 20)["total"], 2)
+
+    def test_same_name_authors_without_ids_merge(self):
+        left = self.paper(1, authors=["Alice Chen"])
+        right = self.paper(2, authors=["Alice Chen"])
+        graph = knowledge_graph.build(references=[left.id, right.id])
+        authors = [node for node in graph["nodes"] if node["kind"] == "author"]
+        self.assertEqual(len(authors), 1)
+        self.assertEqual(authors[0]["provenance"], "name_match")
+        self.assertEqual(len({edge["target"] for edge in graph["edges"] if edge["relation"] == "authored_by"}), 1)
+
+    def test_fallback_keywords_keep_alias_and_drop_generic_tokens(self):
+        terms = knowledge_graph.fallback_keywords("MultiHop-RAG system overview", None, set())
+        self.assertIn("RAG", terms)
+        self.assertNotIn("system", {term.casefold() for term in terms})
+
+    async def test_fill_similar_writes_cache_without_adding_nodes(self):
+        left, right = self.paper(1), self.paper(2)
+        outside = {"id": "arxiv:9999.00001", "title": "Outside"}
+
+        async def bundle(raw, refresh):
+            if raw != left.local_id:
+                return {}
+            with connection() as db, db:
+                db.execute("INSERT INTO paper_relations VALUES (?,?,?,?)", (left.local_id, "sim", json.dumps({
+                    "recommendations": {"computed_at": "2026-10-19T00:00:00+00:00", "items": [outside]},
+                    "network": {"edges": [{"source": left.id, "target": right.id, "type": "similar"}]},
+                }), "2026-10-19T00:00:00+00:00"))
+            return {}
+
+        with patch("app.services.retrieval.recommend.bundle", new=bundle):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                filled = await client.post("/api/knowledge-graph/similar", json={"paper_ids": [left.id, right.id]})
+        self.assertEqual(filled.status_code, 200, filled.text)
+        self.assertIsNone(library.get_paper("arxiv:9999.00001"))
+        graph = knowledge_graph.build(references=[left.id, right.id])
+        similars = [edge for edge in graph["edges"] if edge["relation"] == "similar"]
+        self.assertEqual(len(similars), 1)
+        self.assertEqual(library.list_papers(1, 20)["total"], 2)
 
     async def test_fill_citations_keeps_direction_and_does_not_import_or_call_model(self):
         from app.infrastructure import llm

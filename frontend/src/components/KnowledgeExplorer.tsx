@@ -7,8 +7,8 @@ import { canvasGraph, filterGraph } from "../knowledgeGraph";
 import { ExplorerCanvas } from "./ExplorerCanvas";
 import { TopicEvolution } from "./TopicEvolution";
 
-const SHOW_DEFAULT = "paper,keyword,cites";
-const RELATIONS = ["cites", "has_keyword", "authored_by", "published_in"];
+const SHOW_DEFAULT = "paper,keyword,cites,similar";
+const RELATIONS = ["cites", "similar", "has_keyword", "authored_by", "published_in"];
 
 function keyOf(node: EntityNode) {
   return node.local_id || node.paper_id || node.id;
@@ -20,11 +20,12 @@ function linkedPapers(node: EntityNode, papers: EntityNode[], edges: EntityEdge[
   return papers.filter(item => ids.has(item.id));
 }
 
-export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceId, recommendHref, onFill, references }: {
+export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceId, recommendHref, onFill, onFillSimilar, references }: {
   data: EntityGraph; scope: string; paperHref: (node: EntityNode) => string;
   paperKey?: (node: EntityNode) => string | undefined; workspaceId?: string;
   recommendHref?: (node: EntityNode) => string;
   onFill?: (ids: string[]) => Promise<{ queried: number; failed: number }>;
+  onFillSimilar?: (ids: string[]) => Promise<{ queried: number; failed: number }>;
   references?: string[];
 }) {
   const navigate = useNavigate();
@@ -53,6 +54,7 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
     nodes: visible.nodes.filter(node => show.includes(node.kind)),
     edges: visible.edges.filter(edge => {
       if (edge.relation === "cites") return show.includes("cites") && show.includes("paper");
+      if (edge.relation === "similar") return show.includes("similar") && show.includes("paper");
       if (edge.relation === "has_keyword") return show.includes("keyword") && show.includes("paper");
       if (edge.relation === "authored_by") return show.includes("author") && show.includes("paper");
       return show.includes("venue") && show.includes("paper");
@@ -65,8 +67,10 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
   const years = [...new Set(data.nodes.flatMap(node => node.kind === "paper" && node.year != null ? [node.year] : []))].sort((a, b) => a - b);
   const analyzed = papers.filter(node => node.analysis);
   const cites = visible.edges.filter(edge => edge.relation === "cites");
+  const similars = visible.edges.filter(edge => edge.relation === "similar");
   const keywords = visible.nodes.filter(node => node.kind === "keyword");
   const missingKeywords = papers.filter(node => !visible.edges.some(edge => edge.relation === "has_keyword" && edge.source === node.id));
+  const unanalyzedPapers = papers.filter(node => !node.analysis);
   const unknownYears = data.nodes.filter(node => node.kind === "paper" && node.year == null).length;
   const pickedPapers = papers.filter(node => picks.includes(paperKey?.(node) || keyOf(node)));
   const unanalyzed = pickedPapers.filter(node => !node.analysis);
@@ -74,7 +78,7 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
   function select(id: string) { setEdgeId(""); update({ selected: id }); }
   function selectEdge(id: string) {
     const edge = canvas.edges[Number(id.slice(5))];
-    if (!edge || edge.relation !== "cites") return;
+    if (!edge || (edge.relation !== "cites" && edge.relation !== "similar")) return;
     setEdgeId(id);
     update({ selected: "" });
   }
@@ -93,14 +97,27 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
     pickedPapers.forEach(node => search.append("pick", paperKey?.(node) || keyOf(node)));
     navigate(`/w/${workspaceId}/compare/table?${search}`);
   }
+  function paperIds() {
+    return papers.flatMap(node => [node.local_id, node.paper_id].filter((item): item is string => Boolean(item)));
+  }
   async function fill() {
     if (!onFill || filling) return;
     setFilling(true); setFillNote("");
     try {
-      const result = await onFill(papers.flatMap(node => [node.local_id, node.paper_id].filter((item): item is string => Boolean(item))));
+      const result = await onFill(paperIds());
       setFillNote(result.failed ? `已查询 ${result.queried} 篇，${result.failed} 篇未能完整获取。已保留查到的引用，外部论文不会加入工作区。` : `已查询 ${result.queried} 篇。外部论文不会加入当前工作区。`);
     } catch (err) {
       setFillNote(err instanceof Error ? err.message : "引用补全失败，请重试");
+    } finally { setFilling(false); }
+  }
+  async function fillSimilar() {
+    if (!onFillSimilar || filling) return;
+    setFilling(true); setFillNote("");
+    try {
+      const result = await onFillSimilar(paperIds());
+      setFillNote(result.failed ? `已尝试补全相似关系，${result.failed} 篇未能完成。已保留原图，外部论文不会加入图谱。` : `已写入工作区内相似关系。外部论文不会加入图谱。`);
+    } catch (err) {
+      setFillNote(err instanceof Error ? err.message : "相似关系补全失败，已保留原图");
     } finally { setFilling(false); }
   }
   const idOf = (node: EntityNode) => paperKey?.(node) || keyOf(node);
@@ -117,20 +134,22 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
         <div><span>已分析</span><strong>{analyzed.length}</strong></div>
         <div><span>关键词</span><strong>{keywords.length}</strong></div>
         <div><span>已确认引用</span><strong>{cites.length}</strong></div>
+        <div><span>主题相似</span><strong>{similars.length}</strong></div>
       </div>
     </div>
     <div className="kg-explore-toolbar">
       <Input allowClear placeholder="搜索论文、关键词、作者或期刊／会议" aria-label="搜索图谱" value={query} onChange={event => update({ q: event.target.value, selected: "" })} />
       <Select aria-label="发表年份" value={year || ""} onChange={value => update({ year: value ? String(value) : "", selected: "" })} options={[{ value: "", label: "全部年份" }, ...years.map(item => ({ value: item, label: String(item) }))]} />
       <Button type="primary" loading={filling} onClick={fill} disabled={!onFill || !papers.length}>补全引用关系</Button>
+      <Button loading={filling} onClick={fillSimilar} disabled={!onFillSimilar || !papers.length}>补全工作区内相似关系</Button>
       <Button onClick={reset}>复位</Button>
     </div>
     {fillNote ? <p className="kg-data-note" role="status">{fillNote}</p> : null}
     {year && unknownYears ? <p className="kg-data-note">{unknownYears} 篇缺少年份，未进入该年份的网络和统计。</p> : null}
-    {missingKeywords.length ? <p className="kg-data-note">{missingKeywords.length} 篇没有关键词。未分析的论文仍显示作者和发表渠道，不推测主题。</p> : null}
+    {unanalyzedPapers.length ? <p className="kg-data-note">未分析的论文使用标题和摘要中的原文词。{missingKeywords.length ? `${missingKeywords.length} 篇没有可识别的关键词，单独显示。` : ""}</p> : null}
     {!papers.length ? <Empty description="没有符合条件的论文"><Button onClick={reset}>清除筛选</Button></Empty> : tab === "evolution" ? <TopicEvolution references={references} onExploreTheme={theme => update({ q: theme.keywords[0] ?? theme.name, selected: "", tab: "graph" })} /> : <>
       <div className="kg-entity-toggles">
-        {([["paper", "论文"], ["keyword", "关键词"], ["cites", "引用"], ["author", "作者"], ["venue", "期刊／会议"]] as const).map(([value, label]) => <Checkbox key={value} checked={show.includes(value)} onChange={event => {
+        {([["paper", "论文"], ["keyword", "关键词"], ["cites", "引用"], ["similar", "相似"], ["author", "作者"], ["venue", "期刊／会议"]] as const).map(([value, label]) => <Checkbox key={value} checked={show.includes(value)} onChange={event => {
           const next = event.target.checked ? [...new Set([...show, value])] : show.filter(item => item !== value);
           update({ show: next.join(",") || "none" });
         }}>{label}</Checkbox>)}
@@ -145,6 +164,7 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
             <span><i style={{ background: "#f3e9ff", border: `1.5px solid ${KIND_COLOR.author}`, borderRadius: "50%" }} />作者</span>
             <span><i style={{ background: "#fff6e8", border: `1.5px solid ${KIND_COLOR.venue}` }} />期刊／会议</span>
             <span>箭头：已确认引用</span>
+            <span>虚线：主题相似（推荐缓存，不是引用）</span>
           </div>
         </section>
         {narrow ? <Drawer open={Boolean(selectedNode || selectedEdge)} onClose={() => { select(""); setEdgeId(""); }} title="详情" placement="bottom" height="72%">{detail}</Drawer> : <aside className="kg-inspector kg-detail" aria-label="实体详情">{detail}</aside>}
@@ -161,6 +181,15 @@ function GraphDetail({ node, edge, nodes, papers, edges, picks, idOf, onPick, on
 }) {
   const byId = new Map(nodes.map(item => [item.id, item]));
   if (edge) {
+    if (edge.relation === "similar") {
+      return <>
+        <p className="kg-eyebrow">主题相似</p>
+        <h2>{byId.get(edge.source)?.label ?? "论文"}</h2>
+        <p className="kg-detail-copy">与</p>
+        <h2>{byId.get(edge.target)?.label ?? "论文"}</h2>
+        <p className="kg-data-note">依据是推荐缓存里已经算过的主题相似，两端都在当前工作区。这不是引用关系，也不会把外部论文画进图谱。</p>
+      </>;
+    }
     return <>
       <p className="kg-eyebrow">已确认引用</p>
       <h2>{byId.get(edge.source)?.label ?? "引用方"}</h2>
@@ -182,7 +211,7 @@ function GraphDetail({ node, edge, nodes, papers, edges, picks, idOf, onPick, on
       <div className="kg-detail-top"><span className="kg-kind"><i style={{ background: KIND_COLOR.paper }} />论文</span></div>
       <h2>{node.label}</h2>
       <p className="kg-detail-copy">{[node.year ?? "年份未知", node.authors?.join("、") || people.map(item => item.label).join("、") || "作者未知", node.venue || "发表渠道未知"].join(" · ")}</p>
-      <p className="kg-data-note">{node.analysis ? "已完成分析。" : "尚未分析，没有关键词，不推测主题。"} {node.citation_note || "尚未查询引用关系。"}</p>
+      <p className="kg-data-note">{node.analysis ? "已完成分析。" : topics.some(item => item.provenance === "metadata") ? "尚未分析，使用标题和摘要中的原文词。" : "尚未分析，没有可识别的关键词，不推测主题。"} {node.citation_note || "尚未查询引用关系。"}</p>
       {topics.length ? <div className="kg-topic-tags">{topics.map(item => <button type="button" key={item.id} onClick={() => onSelect(item.id)}>{item.label}</button>)}</div> : <p className="kg-data-note">当前没有可显示的关键词。</p>}
       <div className="kg-detail-links">
         <Link to={paperHref(node)}>查看分析</Link>
@@ -197,7 +226,7 @@ function GraphDetail({ node, edge, nodes, papers, edges, picks, idOf, onPick, on
     <div className="kg-detail-top"><span className="kg-kind"><i style={{ background: KIND_COLOR[node.kind] }} />{node.kind === "keyword" ? "已选关键词" : KIND_LABEL[node.kind]}</span></div>
     <h2>{node.label}</h2>
     <p className="kg-detail-count">关联论文 {related.length} 篇</p>
-    <p className="kg-data-note">{node.kind === "keyword" ? "以下论文的已有分析包含该关键词。" : node.kind === "author" ? "按平台作者标识归并。同名但标识不同不会当成同一作者。" : "以下论文发表在该渠道。"}</p>
+    <p className="kg-data-note">{node.kind === "keyword" ? (node.provenance === "metadata" ? "以下论文通过标题或摘要中的原文词关联到该关键词。" : "以下论文的已有分析包含该关键词。") : node.kind === "author" ? (node.provenance === "name_match" ? "按规范化全名合并。没有平台作者标识时，仅当工作区内全名完全相同才视为同一作者。" : "按平台作者标识归并。同名但标识不同不会当成同一作者。") : "以下论文发表在该渠道。共同预印本渠道默认可以关掉。"}</p>
     <ul className="kg-pick-list">{related.map(item => <li key={item.id}>
       <Checkbox checked={picks.includes(idOf(item))} onChange={() => onPick(item)} aria-label={`选择 ${item.label}`} />
       <div><strong>{item.label}</strong><span>{item.year ?? "年份未知"} · {item.analysis ? "已分析" : "未分析"}</span></div>

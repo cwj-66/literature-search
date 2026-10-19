@@ -108,20 +108,36 @@ async def fill_graph_citations(payload: CitationFillRequest):
         raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
 
 
-@app.get("/api/knowledge-graph/themes")
-async def get_knowledge_graph_themes(limit: int = Query(80, ge=1, le=2000)):
+@app.post("/api/knowledge-graph/similar")
+async def fill_graph_similar(payload: CitationFillRequest):
+    if any(not ref.strip() or len(ref) > 300 for ref in payload.paper_ids):
+        raise HTTPException(status_code=422, detail="论文标识不能为空或超过 300 字符")
     try:
-        return await themes.build(references=None, limit=limit)
+        return await knowledge_graph.fill_similar(payload.paper_ids)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
+
+
+@app.get("/api/knowledge-graph/themes")
+async def get_knowledge_graph_themes(
+    limit: int = Query(80, ge=1, le=2000),
+    scope: str = Query("workspace", pattern="^(workspace|expanded)$"),
+):
+    try:
+        return await themes.build(references=None, limit=limit, scope=scope)
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="本地主题分析暂不可用，请稍后重试")
 
 
 @app.post("/api/knowledge-graph/themes")
-async def get_workspace_knowledge_graph_themes(references: list[str] = Body(default_factory=list, max_length=2000)):
+async def get_workspace_knowledge_graph_themes(
+    references: list[str] = Body(default_factory=list, max_length=2000),
+    scope: str = Query("workspace", pattern="^(workspace|expanded)$"),
+):
     if any(not ref.strip() or len(ref) > 300 for ref in references):
         raise HTTPException(status_code=422, detail="论文标识不能为空或超过 300 字符")
     try:
-        return await themes.build(references=references)
+        return await themes.build(references=references, scope=scope)
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
 

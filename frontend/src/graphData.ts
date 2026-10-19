@@ -16,9 +16,10 @@ export interface EntityEdge { source: string; target: string; relation: string; 
 export interface EntityGraph { nodes: EntityNode[]; edges: EntityEdge[]; total_papers: number; scope: string; missing_references?: string[] }
 export const RELATIONS: Record<string, { label: string; color: string; dash?: number[] }> = {
   authored_by: { label: "作者署名", color: "#8b78a3" },
-  has_keyword: { label: "主题关联 · AI提取", color: "#468e82", dash: [5, 4] },
+  has_keyword: { label: "主题关联 · 关键词", color: "#468e82", dash: [5, 4] },
   published_in: { label: "发表渠道", color: "#b29467", dash: [2, 4] },
   cites: { label: "引用 → 被引用", color: "#4169a7" },
+  similar: { label: "主题相似 · 推荐缓存", color: "#7048e8", dash: [6, 5] },
 };
 export const KIND_LABEL: Record<EntityKind, string> = { paper: "论文", author: "作者", keyword: "关键词", venue: "期刊／会议" };
 export const KIND_COLOR: Record<EntityKind, string> = { paper: "#2a53b0", author: "#85599f", keyword: "#23806f", venue: "#a8701c" };

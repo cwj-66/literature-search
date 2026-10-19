@@ -3,10 +3,10 @@ import { tokens } from "./theme";
 import type { KnowledgeTheme, ThemeEvolutionLink, ThemeQuadrant } from "./types";
 
 export const QUADRANT_META: Record<ThemeQuadrant, { label: string; color: string; hint: string }> = {
-  motor: { label: "当前热点", color: tokens.vizRose, hint: "高关联 · 高密集" },
-  basic: { label: "基础主题", color: tokens.vizBlue, hint: "低关联 · 高密集" },
-  emerging: { label: "新兴主题", color: tokens.vizGreen, hint: "高关联 · 低密集" },
-  niche: { label: "小众主题", color: tokens.placeholder, hint: "低关联 · 低密集" },
+  motor: { label: "当前热点", color: tokens.vizRose, hint: "高中心度 · 高密集度" },
+  niche: { label: "专业主题", color: tokens.placeholder, hint: "低中心度 · 高密集度" },
+  basic: { label: "基础主题", color: tokens.vizBlue, hint: "高中心度 · 低密集度" },
+  emerging: { label: "新兴或衰退", color: tokens.vizGreen, hint: "低中心度 · 低密集度" },
 };
 
 export const VIZ_PALETTE = [tokens.vizBlue, tokens.vizTeal, tokens.vizAmber, tokens.vizRose, tokens.vizViolet, tokens.vizGreen];
@@ -48,17 +48,17 @@ export function quadrantOption(themes: KnowledgeTheme[]): EChartsOption {
         const name = (params as { name?: string }).name ?? "";
         const theme = byName.get(name);
         if (!theme) return name;
-        const meta = QUADRANT_META[theme.quadrant];
+        const meta = theme.quadrant ? QUADRANT_META[theme.quadrant] : { label: "未划分", color: tokens.placeholder, hint: "" };
         const lines = [
           `<strong>${theme.name}</strong>（${meta.label}）`,
-          `论文 ${theme.size} 篇 · 关联度 ${theme.centrality.toFixed(2)} · 密集度 ${theme.density.toFixed(2)}`,
+          `论文 ${theme.size} 篇 · 中心度 ${theme.centrality.toFixed(2)} · 密集度 ${theme.density.toFixed(2)}`,
         ];
         if (theme.description) lines.push(theme.description);
         if (theme.keywords.length) lines.push(`关键词：${theme.keywords.join("、")}`);
         return lines.join("<br/>");
       },
     },
-    xAxis: { name: "关联度 centrality", nameLocation: "middle", nameGap: 30, min: 0, max: maxX, splitLine: { lineStyle: { color: tokens.line } }, axisLabel: { color: tokens.faint } },
+    xAxis: { name: "中心度 centrality", nameLocation: "middle", nameGap: 30, min: 0, max: maxX, splitLine: { lineStyle: { color: tokens.line } }, axisLabel: { color: tokens.faint } },
     yAxis: { name: "密集度 density", nameGap: 42, min: 0, max: maxY, splitLine: { lineStyle: { color: tokens.line } }, axisLabel: { color: tokens.faint } },
     series: [{
       type: "scatter",
@@ -66,7 +66,7 @@ export function quadrantOption(themes: KnowledgeTheme[]): EChartsOption {
         name: theme.name,
         value: [theme.centrality, theme.density],
         symbolSize: 12 + 30 * Math.sqrt(theme.size / maxSize),
-        itemStyle: { color: QUADRANT_META[theme.quadrant].color, opacity: 0.85, borderColor: "#ffffff", borderWidth: 1 },
+        itemStyle: { color: theme.quadrant ? QUADRANT_META[theme.quadrant].color : tokens.placeholder, opacity: 0.85, borderColor: "#ffffff", borderWidth: 1 },
       })),
       emphasis: { scale: 1.15 },
       markLine: {
@@ -79,9 +79,9 @@ export function quadrantOption(themes: KnowledgeTheme[]): EChartsOption {
         silent: true,
         data: [
           area(medX, medY, maxX, maxY, QUADRANT_META.motor),
-          area(0, medY, medX, maxY, QUADRANT_META.basic),
-          area(medX, 0, maxX, medY, QUADRANT_META.emerging),
-          area(0, 0, medX, medY, QUADRANT_META.niche),
+          area(0, medY, medX, maxY, QUADRANT_META.niche),
+          area(medX, 0, maxX, medY, QUADRANT_META.basic),
+          area(0, 0, medX, medY, QUADRANT_META.emerging),
         ],
       },
     }],

@@ -18,6 +18,7 @@ const graph = {
     ...['p1', 'p2'].flatMap(source => ['k1', 'k2'].map(target => ({ source, target, relation: 'has_keyword' }))),
     { source: 'p1', target: 'a', relation: 'authored_by' }, { source: 'p3', target: 'a', relation: 'authored_by' },
     { source: 'p2', target: 'p1', relation: 'cites' },
+    { source: 'p1', target: 'p2', relation: 'similar' },
   ],
 };
 
@@ -27,6 +28,7 @@ test('search finds author/topic papers; bounded years exclude unknown and preser
   const filtered = filterGraph(graph, '', 2024, 2024);
   assert.equal(filtered.total_papers, 1);
   assert.equal(filtered.edges.some(e => e.relation === 'cites'), false);
+  assert.equal(filtered.edges.some(e => e.relation === 'similar'), false);
   assert.equal(filterGraph(graph, 'not present').nodes.length, 0);
 });
 
@@ -34,6 +36,7 @@ test('related papers explain shared topics/authors and retain true citation dire
   const related = relatedPapers(graph, graph.nodes[0]);
   assert.equal(related.length, 2);
   assert.ok(related.find(r => r.node.id === 'p2').reasons.includes('此论文引用了当前论文'));
+  assert.ok(related.find(r => r.node.id === 'p2').reasons.includes('主题相似（推荐缓存，不是引用）'));
   assert.ok(related.find(r => r.node.id === 'p3').reasons.includes('共同作者：Alice'));
 });
 

@@ -1,7 +1,7 @@
-"""Research themes and topic evolution, following bibliometrix thematicMap/thematicEvolution.
+"""Research themes and topic evolution for a closed paper sample.
 
-Co-occurrence of saved keywords -> Louvain communities -> Salton-cosine
-centrality/density quadrants, plus period slicing with Jaccard overlap links.
+Co-occurrence -> Louvain communities -> Callon centrality/density quadrants,
+plus period slicing with Cobo inclusion-index links.
 Core algorithm functions are pure (no DB, no network) for testability.
 """
 import asyncio
@@ -21,8 +21,9 @@ log = logging.getLogger(__name__)
 
 MAX_KEYWORDS = 12
 MIN_COOCCURRENCE = 2
-JACCARD_THRESHOLD = 0.15
+INCLUSION_THRESHOLD = 0.15
 RECENT_LIMIT = 80
+MIN_THEME_PAPERS = 3
 
 NAMING_SYSTEM = """你是学术研究主题命名助手。只根据用户给出的关键词列表为一个研究主题命名，禁止使用给定关键词之外的知识编造内容。
 只输出一个 JSON 对象，不要 Markdown。字段为：
@@ -123,25 +124,43 @@ def _greedy_modularity(graph_edges: dict) -> list[set]:
     return list(communities.values())
 
 
+def _ranks(values: list[float]) -> list[float]:
+    order = sorted(range(len(values)), key=lambda index: values[index])
+    ranks = [0.0] * len(values)
+    start = 0
+    while start < len(order):
+        end = start
+        while end + 1 < len(order) and values[order[end + 1]] == values[order[start]]:
+            end += 1
+        rank = (start + end) / 2 + 1
+        for index in range(start, end + 1):
+            ranks[order[index]] = rank
+        start = end + 1
+    return ranks
+
+
 def assign_quadrants(themes: list[dict]) -> None:
-    """Split themes into quadrants by the median of centrality and density
-    (bibliometrix thematicMap): motor (high cen, high den), basic (low cen,
-    high den), emerging (high cen, low den), niche (low, low)."""
-    if not themes:
+    """Split themes by the mean of Callon centrality/density ranks.
+    motor (high, high), niche (low, high), basic (high, low), emerging (low, low)."""
+    if len(themes) < 2:
+        for theme in themes:
+            theme["quadrant"] = None
         return
-    cen_median = statistics.median(t["centrality"] for t in themes)
-    den_median = statistics.median(t["density"] for t in themes)
-    for theme in themes:
-        high_cen = theme["centrality"] >= cen_median
-        high_den = theme["density"] >= den_median
+    rcen = _ranks([theme["centrality"] for theme in themes])
+    rden = _ranks([theme["density"] for theme in themes])
+    mean_cen = statistics.mean(rcen)
+    mean_den = statistics.mean(rden)
+    for theme, cen, den in zip(themes, rcen, rden):
+        high_cen = cen >= mean_cen
+        high_den = den >= mean_den
         if high_cen and high_den:
             theme["quadrant"] = "motor"
         elif high_den:
-            theme["quadrant"] = "basic"
-        elif high_cen:
-            theme["quadrant"] = "emerging"
-        else:
             theme["quadrant"] = "niche"
+        elif high_cen:
+            theme["quadrant"] = "basic"
+        else:
+            theme["quadrant"] = "emerging"
 
 
 def analyze_themes(papers: list[dict]) -> list[dict]:
@@ -164,16 +183,12 @@ def analyze_themes(papers: list[dict]) -> list[dict]:
     for theme in themes:
         members = theme["keywords"]
         member_set = set(members)
-        intra = [salton_cosine(edges.get(tuple(sorted(pair)), 0), freq[pair[0]], freq[pair[1]])
-                 for pair in combinations(members, 2)]
-        theme["density"] = sum(intra) / len(intra) if intra else 0.0
-        centrality = 0.0
-        for term in members:
-            for other in freq:
-                if other in member_set:
-                    continue
-                centrality += salton_cosine(edges.get(tuple(sorted((term, other))), 0), freq[term], freq[other])
-        theme["centrality"] = centrality
+        internal = sum(edges.get(tuple(sorted(pair)), 0) for pair in combinations(members, 2))
+        theme["density"] = (100.0 * internal / len(members)) if members else 0.0
+        theme["centrality"] = float(sum(
+            edges.get(tuple(sorted((term, other))), 0)
+            for term in members for other in freq if other not in member_set
+        ))
         theme["size"] = len(theme["paper_ids"])
         by_year = {}
         for paper in papers:
@@ -214,14 +229,19 @@ def jaccard(left: set, right: set) -> float:
     return len(left & right) / len(left | right)
 
 
-def period_links(period_themes: list[list[dict]], threshold: float = JACCARD_THRESHOLD) -> list[dict]:
-    """Link themes of adjacent periods when their keyword sets overlap enough
-    (bibliometrix thematicEvolution). period_themes[i] is the theme list of period i."""
+def inclusion(left: set, right: set) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left & right) / min(len(left), len(right))
+
+
+def period_links(period_themes: list[list[dict]], threshold: float = INCLUSION_THRESHOLD) -> list[dict]:
+    """Link adjacent-period themes by Cobo inclusion index |A∩B| / min(|A|, |B|)."""
     links = []
     for index in range(len(period_themes) - 1):
         for from_pos, from_theme in enumerate(period_themes[index]):
             for to_pos, to_theme in enumerate(period_themes[index + 1]):
-                overlap = jaccard(set(from_theme["keywords"]), set(to_theme["keywords"]))
+                overlap = inclusion(set(from_theme["keywords"]), set(to_theme["keywords"]))
                 if overlap >= threshold:
                     links.append({
                         "from": f"{index}:{from_pos}", "to": f"{index + 1}:{to_pos}",
@@ -238,7 +258,7 @@ def analyze_evolution(papers: list[dict], themes: list[dict]) -> dict:
     years = sorted({p["year"] for p in papers if p["year"] is not None})
     periods = split_periods(years)
     if not periods:
-        return {"periods": [], "links": []}
+        return {"periods": [], "links": [], "reason": "年份不足，无法绘制主题演进"}
 
     def label_for(keyword_set: set, freq_hint: dict) -> str:
         best, best_overlap = "", 0.0
@@ -262,9 +282,16 @@ def analyze_evolution(papers: list[dict], themes: list[dict]) -> dict:
         period_themes.append([
             {**theme, "name": label_for(set(theme["keywords"]), freq_global)} for theme in found
         ])
+    links = period_links(period_themes)
+    reason = ""
+    if len(periods) < 2:
+        reason = "年份不足，无法绘制主题演进"
+    elif not links:
+        reason = "相邻时段没有足够的共享关键词"
     return {
         "periods": [f"{start}-{end}" for start, end in periods],
-        "links": period_links(period_themes),
+        "links": links,
+        "reason": reason,
     }
 
 
@@ -278,12 +305,24 @@ def _keywords(payload: dict) -> list[str]:
     for term in terms[:MAX_KEYWORDS] if isinstance(terms, list) else []:
         if not isinstance(term, str):
             continue
-        label = knowledge_graph.canonical_keyword(term[:80])
-        if not label or label.casefold() in seen:
-            continue
-        seen.add(label.casefold())
-        result.append(label)
+        for label in knowledge_graph.expand_keywords(term[:80]):
+            if label.casefold() in seen:
+                continue
+            seen.add(label.casefold())
+            result.append(label)
     return result
+
+
+def _apply_fallback(papers: list[dict]) -> None:
+    analyzed = {term for paper in papers for term in paper["keywords"]}
+    for paper in papers:
+        if paper["keywords"]:
+            paper.pop("title", None)
+            paper.pop("abstract", None)
+            continue
+        paper["keywords"] = knowledge_graph.fallback_keywords(paper.get("title") or "", paper.get("abstract"), analyzed)
+        paper.pop("title", None)
+        paper.pop("abstract", None)
 
 
 def _load_papers(references: list[str] | None, limit: int) -> tuple[list[dict], int]:
@@ -309,8 +348,47 @@ def _load_papers(references: list[str] | None, limit: int) -> tuple[list[dict], 
             paper = library.as_paper(row)
             result = db.execute("SELECT payload FROM analysis_results WHERE local_id = ? ORDER BY generated_at DESC, result_id DESC LIMIT 1", (paper.local_id,)).fetchone()
             payload = knowledge_graph._object(result["payload"]) if result else {}
-            papers.append({"local_id": paper.local_id, "year": paper.year, "keywords": _keywords(payload)})
+            papers.append({
+                "local_id": paper.local_id, "year": paper.year, "keywords": _keywords(payload),
+                "title": paper.title, "abstract": paper.abstract,
+            })
+    _apply_fallback(papers)
     return papers, total
+
+
+def _load_expanded(references: list[str] | None, limit: int) -> tuple[list[dict], int]:
+    seeds, _ = _load_papers(references, limit)
+    papers, seen = [], set()
+    with connection() as db:
+        for seed in seeds:
+            row = db.execute(
+                "SELECT payload FROM paper_relations WHERE source_local_id = ? ORDER BY computed_at DESC LIMIT 1",
+                (seed["local_id"],),
+            ).fetchone()
+            if not row:
+                continue
+            data = knowledge_graph._object(row["payload"])
+            rec = data.get("recommendations") if isinstance(data.get("recommendations"), dict) else {}
+            for item in rec.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                paper_id = item.get("id")
+                if not isinstance(paper_id, str) or paper_id in seen:
+                    continue
+                seen.add(paper_id)
+                local = library.get_paper(paper_id)
+                keywords = []
+                year = item.get("year") if isinstance(item.get("year"), int) else None
+                if local:
+                    result = db.execute("SELECT payload FROM analysis_results WHERE local_id = ? ORDER BY generated_at DESC, result_id DESC LIMIT 1", (local.local_id,)).fetchone()
+                    keywords = _keywords(knowledge_graph._object(result["payload"]) if result else {})
+                    year = local.year if year is None else year
+                papers.append({
+                    "local_id": paper_id, "year": year, "keywords": keywords,
+                    "title": item.get("title") or "", "abstract": item.get("abstract") if isinstance(item.get("abstract"), str) else "",
+                })
+    _apply_fallback(papers)
+    return papers, len(papers)
 
 
 def cluster_key(keywords: list[str]) -> str:
@@ -374,20 +452,36 @@ async def _name_themes(themes: list[dict], papers: list[dict]) -> None:
             await asyncio.to_thread(_save_name, key, named["name"], named["description"])
 
 
-async def build(references: list[str] | None = None, limit: int = RECENT_LIMIT) -> dict:
-    papers, total = await asyncio.to_thread(_load_papers, references, limit)
+async def build(references: list[str] | None = None, limit: int = RECENT_LIMIT, scope: str = "workspace") -> dict:
+    loader = _load_expanded if scope == "expanded" else _load_papers
+    papers, total = await asyncio.to_thread(loader, references, limit)
     analyzed = [p for p in papers if p["keywords"]]
-    themes = await asyncio.to_thread(analyze_themes, analyzed)
-    if themes:
-        await _name_themes(themes, analyzed)
-    evolution = analyze_evolution(analyzed, themes)
+    found = await asyncio.to_thread(analyze_themes, analyzed)
+    insufficient = bool(papers) and (len(analyzed) < MIN_THEME_PAPERS or len(found) <= 1)
+    if insufficient:
+        for theme in found:
+            theme["quadrant"] = None
+    if found:
+        await _name_themes(found, analyzed)
+    if insufficient:
+        evolution = {"periods": [], "links": [], "reason": "样本不足，不绘制主题演进"}
+    else:
+        evolution = analyze_evolution(analyzed, found)
     years = sorted({p["year"] for p in analyzed if p["year"] is not None})
-    scope_note = "统计范围为当前工作区，不代表整个研究领域" if references is not None else "统计范围为本地最近入库的论文，不代表整个研究领域"
+    if scope == "expanded":
+        scope_note = "扩展文献样本来自已缓存的推荐结果，不是全领域"
+    elif references is not None:
+        scope_note = "统计范围为当前工作区，不代表整个研究领域"
+    else:
+        scope_note = "统计范围为本地最近入库的论文，不代表整个研究领域"
     return {
-        "themes": themes,
+        "themes": found,
         "evolution": evolution,
         "years": years,
-        "total_papers": len(papers) if references is not None else total,
+        "total_papers": len(papers) if references is not None or scope == "expanded" else total,
         "analyzed_papers": len(analyzed),
         "scope_note": scope_note,
+        "scope": scope,
+        "status": "insufficient" if insufficient else "ok",
+        "status_reason": "论文不足 3 篇或只有 1 个主题，不绘制战略坐标图" if insufficient else "",
     }

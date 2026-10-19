@@ -16,7 +16,7 @@ export function filterGraph(data: EntityGraph, query = "", from = 0, to = 0): En
     && (!to || n.year != null && n.year <= to)
     && (!term || matched.has(n.id) || [...(byPaper.get(n.id) ?? [])].some(id => matched.has(id))));
   const ids = new Set(papers.map(n => n.id));
-  const edges = data.edges.filter(e => ids.has(e.source) && (e.relation !== "cites" || ids.has(e.target)));
+  const edges = data.edges.filter(e => ids.has(e.source) && ((e.relation !== "cites" && e.relation !== "similar") || ids.has(e.target)));
   const keep = new Set([...ids, ...edges.map(e => e.target)]);
   return { ...data, nodes: data.nodes.filter(n => keep.has(n.id)), edges, total_papers: papers.length };
 }
@@ -55,6 +55,11 @@ export function relatedPapers(data: EntityGraph, selected: EntityNode) {
     for (const e of data.edges.filter(e => e.relation === "cites")) {
       if (e.source === selected.id && e.target === p.id) reasons.unshift("当前论文引用了此论文");
       if (e.target === selected.id && e.source === p.id) reasons.unshift("此论文引用了当前论文");
+    }
+    for (const e of data.edges.filter(e => e.relation === "similar")) {
+      if ((e.source === selected.id && e.target === p.id) || (e.target === selected.id && e.source === p.id)) {
+        reasons.unshift("主题相似（推荐缓存，不是引用）");
+      }
     }
     return reasons.length ? [{ node: p, reasons: [...new Set(reasons)] }] : [];
   }).sort((a, b) => b.reasons.length - a.reasons.length);

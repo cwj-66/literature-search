@@ -186,8 +186,12 @@ export function fillGraphCitations(paperIds: string[], signal?: AbortSignal) {
   return postJson<{ queried: number; failed: number; linked: number; items: { id: string; title: string; status: string; note: string }[] }>("/api/knowledge-graph/citations", { paper_ids: paperIds }, signal);
 }
 
-export function fetchKnowledgeThemes(references: string[], signal?: AbortSignal) {
-  return postJson<KnowledgeThemesResponse>("/api/knowledge-graph/themes", references, signal);
+export function fillGraphSimilar(paperIds: string[], signal?: AbortSignal) {
+  return postJson<{ queried: number; failed: number; linked: number; items: { id: string; title: string; status: string; note: string }[] }>("/api/knowledge-graph/similar", { paper_ids: paperIds }, signal);
+}
+
+export function fetchKnowledgeThemes(references: string[], signal?: AbortSignal, scope: "workspace" | "expanded" = "workspace") {
+  return postJson<KnowledgeThemesResponse>(`/api/knowledge-graph/themes?scope=${scope}`, references, signal);
 }
 
 export function compareLibrary(paperIds: string[], signal?: AbortSignal) {

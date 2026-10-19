@@ -478,13 +478,13 @@ async def _tool_search_papers(state: dict, args: dict) -> tuple[str, dict]:
         "errors": errors, "cached": from_cache,
         "reason": "来源部分失败，保留已取得结果" if errors and known else "检索候选",
     }
-    content = json.dumps({
+    content = compact_tool_content("search_papers", json.dumps({
         "found": len(result.get("papers") or []),
-        "papers": _compact_papers(result.get("papers") or []),
+        "papers": _compact_papers(result.get("papers") or [], limit=len(result.get("papers") or [])),
         "workspace_total": len(known),
         "source_errors": errors,
         "cached": from_cache,
-    }, ensure_ascii=False)
+    }, ensure_ascii=False))
     return content, {
         "papers": list(known.values()),
         "search_pages": pages,
@@ -935,6 +935,38 @@ def _depends_on_turn(args: dict, known_before: set[str], acc: dict) -> bool:
     return any(ref in produced for ref in _refs_of(args))
 
 
+SEARCH_RESULT_HEAD = 10
+
+
+def compact_tool_content(name: str, content: str) -> str:
+    """search_papers 结果在消息历史中的瘦身：去摘要（可按 ID 重查），超 HEAD 条数再截断。
+
+    完整候选始终留在 state.papers，避免 ReAct 历史随检索轮次无限累积。
+    """
+    if name != "search_papers":
+        return content
+    try:
+        payload = json.loads(content)
+    except (ValueError, TypeError):
+        return content
+    if not isinstance(payload, dict):
+        return content
+    papers = payload.get("papers") or []
+    if not isinstance(papers, list) or any(not isinstance(paper, dict) for paper in papers):
+        return content
+    slimmed = [{"id": paper.get("id"), "title": paper.get("title"), "year": paper.get("year"),
+                **({"venue": paper["venue"]} if paper.get("venue") else {})}
+               for paper in papers[:SEARCH_RESULT_HEAD]]
+    changed = slimmed != papers
+    if not changed:
+        return content
+    payload["papers"] = slimmed
+    if len(papers) > SEARCH_RESULT_HEAD:
+        payload["truncated"] = len(papers) - SEARCH_RESULT_HEAD
+    payload.pop("workspace_total", None)
+    return json.dumps(payload, ensure_ascii=False)
+
+
 async def tool_node(state: dict) -> dict:
     """统一工具执行节点：按顺序执行 react_agent 发出的工具调用，结果以 tool 消息回注。"""
     messages = list(state.get("messages") or [])
@@ -998,7 +1030,7 @@ async def tool_node(state: dict) -> dict:
         events.extend(updates.pop("events_extra", []))
         pasts.extend(updates.pop("past_extra", []))
         acc.update(updates)
-        tool_messages.append({"role": "tool", "name": name, "content": content, "tool_call_id": call_id})
+        tool_messages.append({"role": "tool", "name": name, "content": compact_tool_content(name, content), "tool_call_id": call_id})
         if name in PRODUCER_TOOLS:
             producer_seen = True
     if halt == "用户取消":

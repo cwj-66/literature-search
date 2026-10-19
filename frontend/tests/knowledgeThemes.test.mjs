@@ -15,9 +15,9 @@ const { median, themeTotal, themeYearCount, quadrantOption, themeRiverOption, sa
 
 const themes = [
   { id: 'theme:rag', name: '检索增强生成', description: 'RAG 系统', keywords: ['rag', 'llm'], paper_ids: ['paper:x'], size: 3, centrality: 0.8, density: 0.8, quadrant: 'motor', by_year: { '2023': 1, '2024': 20 } },
-  { id: 'theme:ir', name: '信息检索', description: '', keywords: ['retrieval'], paper_ids: [], size: 2, centrality: 0.2, density: 0.9, quadrant: 'basic', by_year: { '2022': 2 } },
-  { id: 'theme:agent', name: '智能体', description: '', keywords: ['agent'], paper_ids: [], size: 1, centrality: 0.9, density: 0.1, quadrant: 'emerging', by_year: { '2024': 1 } },
-  { id: 'theme:x', name: '小众主题', description: '', keywords: [], paper_ids: [], size: 1, centrality: 0.1, density: 0.1, quadrant: 'niche', by_year: { '2024': 1 } },
+  { id: 'theme:ir', name: '信息检索', description: '', keywords: ['retrieval'], paper_ids: [], size: 2, centrality: 0.2, density: 0.9, quadrant: 'niche', by_year: { '2022': 2 } },
+  { id: 'theme:agent', name: '智能体', description: '', keywords: ['agent'], paper_ids: [], size: 1, centrality: 0.9, density: 0.1, quadrant: 'basic', by_year: { '2024': 1 } },
+  { id: 'theme:x', name: '小众主题', description: '', keywords: [], paper_ids: [], size: 1, centrality: 0.1, density: 0.1, quadrant: 'emerging', by_year: { '2024': 1 } },
 ];
 
 test('theme chart options render through the real ECharts SVG engine', () => {
@@ -57,9 +57,9 @@ test('quadrant option draws median cross, colors by quadrant and scales point si
   assert.equal(series.markArea.data.length, 4);
   const byName = Object.fromEntries(series.data.map(item => [item.name, item]));
   assert.equal(byName['检索增强生成'].itemStyle.color, QUADRANT_META.motor.color);
-  assert.equal(byName['信息检索'].itemStyle.color, QUADRANT_META.basic.color);
-  assert.equal(byName['智能体'].itemStyle.color, QUADRANT_META.emerging.color);
-  assert.equal(byName['小众主题'].itemStyle.color, QUADRANT_META.niche.color);
+  assert.equal(byName['信息检索'].itemStyle.color, QUADRANT_META.niche.color);
+  assert.equal(byName['智能体'].itemStyle.color, QUADRANT_META.basic.color);
+  assert.equal(byName['小众主题'].itemStyle.color, QUADRANT_META.emerging.color);
   assert.ok(byName['检索增强生成'].symbolSize > byName['智能体'].symbolSize);
   assert.deepEqual(byName['检索增强生成'].value, [0.8, 0.8]);
 });

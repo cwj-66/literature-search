@@ -1,6 +1,7 @@
 """Workspace graph from metadata, saved keywords, and confirmed citations."""
 import hashlib
 import json
+import re
 import unicodedata
 from datetime import datetime, timezone
 
@@ -14,10 +15,15 @@ ALIASES = {
     "rag": "RAG",
     "retrieval-augmented generation": "RAG",
     "retrieval augmented generation": "RAG",
+    "retrieval-augmented": "RAG",
+    "retrieval augmented": "RAG",
+    "检索增强生成": "RAG",
+    "检索增强": "RAG",
     "hallucination": "Hallucination",
     "hallucinations": "Hallucination",
 }
 UNRELIABLE = ("未知", "暂不可用", "已停用", "无法核验", "不完整", "缺少")
+HYPHEN = re.compile(r"[-_/]")
 
 
 def _object(raw):
@@ -44,6 +50,49 @@ def canonical_keyword(term: str) -> str | None:
     return ALIASES.get(text.casefold(), text)
 
 
+def expand_keywords(term: str) -> list[str]:
+    label = canonical_keyword(term)
+    if not label:
+        return []
+    result = [label]
+    seen = {label.casefold()}
+    for part in HYPHEN.split(_clean(term)):
+        mapped = ALIASES.get(part.casefold())
+        if mapped and mapped.casefold() not in seen:
+            seen.add(mapped.casefold())
+            result.append(mapped)
+    return result
+
+
+def fallback_keywords(title: str, abstract: str | None, allowed: set[str] | None = None) -> list[str]:
+    from app.services.retrieval.similarity import keywords as extract
+
+    extra = {item.casefold() for item in (allowed or set())}
+    alias_labels = {value.casefold() for value in ALIASES.values()}
+    text = f"{title} {abstract or ''}"
+    folded = text.casefold()
+    candidates = list(extract(title, abstract))
+    for token in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]+(?:[-_/][A-Za-z0-9\u4e00-\u9fff]+)+", text):
+        candidates.append(token)
+        candidates.extend(HYPHEN.split(token))
+    candidates.extend(key for key in ALIASES if key in folded)
+    seen, result = set(), []
+    for term in candidates:
+        source = term.casefold().strip()
+        hyphenated_alias = HYPHEN.search(term) and any(
+            (part := canonical_keyword(piece)) and part.casefold() in alias_labels for piece in HYPHEN.split(term)
+        )
+        for label in expand_keywords(term[:80]):
+            if label.casefold() in seen:
+                continue
+            is_phrase = len(source.split()) >= 2
+            if source not in ALIASES and label.casefold() not in extra and source not in extra and not hyphenated_alias and not is_phrase:
+                continue
+            seen.add(label.casefold())
+            result.append(label)
+    return result[:12]
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -66,9 +115,12 @@ def _load_query(db, local_id: str):
 def build(limit: int = 80, references: list[str] | None = None) -> dict:
     nodes, edges, missing = {}, [], []
 
-    def entity(kind, label, identity):
+    def entity(kind, label, identity, provenance="metadata"):
         key = _stable(kind, identity)
-        nodes.setdefault(key, {"id": key, "kind": kind, "label": label, "provenance": "metadata"})
+        if key not in nodes:
+            nodes[key] = {"id": key, "kind": kind, "label": label, "provenance": provenance}
+        elif provenance == "model":
+            nodes[key]["provenance"] = "model"
         return key
 
     with connection() as db:
@@ -93,6 +145,8 @@ def build(limit: int = 80, references: list[str] | None = None) -> dict:
 
         aliases = {}
         papers = []
+        pending_fallback = []
+        analyzed_terms = set()
         for row in rows:
             paper = library.as_paper(row)
             key = "paper:" + paper.local_id
@@ -115,12 +169,16 @@ def build(limit: int = 80, references: list[str] | None = None) -> dict:
                 if not name:
                     continue
                 author_id = author_ids[index].strip() if index < len(author_ids) and isinstance(author_ids[index], str) else ""
-                identity = f"id:{author_id}" if author_id else f"local:{paper.local_id}:{_clean(name).casefold()}"
-                edges.append({"source": key, "target": entity("author", name, identity), "relation": "authored_by", "provenance": "metadata"})
+                if author_id:
+                    identity, origin = f"id:{author_id}", "metadata"
+                else:
+                    identity, origin = f"name:{_clean(name).casefold()}", "name_match"
+                edges.append({"source": key, "target": entity("author", name, identity, origin), "relation": "authored_by", "provenance": origin})
             if paper.venue and paper.venue.strip():
                 venue = _clean(paper.venue)
                 edges.append({"source": key, "target": entity("venue", venue, venue.casefold()), "relation": "published_in", "provenance": "metadata"})
             result = db.execute("SELECT * FROM analysis_results WHERE local_id = ? ORDER BY generated_at DESC, result_id DESC LIMIT 1", (paper.local_id,)).fetchone()
+            added = False
             if result:
                 payload = _object(result["payload"])
                 if payload:
@@ -129,23 +187,34 @@ def build(limit: int = 80, references: list[str] | None = None) -> dict:
                         "innovations": [item for item in payload.get("innovations", []) if isinstance(item, str)] if isinstance(payload.get("innovations"), list) else [],
                         **{field: result[field] for field in ("result_id", "analysis_basis", "model_name", "generated_at", "source_url", "degradation_reason")},
                     }
-                    terms = payload.get("keywords", [])
                     seen_terms = set()
-                    for term in terms[:12] if isinstance(terms, list) else []:
+                    for term in payload.get("keywords", [])[:12] if isinstance(payload.get("keywords"), list) else []:
                         if not isinstance(term, str):
                             continue
-                        label = canonical_keyword(term[:80])
-                        if not label or label.casefold() in seen_terms:
-                            continue
-                        seen_terms.add(label.casefold())
-                        target = entity("keyword", label, label.casefold())
-                        edges.append({
-                            "source": key, "target": target, "relation": "has_keyword", "provenance": "model",
-                            "result_id": result["result_id"], "generated_at": result["generated_at"],
-                            "analysis_basis": result["analysis_basis"], "source_url": result["source_url"],
-                        })
+                        for label in expand_keywords(term[:80]):
+                            if label.casefold() in seen_terms:
+                                continue
+                            seen_terms.add(label.casefold())
+                            analyzed_terms.add(label)
+                            target = entity("keyword", label, label.casefold(), "model")
+                            edges.append({
+                                "source": key, "target": target, "relation": "has_keyword", "provenance": "model",
+                                "result_id": result["result_id"], "generated_at": result["generated_at"],
+                                "analysis_basis": result["analysis_basis"], "source_url": result["source_url"],
+                            })
+                            added = True
+            if not added:
+                pending_fallback.append((key, paper))
             papers.append(nodes[key])
             _apply_citations(db, nodes[key], aliases, edges)
+        for key, paper in pending_fallback:
+            seen_terms = set()
+            for label in fallback_keywords(paper.title, paper.abstract, analyzed_terms):
+                if label.casefold() in seen_terms:
+                    continue
+                seen_terms.add(label.casefold())
+                target = entity("keyword", label, label.casefold(), "metadata")
+                edges.append({"source": key, "target": target, "relation": "has_keyword", "provenance": "metadata"})
 
     edges = list({(item["source"], item["target"], item["relation"]): item for item in edges}.values())
     for paper in papers:
@@ -180,6 +249,7 @@ def _apply_citations(db, paper: dict, aliases: dict, edges: list) -> None:
         (paper["local_id"],),
     ).fetchone()
     recorded = []
+    similar = []
     unreliable = False
     if query:
         payload = _object(query["payload"])
@@ -191,8 +261,12 @@ def _apply_citations(db, paper: dict, aliases: dict, edges: list) -> None:
         data = _object(cached["payload"])
         network = data.get("network") if isinstance(data.get("network"), dict) else {}
         for edge in network.get("edges") or []:
-            if isinstance(edge, dict) and edge.get("type") == "cites":
+            if not isinstance(edge, dict):
+                continue
+            if edge.get("type") == "cites":
                 recorded.append(edge)
+            elif edge.get("type") == "similar":
+                similar.append(edge)
         warnings = []
         recommendations = data.get("recommendations") if isinstance(data.get("recommendations"), dict) else {}
         if isinstance(recommendations.get("warnings"), list):
@@ -206,24 +280,31 @@ def _apply_citations(db, paper: dict, aliases: dict, edges: list) -> None:
                 paper["citation_status"] = "linked"
                 paper["citation_note"] = "已查询引用关系"
     for edge in recorded:
-        if not isinstance(edge, dict):
-            continue
-        source, target = edge.get("source"), edge.get("target")
-        if not isinstance(source, str) or not isinstance(target, str):
-            continue
-        left, right = aliases.get(source), aliases.get(target)
-        if left and right and left != right:
-            edges.append({
-                "source": left, "target": right, "relation": "cites",
-                "provenance": "citation_query" if query else "citation_cache",
-                "generated_at": query["queried_at"] if query else cached["computed_at"],
-            })
+        _link_cached_edge(edge, "cites", aliases, edges, query, cached)
+    for edge in similar:
+        _link_cached_edge(edge, "similar", aliases, edges, query, cached)
     if not query and not cached:
         return
     if not query and cached and unreliable and paper["citation_status"] == "partial":
         return
     if not query and cached and not unreliable:
         paper["citation_status"] = "linked"
+
+
+def _link_cached_edge(edge: dict, relation: str, aliases: dict, edges: list, query, cached) -> None:
+    source, target = edge.get("source"), edge.get("target")
+    if not isinstance(source, str) or not isinstance(target, str):
+        return
+    left, right = aliases.get(source), aliases.get(target)
+    if not left or not right or left == right:
+        return
+    if relation == "similar":
+        left, right = sorted((left, right))
+    edges.append({
+        "source": left, "target": right, "relation": relation,
+        "provenance": "citation_query" if query and relation == "cites" else "citation_cache",
+        "generated_at": query["queried_at"] if query and relation == "cites" else cached["computed_at"] if cached else None,
+    })
 
 
 async def fill_citations(references: list[str]) -> dict:
@@ -267,6 +348,20 @@ async def fill_citations(references: list[str]) -> dict:
                 _save_query(paper.local_id, "none_in_scope", note, [])
                 status = "none_in_scope"
             items.append({"id": paper.id, "title": paper.title, "status": status, "note": note})
+    return _summary(items)
+
+
+async def fill_similar(references: list[str]) -> dict:
+    from app.services.retrieval import recommend
+
+    papers, missing = await _papers(references)
+    items = [{"id": ref, "title": ref, "status": "missing_id", "note": "这篇论文尚未入库，无法计算相似关系"} for ref in missing]
+    for paper in papers:
+        try:
+            await recommend.bundle(paper.local_id, False)
+            items.append({"id": paper.id, "title": paper.title, "status": "linked", "note": "已写入相似关系缓存，图谱只显示当前工作区内的相似边"})
+        except Exception:
+            items.append({"id": paper.id, "title": paper.title, "status": "failed", "note": "相似关系计算失败，已保留原图"})
     return _summary(items)
 
 

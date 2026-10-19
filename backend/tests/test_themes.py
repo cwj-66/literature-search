@@ -26,15 +26,18 @@ class ThemeAlgorithmTests(unittest.TestCase):
         self.assertAlmostEqual(themes.salton_cosine(3, 4, 9), 0.5)
         self.assertEqual(themes.salton_cosine(1, 0, 5), 0.0)
 
-    def test_quadrants_follow_bibliometrix_median_split(self):
+    def test_quadrants_follow_bibliometrix_rank_split(self):
         items = [
-            {"centrality": 9.0, "density": 8.0},   # high cen, high den
-            {"centrality": 1.0, "density": 7.0},   # low cen, high den
-            {"centrality": 8.0, "density": 1.0},   # high cen, low den
-            {"centrality": 0.5, "density": 0.5},   # low, low
+            {"centrality": 9.0, "density": 8.0},
+            {"centrality": 1.0, "density": 7.0},
+            {"centrality": 8.0, "density": 1.0},
+            {"centrality": 0.5, "density": 0.5},
         ]
         themes.assign_quadrants(items)
-        self.assertEqual([item["quadrant"] for item in items], ["motor", "basic", "emerging", "niche"])
+        self.assertEqual([item["quadrant"] for item in items], ["motor", "niche", "basic", "emerging"])
+        lonely = [{"centrality": 1.0, "density": 1.0}]
+        themes.assign_quadrants(lonely)
+        self.assertIsNone(lonely[0]["quadrant"])
 
     def test_split_periods_two_for_short_span_three_for_long(self):
         self.assertEqual(themes.split_periods([2022, 2023, 2024, 2025]), [(2022, 2023), (2024, 2025)])
@@ -42,7 +45,7 @@ class ThemeAlgorithmTests(unittest.TestCase):
         self.assertEqual(themes.split_periods([2023]), [(2023, 2023)])
         self.assertEqual(themes.split_periods([]), [])
 
-    def test_period_links_use_jaccard_threshold(self):
+    def test_period_links_use_inclusion_index(self):
         period_themes = [
             [{"keywords": ["a", "b", "c"], "name": "T1"}, {"keywords": ["x"], "name": "T2"}],
             [{"keywords": ["a", "b", "d"], "name": "T1"}, {"keywords": ["y", "z"], "name": "T3"}],
@@ -50,7 +53,7 @@ class ThemeAlgorithmTests(unittest.TestCase):
         links = themes.period_links(period_themes)
         self.assertEqual(len(links), 1)
         link = links[0]
-        self.assertAlmostEqual(link["weight"], 2 / 4)
+        self.assertAlmostEqual(link["weight"], 2 / 3, places=3)
         self.assertEqual((link["from"], link["to"]), ("0:0", "1:0"))
         self.assertEqual(link["from_label"], "T1")
 
@@ -77,10 +80,25 @@ class ThemeAlgorithmTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(set(result[0]["keywords"]), {"k0", "k1", "k2", "k3"})
         self.assertEqual(result[0]["density"], 0.0)
+        self.assertIsNone(result[0]["quadrant"])
 
     def test_analyze_themes_empty_input(self):
         self.assertEqual(themes.analyze_themes([]), [])
         self.assertEqual(themes.analyze_themes([{"local_id": "p", "year": 2023, "keywords": []}]), [])
+
+    def test_callon_centrality_and_density(self):
+        papers = [
+            {"local_id": "p1", "year": 2023, "keywords": ["a", "b"]},
+            {"local_id": "p2", "year": 2023, "keywords": ["a", "b"]},
+            {"local_id": "p3", "year": 2023, "keywords": ["c", "d"]},
+            {"local_id": "p4", "year": 2023, "keywords": ["c", "d"]},
+            {"local_id": "p5", "year": 2023, "keywords": ["a", "c"]},
+        ]
+        result = themes.analyze_themes(papers)
+        self.assertEqual(len(result), 2)
+        ab = next(theme for theme in result if set(theme["keywords"]) == {"a", "b"})
+        self.assertEqual(ab["density"], 100.0)
+        self.assertEqual(ab["centrality"], 1.0)
 
 
 class ThemeRouteTests(unittest.IsolatedAsyncioTestCase):
@@ -111,8 +129,11 @@ class ThemeRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["themes"], [])
-        self.assertEqual(data["evolution"], {"periods": [], "links": []})
+        self.assertEqual(data["evolution"]["periods"], [])
+        self.assertEqual(data["evolution"]["links"], [])
         self.assertEqual(data["analyzed_papers"], 0)
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["scope"], "workspace")
         self.assertIn("不代表整个研究领域", data["scope_note"])
 
     async def test_themes_are_named_via_llm_and_cached_per_cluster(self):
@@ -170,7 +191,7 @@ class ThemeRouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_references_scoping_validation_and_missing_analysis(self):
         with_keywords = self.paper(1)
         self.analyze(with_keywords, {"keywords": ["retrieval", "llm"]})
-        without = self.paper(2)
+        without = self.paper(2, title="Note", abstract="")
         with patch("app.infrastructure.llm.complete", new=AsyncMock(return_value='{"name": "检索增强生成", "description": "x"}')):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.post("/api/knowledge-graph/themes", json=[with_keywords.id, without.id, "missing"])
@@ -183,6 +204,45 @@ class ThemeRouteTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("当前工作区", data["scope_note"])
                 self.assertEqual((await client.post("/api/knowledge-graph/themes", json=[""])).status_code, 422)
                 self.assertEqual((await client.post("/api/knowledge-graph/themes", json=["x" * 301])).status_code, 422)
+
+    async def test_single_theme_is_insufficient_and_not_motor(self):
+        for i in range(3):
+            paper = self.paper(i + 1)
+            self.analyze(paper, {"keywords": ["retrieval", "llm"]}, result=f"r{i}")
+        with patch("app.infrastructure.llm.complete", new=AsyncMock(return_value='{"name": "检索增强生成", "description": "x"}')):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/api/knowledge-graph/themes", json=[f"arxiv:2301.{i:05d}" for i in range(1, 4)])
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()
+        self.assertEqual(data["status"], "insufficient")
+        self.assertEqual(len(data["themes"]), 1)
+        self.assertIsNone(data["themes"][0]["quadrant"])
+        self.assertEqual(data["evolution"]["links"], [])
+        self.assertIn("样本不足", data["evolution"]["reason"])
+
+    async def test_expanded_scope_reads_cached_candidates_without_importing(self):
+        seed = self.paper(1)
+        self.analyze(seed, {"keywords": ["retrieval", "llm"]})
+        outside = {"id": "arxiv:9999.00001", "title": "Retrieval-Augmented Generation for X", "year": 2024, "abstract": ""}
+        with connection() as db, db:
+            db.execute("INSERT INTO paper_relations VALUES (?,?,?,?)", (seed.local_id, "cache", json.dumps({
+                "recommendations": {"items": [outside]},
+                "network": {"edges": []},
+            }), "2026-10-19T00:00:00+00:00"))
+        with patch("app.infrastructure.llm.complete", new=AsyncMock(return_value='{"name": "检索增强生成", "description": "x"}')):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                graph = await client.post("/api/knowledge-graph", json=[seed.id])
+                workspace = await client.post("/api/knowledge-graph/themes", json=[seed.id])
+                expanded = await client.post("/api/knowledge-graph/themes?scope=expanded", json=[seed.id])
+        self.assertEqual(graph.json()["total_papers"], 1)
+        self.assertFalse(any(node.get("paper_id") == outside["id"] for node in graph.json()["nodes"]))
+        self.assertEqual(workspace.json()["scope"], "workspace")
+        self.assertEqual(workspace.json()["total_papers"], 1)
+        self.assertEqual(expanded.json()["scope"], "expanded")
+        self.assertEqual(expanded.json()["total_papers"], 1)
+        self.assertIn("扩展文献样本", expanded.json()["scope_note"])
+        self.assertIsNone(library.get_paper(outside["id"]))
+        self.assertEqual(library.list_papers(1, 20)["total"], 1)
 
 
 if __name__ == "__main__":
