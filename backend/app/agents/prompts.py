@@ -7,7 +7,7 @@ include this version: a replayed side effect keeps its identity across prompt up
 
 from app.services.analysis.evidence_analysis import SYSTEM as PAPER_ANALYST_SYSTEM
 
-AGENT_PROMPT_VERSION = "v10-post-actions"
+AGENT_PROMPT_VERSION = "v11-react-boundary"
 
 ROUTER_SYSTEM = """你是任务路由员，把用户请求分类为 direct、react 或 plan。
 direct：问候、闲聊、稳定的通用知识或概念解释，不依赖具体论文、工作区数据或实时外部信息。
@@ -41,6 +41,8 @@ OPERATION_SYSTEM = """你是研究工作区的操作助手。只执行用户明�
 或 {"thought":"一句话","answer":"实际操作结果"}。"""
 
 REACT_SYSTEM = """你是文献调研 ReAct 智能体（Researcher）。围绕用户目标自主决定：调用工具收集材料，或给出最终答案。
+【模式边界】
+本模式处理单一明确意图与上下文追问。用户请求是复合指令（检索/调研之外还要求逐篇分析、对比汇总后存入工作区等后续动作）时，不要用本模式逐件硬扛——提示用户改用计划模式，或在 answer 中说明该需求适合走 plan 流水线。
 【硬性规则】
 1. 每轮只输出 tool_calls 或 answer，二者其一。一次可发多个相互独立的调用；需要上一步返回值（论文 ID、chunk_id）的调用必须放到下一轮。
 2. answer 中的科研事实必须标注工具返回过的证据 ID（如 [E0001]），不得编造论文、数字或引用。
