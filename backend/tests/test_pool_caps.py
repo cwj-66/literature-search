@@ -67,7 +67,7 @@ class CandidatePoolCapTests(unittest.IsolatedAsyncioTestCase):
         self.env.stop()
         self.temp.cleanup()
 
-    async def test_candidate_pool_drops_oldest_beyond_cap(self):
+    async def test_candidate_pool_trims_beyond_cap_by_relevance(self):
         state = initial_state("goal")
         state["papers"] = [paper(i) for i in range(1, MAX_CANDIDATE_PAPERS + 6)]
         search = AsyncMock(return_value={"papers": [], "source_errors": {}, "source_retry_after": {}})
@@ -75,7 +75,21 @@ class CandidatePoolCapTests(unittest.IsolatedAsyncioTestCase):
             _, updates = await _tool_search_papers(state, {"query": "rag"})
         papers = updates["papers"]
         self.assertEqual(len(papers), MAX_CANDIDATE_PAPERS)
-        self.assertEqual(papers[0]["id"], "arxiv:6")
+        # 全部候选与查询词零重叠时相关性得分相同，稳定排序保留最早入池的一批。
+        self.assertEqual(papers[0]["id"], "arxiv:1")
+        self.assertNotIn("arxiv:121", {paper["id"] for paper in papers})
+
+    async def test_candidate_pool_keeps_relevant_papers_beyond_cap(self):
+        state = initial_state("goal")
+        state["papers"] = [paper(i) for i in range(1, MAX_CANDIDATE_PAPERS + 1)]
+        relevant = PaperOut(id="arxiv:hit", arxiv_id="hit", title="RAG hallucination reduction",
+                            year=2024, sources=["arxiv"]).model_dump()
+        search = AsyncMock(return_value={"papers": [relevant], "source_errors": {}, "source_retry_after": {}})
+        with patch("app.services.retrieval.search.search_papers", new=search):
+            _, updates = await _tool_search_papers(state, {"query": "rag hallucination"})
+        kept = {paper["id"] for paper in updates["papers"]}
+        self.assertEqual(len(kept), MAX_CANDIDATE_PAPERS)
+        self.assertIn("arxiv:hit", kept)
 
     async def test_sort_order_asc_maps_to_date_asc(self):
         state = initial_state("goal")

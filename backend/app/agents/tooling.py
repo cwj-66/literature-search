@@ -411,8 +411,9 @@ async def _tool_search_papers(state: dict, args: dict) -> tuple[str, dict]:
             continue
         known[payload["id"]] = payload
     if len(known) > MAX_CANDIDATE_PAPERS:
-        # 候选池超出上限时丢弃最旧的候选
-        known = dict(list(known.items())[-MAX_CANDIDATE_PAPERS:])
+        # 候选池超出上限时按查询相关性保留，而不是按入池时间丢弃最旧。
+        ranked = search.rank_candidates(list(known.values()), query)
+        known = {paper["id"]: paper for paper in ranked[:MAX_CANDIDATE_PAPERS]}
     errors = result.get("source_errors") or {}
     queries = list(state.get("queries") or [])
     extra_search = state.get("extra_search", 0)

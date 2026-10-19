@@ -512,6 +512,24 @@ async def search_arxiv(client: httpx.AsyncClient, query: str, offset: int, limit
     return papers, total
 
 
+def rank_candidates(papers: list, query: str) -> list:
+    """按查询相关性对候选降序排序：词频得分 + 查询词覆盖率，分数相同保持原有顺序。"""
+    words = re.findall(r"[\w]+", query, flags=re.UNICODE)
+    if not words:
+        return list(papers)
+    folded = [word.casefold() for word in words]
+
+    def score(paper) -> float:
+        title = (paper.get("title") or "") if isinstance(paper, dict) else (getattr(paper, "title", None) or "")
+        abstract = (paper.get("abstract") or "") if isinstance(paper, dict) else (getattr(paper, "abstract", None) or "")
+        title, text = title.casefold(), (title + " " + abstract).casefold()
+        frequency = sum(3 * title.count(word) + text.count(word) for word in folded)
+        coverage = sum(1 for word in set(folded) if word in text)
+        return frequency + 2 * coverage
+
+    return sorted(papers, key=score, reverse=True)
+
+
 def keyword_score(paper, words) -> int:
     """标题/摘要与检索词的关键词得分；兼容 PaperOut 与 dict 条目。"""
     title = paper.get("title") if isinstance(paper, dict) else paper.title
