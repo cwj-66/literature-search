@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import ts from 'typescript';
+import * as echarts from 'echarts';
 
 function transpile(file) {
   const source = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
@@ -18,6 +19,21 @@ const themes = [
   { id: 'theme:agent', name: '智能体', description: '', keywords: ['agent'], paper_ids: [], size: 1, centrality: 0.9, density: 0.1, quadrant: 'emerging', by_year: { '2024': 1 } },
   { id: 'theme:x', name: '小众主题', description: '', keywords: [], paper_ids: [], size: 1, centrality: 0.1, density: 0.1, quadrant: 'niche', by_year: { '2024': 1 } },
 ];
+
+test('theme chart options render through the real ECharts SVG engine', () => {
+  const links = [{ from_period: 0, to_period: 1, from_label: '早期主题', to_label: '后期主题', weight: 0.5 }];
+  for (const option of [quadrantOption(themes), themeRiverOption(themes, [2023, 2024]), sankeyOption(links)]) {
+    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 800, height: 400 });
+    try {
+      chart.setOption({ ...option, animation: false });
+      const svg = chart.renderToSVGString();
+      assert.match(svg, /<svg/);
+      assert.match(svg, /<path/);
+    } finally {
+      chart.dispose();
+    }
+  }
+});
 
 test('median splits sorted values for odd and even counts', () => {
   assert.equal(median([3, 1, 2]), 2);

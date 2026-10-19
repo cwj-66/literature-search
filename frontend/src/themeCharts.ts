@@ -99,6 +99,12 @@ export function themeRiverOption(themes: KnowledgeTheme[], years: number[]): ECh
     color: VIZ_PALETTE,
     tooltip: { trigger: "axis", axisPointer: { type: "line", lineStyle: { color: tokens.lineStrong } } },
     legend: { type: "scroll", bottom: 0, textStyle: { color: tokens.muted, fontSize: 11 }, pageTextStyle: { color: tokens.muted } },
+    singleAxis: {
+      type: "time", top: 24, bottom: 52, left: 44, right: 24,
+      axisLabel: { color: tokens.faint, formatter: "{yyyy}" },
+      axisLine: { lineStyle: { color: tokens.line } },
+      splitLine: { show: false },
+    },
     series: [{
       type: "themeRiver",
       emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(16,24,40,.18)" } },
