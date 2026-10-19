@@ -22,6 +22,7 @@ class CompactToolContentTests(unittest.TestCase):
         self.assertEqual(len(compacted["papers"]), tooling.SEARCH_RESULT_HEAD)
         self.assertEqual(compacted["truncated"], 5)
         self.assertEqual(compacted["papers"][0], {"id": "arxiv:0", "title": "Paper 0", "year": 2023})
+        self.assertNotIn("workspace_total", compacted)
 
     def test_search_results_within_head_strip_abstract_without_truncation(self):
         content = json.dumps({"found": 3, "papers": [entry(i) for i in range(3)]}, ensure_ascii=False)
