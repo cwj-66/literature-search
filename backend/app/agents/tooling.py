@@ -238,6 +238,8 @@ async def _llm_assess(state: dict) -> dict:
     result = assessment.model_dump()
     new_query = result.get("new_query")
     result["new_query"] = str(new_query).strip()[:300] if new_query else None
+    feedback = result.get("feedback")
+    result["feedback"] = str(feedback).strip()[:500] if feedback else None
     return result
 
 
@@ -246,6 +248,9 @@ async def run_coverage_assessment(state: dict) -> tuple[dict, int, bool]:
     reason = budget_exhausted(state)
     if reason:
         return {"coverage": "partial" if state.get("papers") else "insufficient", "missing": [], "next_action": "stop", "rationale": reason, "new_query": None}, 0, False
+    # 规则先行：标题漂移是硬质量信号，直接走规则评估改写，不花 LLM 调用。
+    if _title_drift(state) and state.get("extra_search", 0) < state.get("max_extra_search", MAX_EXTRA_SEARCH):
+        return _rule_assess(state), 0, False
     try:
         assessment, cache_hit = await store.cached_call("assess", _assess_cache_payload(state), lambda: _llm_assess(state))
         llm_delta, fallback = (0 if cache_hit else 1), False
@@ -264,6 +269,7 @@ async def run_coverage_assessment(state: dict) -> tuple[dict, int, bool]:
 def assessment_updates(state: dict, assessment: dict, llm_delta: int, fallback: bool) -> dict:
     return {
         "coverage": assessment,
+        "assess_feedback": assessment.get("feedback"),
         "assessments": state.get("assessments", 0) + 1,
         "llm_calls": state.get("llm_calls", 0) + llm_delta,
         "events_extra": [{

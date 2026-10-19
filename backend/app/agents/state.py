@@ -128,6 +128,7 @@ class CoverageAssessment(BaseModel):
     next_action: Literal["search_more", "read_next", "paginate", "synthesize", "stop"]
     rationale: str = ""
     new_query: str | None = None
+    feedback: str | None = None
 
 
 class TaskRoute(BaseModel):
