@@ -16,3 +16,5 @@ backend/pytest-cache-files-*/
 .cursor-checks.txt
 .graph-check-output.txt
 .progressive-checks.txt
+backend/.*tests.txt
+frontend/.*build.txt
