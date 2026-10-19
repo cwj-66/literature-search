@@ -222,19 +222,22 @@ def merge_papers(groups: list[list[PaperOut]], sort: str) -> list[PaperOut]:
     return [paper for paper, _ in merged]
 
 
+_VIEW_RE = re.compile(r'^\(("[^"]+"(?: OR "[^"]+")*)\)(?: AND \("[^"]+(?: OR "[^"]+")*"\))+$|^\(("[^"]+"(?: OR "[^"]+")*)\)$')
+
+
 def parse_view_groups(query: str) -> list[list[str]] | None:
     """解析 SearchPlan 编译出的布尔视图查询 '("a" OR "b") AND ("c")' 为概念组列表。
 
-    不是视图形态（含顶层括号分组）时返回 None，交给各源原样处理。
+    用严格正则校验形态：不是视图（含括号开头的普通查询、小写 and/or、
+    引号内嵌引号、括号不平衡）一律返回 None，交给各源原样处理。
     """
     text = query.strip()
-    if not (text.startswith("(") and ")" in text):
+    if not _VIEW_RE.match(text):
         return None
+    factors = re.split(r'"\) AND \("', text[1:-1])
     groups = []
-    for factor in re.split(r"\)\s+AND\s+\(", text):
-        factor = factor.strip().strip("()").strip()
-        terms = [term.strip().strip('"') for term in factor.split(" OR ")]
-        terms = [term for term in terms if term]
+    for factor in factors:
+        terms = [term for term in factor.strip('"').split('" OR "') if term and '"' not in term]
         if not terms:
             return None
         groups.append(terms)
@@ -514,10 +517,10 @@ async def search_arxiv(client: httpx.AsyncClient, query: str, offset: int, limit
 
 def rank_candidates(papers: list, query: str) -> list:
     """按查询相关性对候选降序排序：词频得分 + 查询词覆盖率，分数相同保持原有顺序。"""
-    words = re.findall(r"[\w]+", query, flags=re.UNICODE)
-    if not words:
+    words = re.findall(r"[a-zA-Z]{3,}", query, flags=re.UNICODE)
+    folded = [word.casefold() for word in words if word.casefold() not in {"and", "or", "not"}]
+    if not folded:
         return list(papers)
-    folded = [word.casefold() for word in words]
 
     def score(paper) -> float:
         title = (paper.get("title") or "") if isinstance(paper, dict) else (getattr(paper, "title", None) or "")

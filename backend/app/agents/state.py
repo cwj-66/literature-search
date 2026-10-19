@@ -93,6 +93,12 @@ class AgentState(TypedDict, total=False):
     max_api_calls: int
     max_llm_calls: int
     max_deep_reads: int
+    max_react: int
+    max_judge_rounds: int
+    budget: str
+    post_actions: list
+    query_fingerprints: list
+    assess_feedback: str | None
     judge_round: int
     source_errors: dict
     source_retry_after: dict
@@ -486,6 +492,12 @@ def public_state(state: dict) -> dict:
         "llm_calls": state.get("llm_calls", 0),
         "extra_search": state.get("extra_search", 0),
         "deep_reads": state.get("deep_reads", 0),
+        "budget": state.get("budget"),
+        "max_react": state.get("max_react"),
+        "max_judge_rounds": state.get("max_judge_rounds"),
+        "post_actions": state.get("post_actions") or [],
+        "query_fingerprints": state.get("query_fingerprints") or [],
+        "assess_feedback": state.get("assess_feedback"),
         "stop_reason": state.get("stop_reason"),
         "status": _status_of(state),
         "interrupt": state.get("interrupt"),

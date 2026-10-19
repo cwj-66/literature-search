@@ -1,0 +1,403 @@
+................................FF.FF...........F.....FFFFFFFFFFFFFFF.F. [ 30%]
+F....................................................................... [ 60%]
+........................................................................ [ 90%]
+........................                                             [100%]
+================================== FAILURES ===================================
+_____ AgentCacheTests.test_assess_cache_hit_avoids_llm_call_and_counting ______
+tests\test_agent_recovery.py:85: in test_assess_cache_hit_avoids_llm_call_and_counting
+    first = await agent.assess_node(state)
+                  ^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.agents.agent' has no attribute 'assess_node'
+_____________ AgentCacheTests.test_llm_failures_are_never_cached ______________
+tests\test_agent_recovery.py:96: in test_llm_failures_are_never_cached
+    await agent.assess_node(state)
+          ^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.agents.agent' has no attribute 'assess_node'
+_______ AgentCacheTests.test_search_cache_hit_does_not_rebill_api_calls _______
+tests\test_agent_recovery.py:65: in test_search_cache_hit_does_not_rebill_api_calls
+    first = await agent.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
+                  ^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.agents.agent' has no attribute 'search_node'. Did you mean: 'react_node'?
+_________ AgentCacheTests.test_search_error_responses_are_not_cached __________
+tests\test_agent_recovery.py:77: in test_search_error_responses_are_not_cached
+    await agent.search_node({**agent.initial_state("goal"), "queries": ["q1"]})
+          ^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.agents.agent' has no attribute 'search_node'. Did you mean: 'react_node'?
+____ AgentRouterTests.test_override_react_skips_interrupt_for_complex_goal ____
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2294: in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+E   StopIteration
+
+During handling of the above exception, another exception occurred:
+..\.venv\Lib\site-packages\langgraph\pregel\_runner.py:397: in atick
+    await arun_with_retry(
+..\.venv\Lib\site-packages\langgraph\pregel\_retry.py:737: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:756: in ainvoke
+    input = await asyncio.create_task(
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:522: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:668: in react_agent
+    raw = await llm.complete(messages)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2298: in _execute_mock_call
+    raise StopAsyncIteration
+E   StopAsyncIteration
+E   During task with name 'react_agent' and id 'e542950a-13d9-1de9-9c26-102649462e7c'
+
+The above exception was the direct cause of the following exception:
+tests\test_agent_router.py:155: in test_override_react_skips_interrupt_for_complex_goal
+    result = await agent.run("����������ǿ�ڴ�ģ�ͻþ������ϵ��о����粢�Ա���Ҫ����", task_id="rt-ov-react", mode="react")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1885: in run
+    result = await compiled.ainvoke(initial_state(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context), config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:4178: in ainvoke
+    async for chunk in self.astream(
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:3529: in astream
+    async for _ in runner.atick(
+E   RuntimeError: async generator raised StopAsyncIteration
+______ AgentPrivilegedToolTests.test_deep_analysis_approved_subset_only _______
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2294: in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+E   StopIteration
+
+During handling of the above exception, another exception occurred:
+..\.venv\Lib\site-packages\langgraph\pregel\_runner.py:397: in atick
+    await arun_with_retry(
+..\.venv\Lib\site-packages\langgraph\pregel\_retry.py:737: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:756: in ainvoke
+    input = await asyncio.create_task(
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:522: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1284: in claims_node
+    drafts, cache_hit = await cached_call(
+app\agents\agent.py:324: in cached_call
+    result = await result
+             ^^^^^^^^^^^^
+app\agents\agent.py:1274: in _llm_extract_claims
+    parsed = ClaimsOutput.model_validate(ea.parse_json(await llm.complete(messages)))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2298: in _execute_mock_call
+    raise StopAsyncIteration
+E   StopAsyncIteration
+E   During task with name 'claims' and id '52a229b0-783b-76b2-e035-55995b82b150'
+
+The above exception was the direct cause of the following exception:
+tests\test_agent_router.py:329: in test_deep_analysis_approved_subset_only
+    paused = await agent.run("��ν���RAG�þ�", auto_approve=True, task_id="pv-deep")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1885: in run
+    result = await compiled.ainvoke(initial_state(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context), config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:4178: in ainvoke
+    async for chunk in self.astream(
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:3529: in astream
+    async for _ in runner.atick(
+E   RuntimeError: async generator raised StopAsyncIteration
+_ AgentPrivilegedToolTests.test_save_papers_interrupts_and_saves_only_approved_subset _
+tests\test_agent_router.py:269: in test_save_papers_interrupts_and_saves_only_approved_subset
+    self.assertEqual(paused["status"], "waiting")
+E   AssertionError: 'done' != 'waiting'
+E   - done
+E   + waiting
+______ AgentPrivilegedToolTests.test_save_papers_rejected_saves_nothing _______
+tests\test_agent_router.py:295: in test_save_papers_rejected_saves_nothing
+    self.assertEqual(paused["status"], "waiting")
+E   AssertionError: 'done' != 'waiting'
+E   - done
+E   + waiting
+________________ AgentScenarioTests.test_01_normal_completion _________________
+tests\test_agent_scenarios.py:138: in test_01_normal_completion
+    self.assertEqual(result["answer"], "����A������B������C��")  # judge ȫͨ������δ�Ķ�
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: '��δ��������Ч�𸴣�\n\n������˵�������ֽ���֤�ݲ��㣬�Ѱ����ر����������Ǵ���ʵ�����帴��δ��ɣ����Ͻ���������ο���' != '����A������B������C��'
+E   + ����A������B������C��
+E   - ��δ��������Ч�𸴣�
+E   - 
+E   - ������˵�������ֽ���֤�ݲ��㣬�Ѱ����ر����������Ǵ���ʵ�����帴��δ��ɣ����Ͻ���������ο���
+------------------------------ Captured log call ------------------------------
+WARNING  asyncio:base_events.py:1994 Executing <Task pending name='Task-1597' coro=<AgentScenarioTests.test_01_normal_completion() running at D:\PythonProject\��ҵ���\backend\tests\test_agent_scenarios.py:135> wait_for=<Task pending name='Task-1601' coro=<RunnableCallable.ainvoke() running at D:\PythonProject\��ҵ���\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:452> cb=[Task.task_wakeup()] created at C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\tasks.py:422> cb=[_run_until_complete_cb() at C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\base_events.py:181] created at C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\asyncio\runners.py:100> took 0.110 seconds
+_____________ AgentScenarioTests.test_02_vague_terms_extend_query _____________
+tests\test_agent_scenarios.py:164: in test_02_vague_terms_extend_query
+    self.assertEqual(len(result["queries"]), 2)
+E   AssertionError: 1 != 2
+__________________ AgentScenarioTests.test_03_no_candidates ___________________
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2294: in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+E   StopIteration
+
+During handling of the above exception, another exception occurred:
+..\.venv\Lib\site-packages\langgraph\pregel\_runner.py:397: in atick
+    await arun_with_retry(
+..\.venv\Lib\site-packages\langgraph\pregel\_retry.py:737: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:756: in ainvoke
+    input = await asyncio.create_task(
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:522: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1284: in claims_node
+    drafts, cache_hit = await cached_call(
+app\agents\agent.py:324: in cached_call
+    result = await result
+             ^^^^^^^^^^^^
+app\agents\agent.py:1274: in _llm_extract_claims
+    parsed = ClaimsOutput.model_validate(ea.parse_json(await llm.complete(messages)))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2298: in _execute_mock_call
+    raise StopAsyncIteration
+E   StopAsyncIteration
+E   During task with name 'claims' and id '22c7e482-1978-9009-f237-2aa94981155f'
+
+The above exception was the direct cause of the following exception:
+tests\test_agent_scenarios.py:175: in test_03_no_candidates
+    result = await self.run_scenario("sc-03", side, search=AsyncMock(return_value=dict(EMPTY_SEARCH)))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_agent_scenarios.py:121: in run_scenario
+    return await agent.run("��ν���RAG�þ�", auto_approve=True, task_id=task_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1885: in run
+    result = await compiled.ainvoke(initial_state(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context), config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:4178: in ainvoke
+    async for chunk in self.astream(
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:3529: in astream
+    async for _ in runner.atick(
+E   RuntimeError: async generator raised StopAsyncIteration
+_________ AgentScenarioTests.test_04_insufficient_coverage_paginates __________
+tests\test_agent_scenarios.py:194: in test_04_insufficient_coverage_paginates
+    self.assertEqual(search.call_count, 2)
+E   AssertionError: 0 != 2
+_________ AgentScenarioTests.test_05_fulltext_unavailable_records_gap _________
+tests\test_agent_scenarios.py:219: in test_05_fulltext_unavailable_records_gap
+    self.assertTrue(any(gap.startswith("ȫ�Ĳ��ɵ�:arxiv:1") for gap in result["gaps"]))
+E   AssertionError: False is not true
+_____ AgentScenarioTests.test_06_single_source_rate_limit_partial_results _____
+tests\test_agent_scenarios.py:240: in test_06_single_source_rate_limit_partial_results
+    self.assertEqual(result["paper_ids"], ["arxiv:1"])
+E   AssertionError: Lists differ: [] != ['arxiv:1']
+E   
+E   Second list contains 1 additional elements.
+E   First extra element 0:
+E   'arxiv:1'
+E   
+E   - []
+E   + ['arxiv:1']
+_________ AgentScenarioTests.test_07_unclear_figure_degrades_honestly _________
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2294: in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+E   StopIteration
+
+During handling of the above exception, another exception occurred:
+..\.venv\Lib\site-packages\langgraph\pregel\_runner.py:397: in atick
+    await arun_with_retry(
+..\.venv\Lib\site-packages\langgraph\pregel\_retry.py:737: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:756: in ainvoke
+    input = await asyncio.create_task(
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:522: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:668: in react_agent
+    raw = await llm.complete(messages)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2298: in _execute_mock_call
+    raise StopAsyncIteration
+E   StopAsyncIteration
+E   During task with name 'react_agent' and id '486a0c7c-5e16-700c-8fec-704339c168e3'
+
+The above exception was the direct cause of the following exception:
+tests\test_agent_scenarios.py:256: in test_07_unclear_figure_degrades_honestly
+    result = await self.run_scenario("sc-07", side, answer=answer)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_agent_scenarios.py:121: in run_scenario
+    return await agent.run("��ν���RAG�þ�", auto_approve=True, task_id=task_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1885: in run
+    result = await compiled.ainvoke(initial_state(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context), config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:4178: in ainvoke
+    async for chunk in self.astream(
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:3529: in astream
+    async for _ in runner.atick(
+E   RuntimeError: async generator raised StopAsyncIteration
+_______ AgentScenarioTests.test_08_invalid_citation_caught_by_precheck ________
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2294: in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+E   StopIteration
+
+During handling of the above exception, another exception occurred:
+..\.venv\Lib\site-packages\langgraph\pregel\_runner.py:397: in atick
+    await arun_with_retry(
+..\.venv\Lib\site-packages\langgraph\pregel\_retry.py:737: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:756: in ainvoke
+    input = await asyncio.create_task(
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:522: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:668: in react_agent
+    raw = await llm.complete(messages)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2298: in _execute_mock_call
+    raise StopAsyncIteration
+E   StopAsyncIteration
+E   During task with name 'react_agent' and id '0bc80818-7760-362b-3b24-92a261377915'
+
+The above exception was the direct cause of the following exception:
+tests\test_agent_scenarios.py:274: in test_08_invalid_citation_caught_by_precheck
+    result = await self.run_scenario("sc-08", side, answer=answer)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_agent_scenarios.py:121: in run_scenario
+    return await agent.run("��ν���RAG�þ�", auto_approve=True, task_id=task_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1885: in run
+    result = await compiled.ainvoke(initial_state(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context), config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:4178: in ainvoke
+    async for chunk in self.astream(
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:3529: in astream
+    async for _ in runner.atick(
+E   RuntimeError: async generator raised StopAsyncIteration
+__ AgentScenarioTests.test_09_contradiction_bounded_revision_then_downgrade ___
+tests\test_agent_scenarios.py:299: in test_09_contradiction_bounded_revision_then_downgrade
+    self.assertEqual(review["fixed_claims"], ["c1"])
+E   AssertionError: Lists differ: [] != ['c1']
+E   
+E   Second list contains 1 additional elements.
+E   First extra element 0:
+E   'c1'
+E   
+E   - []
+E   + ['c1']
+_____ AgentScenarioTests.test_10_api_budget_exhausted_stops_second_search _____
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2294: in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+E   StopIteration
+
+During handling of the above exception, another exception occurred:
+..\.venv\Lib\site-packages\langgraph\pregel\_runner.py:397: in atick
+    await arun_with_retry(
+..\.venv\Lib\site-packages\langgraph\pregel\_retry.py:737: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:756: in ainvoke
+    input = await asyncio.create_task(
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:522: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1284: in claims_node
+    drafts, cache_hit = await cached_call(
+app\agents\agent.py:324: in cached_call
+    result = await result
+             ^^^^^^^^^^^^
+app\agents\agent.py:1274: in _llm_extract_claims
+    parsed = ClaimsOutput.model_validate(ea.parse_json(await llm.complete(messages)))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2298: in _execute_mock_call
+    raise StopAsyncIteration
+E   StopAsyncIteration
+E   During task with name 'claims' and id '5b5f43a3-bc1f-11da-5089-76fa1d5f0010'
+
+The above exception was the direct cause of the following exception:
+tests\test_agent_scenarios.py:320: in test_10_api_budget_exhausted_stops_second_search
+    result = await compiled.ainvoke(state, {"configurable": {"thread_id": "sc-10"}})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:4178: in ainvoke
+    async for chunk in self.astream(
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:3529: in astream
+    async for _ in runner.atick(
+E   RuntimeError: async generator raised StopAsyncIteration
+_______________ AgentScenarioTests.test_11_user_cancel_mid_run ________________
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2294: in _execute_mock_call
+    result = next(effect)
+             ^^^^^^^^^^^^
+E   StopIteration
+
+During handling of the above exception, another exception occurred:
+..\.venv\Lib\site-packages\langgraph\pregel\_runner.py:397: in atick
+    await arun_with_retry(
+..\.venv\Lib\site-packages\langgraph\pregel\_retry.py:737: in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:756: in ainvoke
+    input = await asyncio.create_task(
+..\.venv\Lib\site-packages\langgraph\_internal\_runnable.py:522: in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:668: in react_agent
+    raw = await llm.complete(messages)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\������\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:2298: in _execute_mock_call
+    raise StopAsyncIteration
+E   StopAsyncIteration
+E   During task with name 'react_agent' and id 'c919d83e-fd4c-d6c5-b53d-e6f7cdec1e18'
+
+The above exception was the direct cause of the following exception:
+tests\test_agent_scenarios.py:336: in test_11_user_cancel_mid_run
+    result = await self.run_scenario("sc-11", side, search=AsyncMock(side_effect=cancel_during_search))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_agent_scenarios.py:121: in run_scenario
+    return await agent.run("��ν���RAG�þ�", auto_approve=True, task_id=task_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\agents\agent.py:1885: in run
+    result = await compiled.ainvoke(initial_state(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context), config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:4178: in ainvoke
+    async for chunk in self.astream(
+..\.venv\Lib\site-packages\langgraph\pregel\main.py:3529: in astream
+    async for _ in runner.atick(
+E   RuntimeError: async generator raised StopAsyncIteration
+_ AgentScenarioRecoveryTests.test_12_pause_restart_recover_resume_without_rebilling _
+tests\test_agent_scenarios.py:368: in test_12_pause_restart_recover_resume_without_rebilling
+    self.assertEqual(paused["status"], "waiting")
+E   AssertionError: 'done' != 'waiting'
+E   - done
+E   + waiting
+_____ ResearchEventStreamTests.test_events_endpoint_replays_finished_task _____
+tests\test_agent_scenarios.py:466: in test_events_endpoint_replays_finished_task
+    self.assertIn('"step": "search"', body)
+E   AssertionError: '"step": "search"' not found in 'data: {"type": "event", "task_id": "sse-replay", "event": {"step": "route", "mode": "plan", "reason": "�������ʣ���Ҫ�滮", "source": "llm"}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "plan", "queries": ["q1"], "rationale": "ģ�͹滮�����ã���ʹ��ԭʼ�������"}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "react", "turn": 1, "action": "answer", "thought": ""}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "claims", "count": 1, "reason": "��ȡ�ɸ�������"}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "judge", "round": 1, "verdicts": {}, "action": "�޴���������", "coverage_note": null, "multi_paper_note": null}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "revise", "round": 1, "rule_fixed": 0, "dropped": 1, "feedback": 1}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "react", "turn": 2, "action": "answer", "thought": ""}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "claims", "count": 1, "reason": "��ȡ�ɸ�������"}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "judge", "round": 2, "verdicts": {}, "action": "�޴���������", "coverage_note": null, "multi_paper_note": null}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "finalize", "to_verify": 0, "downgraded": 1, "reason": "���˴������"}}\n\ndata: {"type": "event", "task_id": "sse-replay", "event": {"step": "stop", "reason": "Ŀ�긲�����"}}\n\ndata: [DONE]\n\n'
+_ ResearchEventStreamTests.test_stream_run_emits_node_progress_and_final_state _
+tests\test_agent_scenarios.py:417: in test_stream_run_emits_node_progress_and_final_state
+    self.assertIn("search", nodes)
+E   AssertionError: 'search' not found in ['router', 'plan', 'gate', 'react_agent', 'gate_judge', 'claims', 'judge', 'revise', 'react_agent', 'gate_judge', 'claims', 'judge', 'finalize', 'gate_done', 'finish']
+=========================== short test summary info ===========================
+FAILED tests/test_agent_recovery.py::AgentCacheTests::test_assess_cache_hit_avoids_llm_call_and_counting
+FAILED tests/test_agent_recovery.py::AgentCacheTests::test_llm_failures_are_never_cached
+FAILED tests/test_agent_recovery.py::AgentCacheTests::test_search_cache_hit_does_not_rebill_api_calls
+FAILED tests/test_agent_recovery.py::AgentCacheTests::test_search_error_responses_are_not_cached
+FAILED tests/test_agent_router.py::AgentRouterTests::test_override_react_skips_interrupt_for_complex_goal
+FAILED tests/test_agent_router.py::AgentPrivilegedToolTests::test_deep_analysis_approved_subset_only
+FAILED tests/test_agent_router.py::AgentPrivilegedToolTests::test_save_papers_interrupts_and_saves_only_approved_subset
+FAILED tests/test_agent_router.py::AgentPrivilegedToolTests::test_save_papers_rejected_saves_nothing
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_01_normal_completion
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_02_vague_terms_extend_query
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_03_no_candidates
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_04_insufficient_coverage_paginates
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_05_fulltext_unavailable_records_gap
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_06_single_source_rate_limit_partial_results
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_07_unclear_figure_degrades_honestly
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_08_invalid_citation_caught_by_precheck
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_09_contradiction_bounded_revision_then_downgrade
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_10_api_budget_exhausted_stops_second_search
+FAILED tests/test_agent_scenarios.py::AgentScenarioTests::test_11_user_cancel_mid_run
+FAILED tests/test_agent_scenarios.py::AgentScenarioRecoveryTests::test_12_pause_restart_recover_resume_without_rebilling
+FAILED tests/test_agent_scenarios.py::ResearchEventStreamTests::test_events_endpoint_replays_finished_task
+FAILED tests/test_agent_scenarios.py::ResearchEventStreamTests::test_stream_run_emits_node_progress_and_final_state
+22 failed, 218 passed, 4 subtests passed in 76.39s (0:01:16)

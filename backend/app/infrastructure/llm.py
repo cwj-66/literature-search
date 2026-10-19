@@ -245,8 +245,12 @@ async def complete(messages: list[dict]) -> str:
         data = response.json()
         meter = _USAGE_METER.get()
         if meter is not None:
-            usage = data.get("usage") or {}
-            meter.add(usage.get("prompt_tokens"), usage.get("completion_tokens"))
+            try:
+                usage = data.get("usage")
+                if isinstance(usage, dict):
+                    meter.add(usage.get("prompt_tokens"), usage.get("completion_tokens"))
+            except (TypeError, ValueError, AttributeError):
+                log.warning("malformed usage field ignored: %r", data.get("usage"))
         choice = data["choices"][0]
         content = choice["message"].get("content")
     except (KeyError, IndexError, TypeError, ValueError) as exc:

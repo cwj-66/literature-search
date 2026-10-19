@@ -428,8 +428,10 @@ async def plan_search(question: str) -> dict:
     """
     messages = [{"role": "system", "content": SEARCH_PLAN_SYSTEM}, {"role": "user", "content": question}]
     candidate = None
+    llm_used = 0
     for attempt in range(2):
         try:
+            llm_used += 1
             candidate = ea.parse_json(await llm.complete(messages))
             break
         except llm.AnalysisError:
@@ -447,7 +449,9 @@ async def plan_search(question: str) -> dict:
         # 结构不合法（含旧式输出）直接走兜底，不为纠错再花一次调用。
         if candidate.get("query_views"):
             try:
-                return _plan_from_payload(candidate, question)
+                planned = _plan_from_payload(candidate, question)
+                planned["_llm_used"] = llm_used
+                return planned
             except (ValueError, TypeError):
                 pass
         elif candidate.get("queries"):
@@ -457,5 +461,11 @@ async def plan_search(question: str) -> dict:
                     "queries": queries[:MAX_PLAN_QUERIES],
                     "exclusions": [str(item) for item in candidate.get("exclusions") or []],
                     "rationale": str(candidate.get("rationale") or ""),
+                    "_llm_used": llm_used,
                 }
-    return await decompose(question)
+    fallback = await decompose(question)
+    # decompose 成功（非兜底理由）说明它内部也消耗了一次 LLM 调用。
+    if not str(fallback.get("rationale") or "").startswith("模型规划不可用"):
+        llm_used += 1
+    fallback["_llm_used"] = llm_used
+    return fallback

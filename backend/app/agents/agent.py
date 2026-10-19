@@ -421,7 +421,8 @@ async def plan_node(state: dict) -> dict:
                 store.cache_put(key, planned)
         queries = planned["queries"]
         plan = [{"action": "read" if local_read else "search", "query": query} for query in queries]
-        llm_calls = state.get("llm_calls", 0) + (0 if cache_hit else 1)
+        llm_used = int(planned.get("_llm_used") or 1)
+        llm_calls = state.get("llm_calls", 0) + (0 if cache_hit else llm_used)
         events = with_event(state, {"step": "plan", "queries": queries, "rationale": planned.get("rationale")})
     rejected = False
     if not state.get("auto_approve"):
