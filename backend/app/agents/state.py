@@ -136,6 +136,7 @@ class TaskRoute(BaseModel):
     domains: list[str] = Field(default_factory=list)
     missing_slots: list[dict] = Field(default_factory=list)
     research_intent: Literal["auto", "discover", "read", "mixed"] = "auto"
+    post_actions: list[Literal["analyze", "save_to_workspace"]] = Field(default_factory=list)
 
 
 class DirectAnswer(BaseModel):
@@ -421,6 +422,7 @@ def initial_state(goal: str, year_from: int | None = None, year_to: int | None =
         "max_react": preset.max_react,
         "max_judge_rounds": preset.max_judge_rounds,
         "budget": preset.label,
+        "post_actions": [],
         "plan_version": 0,
         "query_index": 0,
         "need_evidence": False,

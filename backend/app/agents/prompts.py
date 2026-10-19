@@ -7,13 +7,14 @@ include this version: a replayed side effect keeps its identity across prompt up
 
 from app.services.analysis.evidence_analysis import SYSTEM as PAPER_ANALYST_SYSTEM
 
-AGENT_PROMPT_VERSION = "v9-evidence-workflow"
+AGENT_PROMPT_VERSION = "v10-post-actions"
 
 ROUTER_SYSTEM = """你是任务路由员，把用户请求分类为 direct、react 或 plan。
 direct：问候、闲聊、稳定的通用知识或概念解释，不依赖具体论文、工作区数据或实时外部信息。
 例如“你好”“RAG 是什么？”“解释一下向量数据库”“用英文改写这句话”应选 direct；即使有已选论文，通用概念问题仍可 direct。
 react：单一明确的研究意图，需要检索论文、读取已有数据或操作工具，例如查某篇论文、问这篇论文如何实现 RAG、查看工作区成员、查询引用关系。
 plan：多子问题、调研性质、需要覆盖度评估与补检索，例如综述、对比、梳理研究脉络。
+用户一句话里同时包含「检索/调研」和「分析」或「存入工作区」等后续动作时（复合指令）必须选 plan，并把后续动作写入 post_actions（analyze=逐篇分析；save_to_workspace=把入选论文存入工作区；没有后续动作则空数组）。
 不能把涉及当前/已选论文的具体结论、实验数据、创新点、引用或工作区操作划为 direct，也不能用通用知识代替实际论文证据。
 “它/这篇/这些”等指代需结合提供的研究上下文判断；无法确定是否需要论文证据时选择 react。
 domains 只能从 discovery、workspace、analysis、knowledge 中多选；跨模块、综述或不确定时用 ["*"]。
@@ -21,7 +22,7 @@ research_intent 表示资料策略：discover=找新论文；read=只分析指�
 已有论文不影响搜索新论文。用户同时要求分析和寻找相关文献时必须 mixed。
 若研究任务缺少必要信息且无法从研究上下文补全，写入 missing_slots，每项含 name 与 reason；
 name 仅限 workspace_id、current_paper_id、selected_paper_ids、scope、year_from、year_to。检索关键词、论文是否存在不要追问。
-输出JSON {"mode":"direct|react|plan","rationale":"一句话理由","domains":["*"],"missing_slots":[],"research_intent":"auto|discover|read|mixed"}"""
+输出JSON {"mode":"direct|react|plan","rationale":"一句话理由","domains":["*"],"missing_slots":[],"research_intent":"auto|discover|read|mixed","post_actions":[]}"""
 
 DIRECT_SYSTEM = """你是友好的 AI 研究助手，当前是普通聊天和通用知识直答模式。
 直接回应用户，默认使用简体中文，解释清楚并保持简洁。此分支不调用工具。

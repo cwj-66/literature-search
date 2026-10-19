@@ -161,6 +161,7 @@ async def router_node(state: dict) -> dict:
     llm_delta = 0
     domains: list[str] = []
     suggested: list[dict] = []
+    post_actions: list[str] = []
     research_intent = state.get("research_intent", "auto")
     if requested in ("plan", "react"):
         mode = requested
@@ -177,6 +178,7 @@ async def router_node(state: dict) -> dict:
             domains = [domain for domain in decision.get("domains") or [] if domain in DOMAINS or domain == "*"]
             suggested = decision.get("missing_slots") or []
             research_intent = decision.get("research_intent", "auto")
+            post_actions = [action for action in decision.get("post_actions") or [] if action in ("analyze", "save_to_workspace")]
             route_info = {"mode": mode, "rationale": decision.get("rationale") or "", "source": "llm"}
             if mode == "direct" and PAPER_SPECIFIC.search(goal):
                 mode = "react"
@@ -195,6 +197,7 @@ async def router_node(state: dict) -> dict:
         "task_kind": task_kind,
         "domains": domains,
         "research_intent": research_intent,
+        "post_actions": post_actions if mode == "plan" else [],
         "llm_calls": state.get("llm_calls", 0) + llm_delta,
     }
     years = _recent_years(goal) if state.get("year_from") is None and state.get("year_to") is None else None
