@@ -99,6 +99,44 @@ def limited(state: dict) -> bool:
     return any("限流" in str(value) or "429" in str(value) for value in (state.get("source_errors") or {}).values())
 
 
+def query_fingerprint(query: str) -> str:
+    """保留大小写、引号短语与运算符顺序的查询指纹（PaperSeek query_history 思路）。"""
+    return re.sub(r'"(?:\\.|[^"\\])*"|\s+', lambda match: match[0] if match[0].startswith('"') else " ", query).strip()
+
+
+def _title_drift(state: dict) -> bool:
+    """标题漂移检测（纯代码）：意图信号词在 top-5 候选标题中的覆盖率 <20% 判为跑题。
+
+    信号词取最近执行的检索式（英文源检索词），不足 5 篇候选时不做判断。
+    """
+    papers = state.get("papers") or []
+    queries = state.get("queries") or []
+    if len(papers) < 5 or not queries:
+        return False
+    words = [word.casefold() for word in re.findall(r"[a-zA-Z]{3,}", queries[-1])]
+    if len(words) < 2:
+        return False
+    titles = " ".join(str(paper.get("title") or "") for paper in papers[:5]).casefold()
+    hits = sum(1 for word in set(words) if word in titles)
+    return hits / len(set(words)) < 0.2
+
+
+def _rule_rewrite_query(query: str, state: dict) -> str | None:
+    """规则路径的确定性改写：逐步放松检索式——视图查询丢最后一个 AND 组，普通查询丢最后一个词。"""
+    seen = set(state.get("query_fingerprints") or [])
+    candidates: list[str] = []
+    if ") AND (" in query:
+        candidates.append(query.rsplit(" AND (", 1)[0].rstrip())
+    words = query.split()
+    if len(words) > 1:
+        candidates.append(" ".join(words[:-1]))
+    for candidate in candidates:
+        cleaned = candidate.strip()
+        if cleaned and cleaned != query and query_fingerprint(cleaned) not in seen:
+            return cleaned
+    return None
+
+
 def route(state: dict):
     """规则路由：assess_coverage 在 LLM 不可用时的确定性回退。"""
     if budget_exhausted(state):
@@ -122,6 +160,13 @@ def route(state: dict):
 
 def _rule_assess(state: dict) -> dict:
     decision = route(state)
+    # 标题漂移优先于数量判断：候选多但跑题时，规则路径也能改写检索词重定向。
+    if decision != "stop" and _title_drift(state) and state.get("extra_search", 0) < state.get("max_extra_search", MAX_EXTRA_SEARCH):
+        queries = state.get("queries") or []
+        new_query = _rule_rewrite_query(queries[-1], state) if queries else None
+        if new_query:
+            return {"coverage": "insufficient", "missing": ["候选与目标相关性"], "next_action": "search_more",
+                    "rationale": "标题漂移检测：候选与检索目标不相关，放宽检索式重试", "new_query": new_query}
     if decision == "expand":
         return {"coverage": "insufficient", "missing": ["候选数量或相关性"], "next_action": "search_more", "rationale": "候选不足，按计划继续补检索", "new_query": None}
     if decision == "read":
@@ -441,6 +486,7 @@ async def _tool_search_papers(state: dict, args: dict) -> tuple[str, dict]:
         "source_retry_after": result.get("source_retry_after") or {},
         "api_calls": state.get("api_calls", 0) + api_delta,
         "queries": queries,
+        "query_fingerprints": [*dict.fromkeys([*(state.get("query_fingerprints") or []), query_fingerprint(query)])],
         "extra_search": extra_search,
         "search_count": search_count + 1,
         "need_evidence": True,
