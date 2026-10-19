@@ -75,7 +75,7 @@ function RecommendCard({ item, from }: { item: RecommendationItem; from: string 
     </li>)}</ul></details> : null}
     <div className="recommend-actions">
       <CollectButton paper={paper} />
-      {ready ? <Link to={`/w/${current!.id}/compare?pick=${encodeURIComponent(key)}`}>加入研究内容对比</Link> : null}
+      {ready ? <Link to={`/w/${current!.id}/compare/table?pick=${encodeURIComponent(key)}`}>加入研究内容对比</Link> : null}
       {key && current && !ready ? <Link to={workspacePaperPath(current.id, key, from)}>前往分析</Link> : null}
       {ready ? null : <span className="muted">{!key ? "收藏后完成单篇分析，才能加入研究内容对比" : reason === "状态读取中" ? "正在确认分析状态" : "完成单篇分析后，才能加入研究内容对比"}</span>}
     </div>

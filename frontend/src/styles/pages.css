@@ -1031,6 +1031,10 @@
 .kg-heatmap td button:hover:not(:disabled) { transform: scale(1.04); }
 .kg-heatmap td button:disabled { cursor: default; }
 .kg-heatmap td button:focus-visible { outline: 2px solid var(--accent); }
+.kg-echart { width: 100%; margin: var(--s3) 0 var(--s5); }
+.kg-quadrant-legend { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin: var(--s2) 0 0; }
+.kg-quadrant-chip { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-xs); }
+.kg-quadrant-chip i { width: 10px; height: 10px; border-radius: var(--radius-pill); }
 .kg-evolution-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); padding-top: var(--s5); border-top: 1px solid var(--line); }
 .kg-topic-group { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; padding-left: var(--s3); border-left: 2px solid var(--success-border); }
 .kg-topic-group button {

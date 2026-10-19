@@ -1,49 +1,46 @@
-import { Empty } from "antd";
-import { useMemo } from "react";
-import { topicStats } from "../knowledgeGraph";
-import type { EntityGraph } from "../graphData";
+import { Alert, Button, Empty, Skeleton } from "antd";
+import { useCallback, useMemo } from "react";
+import { QUADRANT_META, quadrantOption, sankeyOption, themeRiverOption } from "../themeCharts";
+import type { KnowledgeTheme, ThemeQuadrant } from "../types";
+import { useKnowledgeThemes } from "../useKnowledgeThemes";
+import { EChart } from "./EChart";
 
-export function TopicEvolution({ data, onExplore }: { data: EntityGraph; onExplore: (id: string, year?: number) => void }) {
-  const topics = useMemo(() => topicStats(data), [data]);
-  const papers = data.nodes.filter(n => n.kind === "paper");
-  const dated = papers.filter(p => p.year != null);
-  const years = [...new Set(dated.map(p => p.year!))].sort((a, b) => a - b);
-  const topicPaperIds = new Set(data.edges.filter(e => e.relation === "has_keyword").map(e => e.source));
-  const maxCount = Math.max(1, ...years.map(y => dated.filter(p => p.year === y).length));
-  const shownTopics = topics;
-  const yearWidth = Math.max(54, Math.min(94, 650 / Math.max(1, years.length)));
+export function TopicEvolution({ references, onExploreTheme }: {
+  references?: string[];
+  onExploreTheme: (theme: KnowledgeTheme) => void;
+}) {
+  const { data, error, refresh } = useKnowledgeThemes(references);
+  const themes = useMemo(() => data?.themes ?? [], [data]);
+  const years = useMemo(() => data?.years ?? [], [data]);
+  const links = useMemo(() => data?.evolution.links ?? [], [data]);
+  const quadOption = useMemo(() => themes.length ? quadrantOption(themes) : null, [themes]);
+  const riverOption = useMemo(() => themes.length && years.length ? themeRiverOption(themes, years) : null, [themes, years]);
+  const evoOption = useMemo(() => links.length ? sankeyOption(links) : null, [links]);
+  const pickTheme = useCallback((params: { name?: string }) => {
+    const theme = themes.find(item => item.name === params.name);
+    if (theme) onExploreTheme(theme);
+  }, [themes, onExploreTheme]);
+  const quadrants = (Object.keys(QUADRANT_META) as ThemeQuadrant[]).filter(q => themes.some(t => t.quadrant === q));
 
   return <section className="kg-evolution" aria-label="主题变化">
-    <div className="kg-section-heading"><div><h2>主题如何随年份变化</h2><p>按论文发表年份统计。同一篇论文在同一主题中只计一次，一篇可以属于多个主题。</p></div></div>
-    <p className="kg-data-note">统计范围为当前工作区，反映已收集文献的主题分布，不代表整个研究领域。当前筛选 {papers.length} 篇 · 有年份 {dated.length} 篇 · 有关键词 {topicPaperIds.size} 篇。{papers.length - dated.length ? `${papers.length - dated.length} 篇缺少年份，未进入年度统计。` : ""}{papers.length - topicPaperIds.size ? `${papers.length - topicPaperIds.size} 篇没有关键词，未进入主题统计。` : ""}这里只展示实际数量，不推断热点或研究空白。</p>
-    {!years.length ? <Empty description="论文缺少发表年份，暂时无法展示时间分布。" /> : <>
-      <div className="kg-section-heading"><h3>年度论文分布</h3><span className="kg-data-note">实色：已提取主题　浅色：尚无主题</span></div>
-      <div className="kg-chart-scroll"><svg role="img" aria-label="年度论文数量与主题提取覆盖" viewBox={`0 0 ${Math.max(360, years.length * yearWidth + 80)} 210`} style={{ minWidth: Math.max(360, years.length * yearWidth + 80) }} className="kg-year-chart">
-        <line x1="44" y1="166" x2={Math.max(340, years.length * yearWidth + 64)} y2="166" stroke="#e3e8ef" />
-        {years.map((year, i) => {
-          const total = dated.filter(p => p.year === year).length;
-          const analyzed = dated.filter(p => p.year === year && topicPaperIds.has(p.id)).length;
-          const x = 60 + i * yearWidth;
-          const h = total / maxCount * 115, filled = analyzed / maxCount * 115;
-          return <g key={year} role="button" tabIndex={0} aria-label={`${year}年，${total}篇论文，${analyzed}篇有主题`} className="kg-chart-year" onClick={() => onExplore("", year)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onExplore("", year); } }}>
-            <title>{year}年：{total}篇，已提取主题{analyzed}篇</title>
-            <rect x={x} y={166 - h} width="30" height={h} rx="3" fill="#e5ebf5" />
-            <rect x={x} y={166 - filled} width="30" height={filled} rx="3" fill="#4565a4" />
-            <text x={x + 15} y={155 - h} textAnchor="middle" fill="#334155" fontSize="13">{total}</text>
-            <text x={x + 15} y="190" textAnchor="middle" fill="#667085" fontSize="12">{year}</text>
-          </g>;
-        })}
-      </svg></div>
-    </>}
-    {!topics.length ? <Empty description="尚未提取研究主题。请打开论文详情，执行 AI 分析后刷新图谱。" /> : <>
-      <div className="kg-section-heading"><h3>主题与年份</h3><span className="kg-data-note">{shownTopics.length} 个主题；数字是涉及该主题的论文数量</span></div>
-      {years.length ? <div className="kg-heatmap-scroll"><table className="kg-heatmap"><thead><tr><th>研究主题</th>{years.map(y => <th key={y}>{y}</th>)}<th>合计</th></tr></thead><tbody>
-        {shownTopics.map(topic => <tr key={topic.id}><th><button type="button" onClick={() => onExplore(topic.id)}>{topic.label}</button></th>{years.map(year => {
-          const count = topic.papers.filter(p => p.year === year).length;
-          const denominator = dated.filter(p => p.year === year).length;
-          return <td key={year}><button type="button" disabled={!count} aria-label={`${topic.label}，${year}年，${count}篇`} title={`${count}/${denominator}篇，占当年样本${Math.round(count / denominator * 100)}%`} onClick={() => onExplore(topic.id, year)} style={{ background: count ? `rgba(35,128,111,${.12 + .55 * count / denominator})` : "#f7f9fb", color: count / denominator > .5 ? "#fff" : "#35665c" }}>{count || "—"}</button></td>;
-        })}<td>{topic.papers.filter(item => item.year != null).length}</td></tr>)}
-      </tbody></table></div> : null}
-    </>}
+    <div className="kg-section-heading"><div><h2>研究热点与主题演化</h2><p>基于工作区论文的 AI 分析结果自动归纳主题：四象限地图看当前热点，河流图看逐年热度，桑基图看主题之间的延续与分化。</p></div></div>
+    {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={refresh}>重试</Button>} /> : null}
+    {!data && !error ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
+    {data ? <>
+      <p className="kg-data-note">统计范围为当前工作区，不代表整个研究领域。共 {data.total_papers} 篇论文，其中 {data.analyzed_papers} 篇完成 AI 分析并进入主题统计。{data.scope_note}主题由算法自动归纳，名称与象限划分仅供参考。</p>
+      {!themes.length ? <Empty description="论文不足或未做 AI 分析，暂时无法生成主题地图。请打开论文详情执行 AI 分析后重试。" /> : <>
+        <div className="kg-section-heading"><h3>研究热点四象限</h3><span className="kg-data-note">横轴：关联度（与整体研究网络的相关性）· 纵轴：密集度（主题内部关联强度）· 点大小：论文数</span></div>
+        <div className="kg-quadrant-legend">{quadrants.map(q => <span key={q} className="kg-quadrant-chip"><i style={{ background: QUADRANT_META[q].color }} />{QUADRANT_META[q].label} · {themes.filter(t => t.quadrant === q).length} 个</span>)}</div>
+        {quadOption ? <EChart option={quadOption} height={400} ariaLabel="研究热点四象限图" onClick={pickTheme} /> : null}
+        {riverOption ? <>
+          <div className="kg-section-heading"><h3>主题河流图</h3><span className="kg-data-note">每年归入各主题的论文数量</span></div>
+          <EChart option={riverOption} height={380} ariaLabel="主题河流图" />
+        </> : null}
+        {evoOption ? <>
+          <div className="kg-section-heading"><h3>主题演化</h3><span className="kg-data-note">相邻时期的主题延续关系，流宽为延续强度</span></div>
+          <EChart option={evoOption} height={360} ariaLabel="主题演化桑基图" />
+        </> : null}
+      </>}
+    </> : null}
   </section>;
 }

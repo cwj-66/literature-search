@@ -20,11 +20,12 @@ function linkedPapers(node: EntityNode, papers: EntityNode[], edges: EntityEdge[
   return papers.filter(item => ids.has(item.id));
 }
 
-export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceId, recommendHref, onFill }: {
+export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceId, recommendHref, onFill, references }: {
   data: EntityGraph; scope: string; paperHref: (node: EntityNode) => string;
   paperKey?: (node: EntityNode) => string | undefined; workspaceId?: string;
   recommendHref?: (node: EntityNode) => string;
   onFill?: (ids: string[]) => Promise<{ queried: number; failed: number }>;
+  references?: string[];
 }) {
   const navigate = useNavigate();
   const narrow = useMediaQuery("(max-width: 900px)");
@@ -90,7 +91,7 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
     if (!workspaceId || !readyCompare) return;
     const search = new URLSearchParams();
     pickedPapers.forEach(node => search.append("pick", paperKey?.(node) || keyOf(node)));
-    navigate(`/w/${workspaceId}/compare?${search}`);
+    navigate(`/w/${workspaceId}/compare/table?${search}`);
   }
   async function fill() {
     if (!onFill || filling) return;
@@ -127,7 +128,7 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
     {fillNote ? <p className="kg-data-note" role="status">{fillNote}</p> : null}
     {year && unknownYears ? <p className="kg-data-note">{unknownYears} 篇缺少年份，未进入该年份的网络和统计。</p> : null}
     {missingKeywords.length ? <p className="kg-data-note">{missingKeywords.length} 篇没有关键词。未分析的论文仍显示作者和发表渠道，不推测主题。</p> : null}
-    {!papers.length ? <Empty description="没有符合条件的论文"><Button onClick={reset}>清除筛选</Button></Empty> : tab === "evolution" ? <TopicEvolution data={visible} onExplore={(id, nextYear) => update({ selected: id, tab: "graph", ...(nextYear ? { year: String(nextYear) } : {}) })} /> : <>
+    {!papers.length ? <Empty description="没有符合条件的论文"><Button onClick={reset}>清除筛选</Button></Empty> : tab === "evolution" ? <TopicEvolution references={references} onExploreTheme={theme => update({ q: theme.keywords[0] ?? theme.name, selected: "", tab: "graph" })} /> : <>
       <div className="kg-entity-toggles">
         {([["paper", "论文"], ["keyword", "关键词"], ["cites", "引用"], ["author", "作者"], ["venue", "期刊／会议"]] as const).map(([value, label]) => <Checkbox key={value} checked={show.includes(value)} onChange={event => {
           const next = event.target.checked ? [...new Set([...show, value])] : show.filter(item => item !== value);

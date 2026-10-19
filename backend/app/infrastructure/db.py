@@ -100,6 +100,12 @@ def connection():
                 payload TEXT NOT NULL,
                 queried_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS theme_names (
+                cluster_key TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
         """)
         yield db
     finally:

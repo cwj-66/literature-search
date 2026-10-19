@@ -1,112 +1,81 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Alert, Button, Checkbox } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Button, Empty, Input, Spin } from "antd";
+import { LeftOutlined, ReloadOutlined, RightOutlined, SearchOutlined } from "@ant-design/icons";
 import { Link, useSearchParams } from "react-router-dom";
-import { compareLibrary } from "../../api";
-import { AnalysisBadge, compareBlockReason, useAnalysisStates } from "../../components/AnalysisBadge";
-import { CompareMatrix } from "../../components/CompareMatrix";
-import { CompareEmpty } from "../../components/EmptyState";
-import { formatAuthors } from "../../components/PaperRow";
-import type { CompareTable } from "../../types";
-import { workspacePaperPath } from "../../workspace";
+import { fetchRecommendations } from "../../api";
+import { PaperRelationMap } from "../../components/PaperRelationMap";
+import type { Recommendations } from "../../types";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
+import "../../styles/paper-relations.css";
 
 export default function ComparePage() {
   const { id, project } = useWorkspaceProject();
-  const [picked, setPicked] = useState<string[]>([]);
-  const [table, setTable] = useState<CompareTable | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [query, setQuery] = useState("");
+  const [data, setData] = useState<Recommendations | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [params] = useSearchParams();
-  const request = useRef(0);
-  const seen = useRef<string | null>(null);
-  const here = `/w/${id}/compare`;
-  const signature = picked.join("|");
-  useEffect(() => { document.title = project ? `${project.name} - 论文对比` : "工作区"; }, [project]);
-  useEffect(() => {
-    if (seen.current === null) { seen.current = signature; return; }
-    if (seen.current === signature) return;
-    seen.current = signature;
-    request.current += 1;
-    setTable(null);
-    setError("");
-    setBusy(false);
-  }, [signature]);
-  useEffect(() => {
-    const initial = params.getAll("pick").filter(key => project?.papers[key]);
-    if (!initial.length) return;
-    setPicked(current => {
-      const next = [...new Set([...current, ...initial])].slice(0, 5);
-      return next.join("|") === current.join("|") ? current : next;
-    });
-  }, [params, project]);
+  const [request, setRequest] = useState({ seq: 0, refresh: false });
+  const strip = useRef<HTMLDivElement>(null);
+  const cache = useRef(new Map<string, Recommendations>());
   const entries = Object.entries(project?.papers ?? {});
-  const states = useAnalysisStates(entries.map(([key]) => key));
-  if (!project) return <MissingWorkspace />;
-  const selected = entries.filter(([key]) => picked.includes(key));
-  const pending = selected.some(([key]) => states[key] === undefined);
-  const blockers = selected.flatMap(([key, item]) => {
-    const reason = compareBlockReason(states[key]);
-    return reason && reason !== "状态读取中" ? [{ key, title: item.paper.title, reason }] : [];
-  });
-  const ready = selected.length >= 2 && selected.length <= 5 && !pending && !blockers.length;
+  const requested = params.get("seed") || params.get("pick") || "";
+  const seed = entries.some(([key]) => key === requested) ? requested : entries[0]?.[0] ?? "";
+  const paper = project?.papers[seed]?.paper;
+  const visible = entries.filter(([, item]) => `${item.paper.title} ${item.paper.authors.join(" ")} ${item.paper.year ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const here = `/w/${id}/compare?${new URLSearchParams({ seed })}`;
 
-  function toggle(key: string) {
-    setPicked(current => current.includes(key) ? current.filter(item => item !== key) : current.length >= 5 ? current : [...current, key]);
+  useEffect(() => { document.title = `${project?.name ?? "工作区"} - 论文关系`; }, [project?.name]);
+  useEffect(() => {
+    if (!seed) { setData(null); setError(""); setLoading(false); return; }
+    const controller = new AbortController();
+    const cacheKey = `${id}:${seed}`;
+    const cached = cache.current.get(cacheKey);
+    setData(cached ?? null); setError("");
+    if (cached && !request.refresh) { setLoading(false); return () => controller.abort(); }
+    setLoading(true);
+    fetchRecommendations(seed, request.refresh, controller.signal).then(result => {
+      if (controller.signal.aborted) return;
+      cache.current.set(cacheKey, result); setData(result);
+    }).catch((err: Error) => { if (!controller.signal.aborted) setError(err.message || "关系网络加载失败，请重试"); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [id, seed, request]);
+
+  if (!project) return <MissingWorkspace />;
+  function choose(key: string) {
+    if (key === seed) return;
+    setParams({ seed: key });
+    setRequest(r => ({ seq: r.seq + 1, refresh: false }));
   }
-  function run() {
-    if (!ready || busy) return;
-    const token = ++request.current;
-    const ids = selected.map(([key]) => key);
-    setBusy(true);
-    setError("");
-    compareLibrary(ids).then(data => { if (request.current === token) setTable(data); })
-      .catch((err: Error) => { if (request.current === token) setError(err.message || "生成对比表失败"); })
-      .finally(() => { if (request.current === token) setBusy(false); });
-  }
-  return <main className={entries.length ? "ws-page" : "ws-page ws-empty-page"}>
-    <header className="ws-page-head">
-      <div>
-        <h1>论文对比</h1>
-        <p>{entries.length
-          ? "选择 2–5 篇论文。选中后先看基本信息；全部完成单篇分析后，再生成研究内容对比表。打开本页或生成对比表都不会查找相关论文。"
-          : "选择 2–5 篇论文，在全部完成单篇分析后对比研究内容。"}</p>
+  return <main className="ws-page relations-page">
+    <header className="relations-heading">
+      <div><div className="relations-eyebrow">PAPER CONNECTIONS <span>发现研究的下一条线索</span></div>
+        <h1>论文关系<span>从一篇出发，连接更多可能</span></h1>
+        <p>以论文为中心，从引用关联、主题相似和关键词关联三个角度探索相关文献。</p>
       </div>
+      <Button icon={<ReloadOutlined />} loading={loading} disabled={!seed} onClick={() => setRequest(r => ({ seq: r.seq + 1, refresh: true }))}>更新关系</Button>
     </header>
-    {!entries.length ? <CompareEmpty workspaceId={id} /> : <>
-      <ul className="ws-pick">
-        {entries.map(([key, item]) => <li key={key}>
-          <Checkbox checked={picked.includes(key)} disabled={!picked.includes(key) && picked.length >= 5} onChange={() => toggle(key)}>{item.paper.title}</Checkbox>
-          <span className="ws-pick-side">
-            <AnalysisBadge state={states[key]} />
-            <Link to={workspacePaperPath(id, key, here)}>查看分析</Link>
-          </span>
-        </li>)}
-      </ul>
-      {selected.length < 2 ? <p className="empty-hint">{selected.length ? "再选一篇就可以并排查看基本信息。" : "勾选 2–5 篇论文后在这里比较。"}</p> : <>
-        <h2 className="compare-section-title">基本信息</h2>
-        <div className="table-scroll" tabIndex={0} aria-label="论文基本信息对比">
-          <table className="compare-table" style={{ "--compare-cols": selected.length } as CSSProperties}>
-            <thead><tr><th scope="col">项目</th>{selected.map(([key, item]) => <th scope="col" key={key}><Link to={workspacePaperPath(id, key, here)}>{item.paper.title}</Link></th>)}</tr></thead>
-            <tbody>
-              <tr><th scope="row">年份</th>{selected.map(([key, item]) => <td key={key}>{item.paper.year ?? "未知"}</td>)}</tr>
-              <tr><th scope="row">作者</th>{selected.map(([key, item]) => <td key={key}>{formatAuthors(item.paper.authors, 4)}</td>)}</tr>
-              <tr><th scope="row">期刊／会议</th>{selected.map(([key, item]) => <td key={key}>{item.paper.venue || "未知"}</td>)}</tr>
-              <tr><th scope="row">被引用次数</th>{selected.map(([key, item]) => <td key={key}>{item.paper.citation_count ?? "未知／暂不可用"}</td>)}</tr>
-              <tr><th scope="row">摘要</th>{selected.map(([key, item]) => <td key={key} className="compare-abstract">{item.paper.abstract || "无摘要"}</td>)}</tr>
-            </tbody>
-          </table>
+    {!entries.length ? <div className="relations-empty"><Empty description="工作区还没有论文，先添加一篇，开始探索它的关系网络。" /><Link to="/search">去搜索论文 →</Link></div> : <>
+      <section className="seed-picker" aria-label="选择中心论文">
+        <div className="seed-picker-head"><div><strong>中心论文</strong><span>{entries.length} 篇 · 点击切换探索起点</span></div>
+          <Input prefix={<SearchOutlined />} placeholder="搜索标题、作者或年份" aria-label="搜索工作区论文" value={query} onChange={e => setQuery(e.target.value)} allowClear />
         </div>
-      </>}
-      <div className="ws-compare-actions">
-        <span className="small-print">生成对比表只读取已保存的分析结果，不会重新分析，也不会调用大模型。</span>
-        <Button type="primary" disabled={!ready} loading={busy} onClick={run}>生成对比表</Button>
-      </div>
-      {pending && selected.length >= 2 ? <p className="muted">正在确认各论文的分析状态。</p> : null}
-      {blockers.length ? <Alert type="warning" showIcon message="以下论文尚未完成分析，不能生成对比表" description={
-        <ul className="compare-blockers">{blockers.map(item => <li key={item.key}>{item.title}（{item.reason}）<Link to={workspacePaperPath(id, item.key, here)}>进入分析页</Link></li>)}</ul>
-      } /> : null}
-      {error ? <Alert type="error" showIcon message={error} /> : null}
-      {table ? <CompareMatrix table={table} hrefFor={paperId => workspacePaperPath(id, paperId, here)} /> : null}
+        <div className="seed-strip-wrap">
+          <button className="seed-scroll" aria-label="向左浏览论文" onClick={() => strip.current?.scrollBy({ left: -420, behavior: "smooth" })}><LeftOutlined /></button>
+          <div className="seed-strip" ref={strip}>
+            {visible.map(([key, item], index) => <button key={key} className={`seed-card${key === seed ? " is-selected" : ""}`} aria-pressed={key === seed} onClick={() => choose(key)} title={item.paper.title}>
+              <span className="seed-card-meta"><span>{String(index + 1).padStart(2, "0")}</span><span>{item.paper.year ?? "年份未知"}{key === seed ? " · 探索中" : ""}</span></span>
+              <strong>{item.paper.title}</strong><span className="seed-card-author">{item.paper.authors.slice(0, 2).join(" · ") || "作者未知"}</span>
+            </button>)}
+            {!visible.length ? <div className="seed-no-results">未找到匹配的论文，试试其他标题或作者。</div> : null}
+          </div>
+          <button className="seed-scroll" aria-label="向右浏览论文" onClick={() => strip.current?.scrollBy({ left: 420, behavior: "smooth" })}><RightOutlined /></button>
+        </div>
+      </section>
+      {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRequest(r => ({ seq: r.seq + 1, refresh: false }))}>重试</Button>} /> : null}
+      {data?.warnings.map(warning => <Alert key={warning} type="warning" showIcon message={warning} />)}
+      {paper && data ? <PaperRelationMap key={`${id}:${seed}`} data={data} paper={paper} from={here} workspaceId={id} centerId={seed} /> : <div className="relations-loading" role="status"><div className="relations-loading-orbit"><span /><span /><span /><i /></div><Spin /><h2>{loading ? "正在连接相关研究" : "等待探索"}</h2><p>{loading ? "正在查找引用、主题和关键词关联，首次探索可能需要片刻。" : "选择一篇论文，展开关系网络。"}</p></div>}
     </>}
   </main>;
 }

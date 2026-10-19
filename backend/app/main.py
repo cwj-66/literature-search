@@ -22,7 +22,7 @@ from app.schemas import (
     ResearchResume, ResearchStart, SearchResponse,
 )
 from app.services.analysis import analysis, analysis_store, attribution
-from app.services.knowledge_graph import knowledge_graph
+from app.services.knowledge_graph import knowledge_graph, themes
 from app.services.papers import ccf, library, metadata, upload
 from app.services.retrieval import hybrid, recommend
 from app.services.retrieval.search import SourceFailure, fetch_paper, normalize_query, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
@@ -104,6 +104,24 @@ async def fill_graph_citations(payload: CitationFillRequest):
         raise HTTPException(status_code=422, detail="论文标识不能为空或超过 300 字符")
     try:
         return await knowledge_graph.fill_citations(payload.paper_ids)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
+
+
+@app.get("/api/knowledge-graph/themes")
+async def get_knowledge_graph_themes(limit: int = Query(80, ge=1, le=2000)):
+    try:
+        return await themes.build(references=None, limit=limit)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="本地主题分析暂不可用，请稍后重试")
+
+
+@app.post("/api/knowledge-graph/themes")
+async def get_workspace_knowledge_graph_themes(references: list[str] = Body(default_factory=list, max_length=2000)):
+    if any(not ref.strip() or len(ref) > 300 for ref in references):
+        raise HTTPException(status_code=422, detail="论文标识不能为空或超过 300 字符")
+    try:
+        return await themes.build(references=references)
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="本地知识图谱暂不可用，请稍后重试") from None
 

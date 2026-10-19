@@ -270,6 +270,40 @@ export interface Recommendations {
   source_status?: { category: string; source: string; status: string; count: number; query?: string; message?: string }[];
 }
 
+export type ThemeQuadrant = "motor" | "basic" | "emerging" | "niche";
+
+export interface KnowledgeTheme {
+  id: string;
+  name: string;
+  description: string;
+  keywords: string[];
+  paper_ids: string[];
+  size: number;
+  centrality: number;
+  density: number;
+  quadrant: ThemeQuadrant;
+  by_year: Record<string, number>;
+}
+
+export interface ThemeEvolutionLink {
+  from: string;
+  to: string;
+  weight: number;
+  from_period: number;
+  to_period: number;
+  from_label: string;
+  to_label: string;
+}
+
+export interface KnowledgeThemesResponse {
+  themes: KnowledgeTheme[];
+  evolution: { periods: string[]; links: ThemeEvolutionLink[] };
+  years: number[];
+  total_papers: number;
+  analyzed_papers: number;
+  scope_note: string;
+}
+
 export interface PaperNetwork {
   paper_id: string;
   paper_title: string;

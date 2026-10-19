@@ -21,7 +21,7 @@ export function SelectionBar() {
       papers.forEach(paper => projects.add(paper));
       const refs = papers.map(paper => paper.local_id ?? paper.id);
       await prepareWorkspace(current.id, current.name, [...new Set([...Object.keys(current.papers), ...refs])]);
-      if (compare) navigate(`/w/${current.id}/compare?${new URLSearchParams(refs.map(ref => ["pick", ref]))}`);
+      if (compare) navigate(`/w/${current.id}/compare/table?${new URLSearchParams(refs.map(ref => ["pick", ref]))}`);
       else {
         navigate(`/w/${current.id}/research?papers=${encodeURIComponent(refs.join(","))}`);
       }

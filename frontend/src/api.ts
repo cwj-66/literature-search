@@ -1,4 +1,4 @@
-import type { AnalysisState, AnalyzePaperResult, CompareTable, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask, Conversation, ConversationSummary, ConversationMessage } from "./types";
+import type { AnalysisState, AnalyzePaperResult, CompareTable, KnowledgeThemesResponse, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask, Conversation, ConversationSummary, ConversationMessage } from "./types";
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
@@ -184,6 +184,10 @@ export function analyzePapers(body: { paper_ids: string[]; fields?: string[]; de
 
 export function fillGraphCitations(paperIds: string[], signal?: AbortSignal) {
   return postJson<{ queried: number; failed: number; linked: number; items: { id: string; title: string; status: string; note: string }[] }>("/api/knowledge-graph/citations", { paper_ids: paperIds }, signal);
+}
+
+export function fetchKnowledgeThemes(references: string[], signal?: AbortSignal) {
+  return postJson<KnowledgeThemesResponse>("/api/knowledge-graph/themes", references, signal);
 }
 
 export function compareLibrary(paperIds: string[], signal?: AbortSignal) {
