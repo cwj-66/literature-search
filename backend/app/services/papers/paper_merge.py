@@ -79,7 +79,7 @@ def combine(left: PaperOut, right: PaperOut) -> PaperOut:
     elif left.id.startswith("upload:"):
         paper_id = left.id
     else:
-        paper_id = right.id if right.id.startswith("upload:") else paper_identity(arxiv_id, doi, s2_id)
+        paper_id = right.id if right.id.startswith("upload:") else left.id
     return PaperOut(
         id=paper_id,
         title=left.title or right.title,

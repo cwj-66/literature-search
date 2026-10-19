@@ -1,104 +1,46 @@
-"""decompose_question tool: resolve goals, counts, year constraints and queries."""
-
+"""Model interpretation is validated, never replaced by lexical topic/count rules."""
 import json
-import os
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
-
 from app.infrastructure import llm
-from app.tools import decompose_question as tool
-
-
-PLAN = {
-    "queries": ['("retrieval-augmented generation") AND ("application")'],
-    "exclusions": [],
-    "search_plan": {"core_concepts": ["retrieval-augmented generation"]},
-    "_llm_used": 1,
-}
-
+from app.tools.decompose_question import decompose_question
+from finding_fixtures import PLAN, dumps
 
 class DecomposeQuestionTests(unittest.IsolatedAsyncioTestCase):
-    async def test_default_count_and_queries(self):
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)) as planner:
-            result = await tool.decompose_question("帮我找有关 RAG 应用的论文")
-        planner.assert_awaited_once_with("帮我找有关 RAG 应用的论文")
-        self.assertEqual(result["status"], "completed")
-        self.assertFalse(result["needs_clarification"])
-        self.assertEqual(result["target_count"], 5)
-        self.assertEqual(result["queries"], PLAN["queries"])
-        self.assertEqual(result["core_topics"], ["retrieval-augmented generation"])
-        self.assertEqual(result["llm_calls"], 1)
+    async def test_model_interpretation_and_context_are_used(self):
+        history=['用户：研究句子表示。助手：你希望多少篇？']
+        with patch.object(llm,'complete',new=AsyncMock(return_value=dumps(PLAN))) as complete:
+            result=await decompose_question('先给我来三份合适的材料',history)
+        self.assertEqual(result['target_count'],3)
+        self.assertEqual(result['resolved_question'],PLAN['resolved_question'])
+        self.assertEqual(result['queries'],PLAN['queries'])
+        payload=json.loads(complete.call_args.args[0][1]['content'])
+        self.assertEqual(payload['context'],history)
+        self.assertEqual(payload['question'],'先给我来三份合适的材料')
 
-    async def test_explicit_count_and_years(self):
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)):
-            result = await tool.decompose_question("帮我找3篇2023到2025年RAG应用的论文")
-        self.assertEqual(result["target_count"], 3)
-        self.assertEqual(result["constraints"], {"year_from": 2023, "year_to": 2025})
+    async def test_model_dates_and_time_preference_preserved(self):
+        plan={**PLAN,'constraints':{'year_from':2023,'year_to':2025,'temporal':'recent','requirements':['医疗场景']}}
+        with patch.object(llm,'complete',new=AsyncMock(return_value=dumps(plan))):
+            result=await decompose_question('这几年相关的就行')
+        self.assertEqual(result['constraints'],plan['constraints'])
 
-    async def test_single_year_becomes_range(self):
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)):
-            result = await tool.decompose_question("帮我找2024年的RAG论文")
-        self.assertEqual(result["constraints"], {"year_from": 2024, "year_to": 2024})
+    async def test_missing_topic_is_a_model_clarification(self):
+        plan={**PLAN,'queries':[],'core_topics':[],'needs_clarification':True,'clarification_question':'想找哪个研究主题？'}
+        with patch.object(llm,'complete',new=AsyncMock(return_value=dumps(plan))):
+            result=await decompose_question('接着来')
+        self.assertEqual(result['status'],'needs_clarification')
+        self.assertEqual(result['queries'],[])
 
-    async def test_relative_years_not_invented(self):
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)):
-            result = await tool.decompose_question("帮我找近三年RAG应用的论文")
-        self.assertEqual(result["constraints"], {"year_from": None, "year_to": None})
+    async def test_invalid_plan_retries_then_fails_without_keyword_fallback(self):
+        for response in ['not json',dumps({**PLAN,'queries':['x'*301]}),dumps({**PLAN,'constraints':{'year_from':2025,'year_to':2020}})]:
+            with self.subTest(response=response),patch.object(llm,'complete',new=AsyncMock(return_value=response)) as complete:
+                result=await decompose_question('找5篇RAG医疗应用论文')
+            self.assertEqual(result['status'],'failed')
+            self.assertEqual(result['queries'],[])
+            self.assertEqual(complete.await_count,2)
 
-    async def test_continuation_without_context_needs_clarification(self):
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock()) as planner, \
-             patch.object(llm, "complete", new=AsyncMock()) as complete:
-            result = await tool.decompose_question("那继续找")
-        planner.assert_not_awaited()
-        complete.assert_not_awaited()
-        self.assertEqual(result["status"], "needs_clarification")
-        self.assertTrue(result["needs_clarification"])
-        self.assertTrue(result["clarification_question"])
-
-    async def test_continuation_with_context_resolves_topic(self):
-        resolved = json.dumps({"resolved_question": "继续找5篇文本向量模型论文", "ambiguous": False})
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)) as planner, \
-             patch.object(llm, "complete", new=AsyncMock(return_value=resolved)):
-            result = await tool.decompose_question("那继续找", context=["用户：帮我找5篇有关向量大模型的论文"])
-        planner.assert_awaited_once_with("继续找5篇文本向量模型论文")
-        self.assertEqual(result["status"], "completed")
-        self.assertEqual(result["target_count"], 5)
-        self.assertEqual(result["llm_calls"], 2)
-
-    async def test_continuation_with_useless_context_needs_clarification(self):
-        ambiguous = json.dumps({"resolved_question": "", "ambiguous": True})
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock()) as planner, \
-             patch.object(llm, "complete", new=AsyncMock(return_value=ambiguous)):
-            result = await tool.decompose_question("那继续找", context=["用户：你好"])
-        planner.assert_not_awaited()
-        self.assertTrue(result["needs_clarification"])
-
-    async def test_long_continuation_with_context_resolves_topic(self):
-        question = "那继续找，这次只要2023年以后关于医疗场景的论文，请多找一些"
-        resolved = json.dumps({"resolved_question": "继续找5篇2023年以后医疗场景的向量模型论文", "ambiguous": False})
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)) as planner, \
-             patch.object(llm, "complete", new=AsyncMock(return_value=resolved)) as complete:
-            result = await tool.decompose_question(question, context=["用户：帮我找5篇有关向量大模型的论文"])
-        complete.assert_awaited_once()
-        planner.assert_awaited_once_with("继续找5篇2023年以后医疗场景的向量模型论文")
-        self.assertEqual(result["status"], "completed")
-
-    async def test_re_prefixed_new_question_is_not_continuation(self):
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)) as planner, \
-             patch.object(llm, "complete", new=AsyncMock()) as complete:
-            result = await tool.decompose_question("再生医学的最新进展综述")
-        complete.assert_not_awaited()
-        planner.assert_awaited_once_with("再生医学的最新进展综述")
-        self.assertEqual(result["status"], "completed")
-
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {"PAPER_DB_PATH": str(Path(self.temp.name) / "papers.sqlite3"),
-                                           "RESEARCH_CHECKPOINT": "memory"})
-        self.env.start()
-
-    def tearDown(self):
-        self.env.stop()
-        self.temp.cleanup()
+    async def test_provider_failure_is_explicit(self):
+        with patch.object(llm,'complete',new=AsyncMock(side_effect=llm.AnalysisError('unavailable'))):
+            result=await decompose_question('找论文')
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['llm_calls'],1)

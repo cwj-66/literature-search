@@ -123,7 +123,8 @@ class DirectChatTests(unittest.IsolatedAsyncioTestCase):
     async def test_router_failure_remains_conservative(self):
         with patch.object(llm, "complete", new=AsyncMock(side_effect=llm.AnalysisError("unavailable"))):
             result = await agent.router_node(agent.initial_state("一个不明确的请求"))
-        self.assertEqual(result["mode"], "plan")
+        self.assertEqual(result["stop_reason"], "需求理解暂不可用")
+        self.assertEqual(agent.route_route(result), "finish")
 
     async def test_direct_failure_does_not_launch_tools_or_invent_answer(self):
         for index, output in enumerate((llm.AnalysisError("provider failed"), "invalid json", '{"answer":"  "}')):

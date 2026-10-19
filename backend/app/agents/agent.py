@@ -28,7 +28,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from app.agents import discovery, store, workflow
+from app.agents import discovery, finding, store, workflow
 from app.agents.prompts import (
     AGENT_PROMPT_VERSION, CLAIMS_SYSTEM, DIRECT_SYSTEM, JUDGE_SOURCE_RULES, JUDGE_SYSTEM, REACT_FORMAT_RETRY,
     REACT_SYSTEM, ROUTER_SYSTEM, OPERATION_SYSTEM,
@@ -192,13 +192,15 @@ async def router_node(state: dict) -> dict:
                 mode = "react"
                 route_info = {"mode": mode, "rationale": "问题明确涉及论文或工作区，保留研究工具与证据流程", "source": "rule"}
         except llm.AnalysisError:
-            mode = "plan"
-            llm_delta = 1
-            route_info = {"mode": mode, "rationale": "路由不可用，回退到计划模式", "source": "rule"}
+            return {"stop_reason": "需求理解暂不可用", "answer": "暂时无法理解本次请求，请重试。尚未发起论文检索。",
+                    "llm_calls": state.get("llm_calls", 0) + 1,
+                    "events": with_event(state, {"step": "route", "reason": "需求理解失败，未执行检索"})}
     route_info["requested"] = requested
     if mode == "plan":
         domains = ["*"]
     task_kind = "chat" if mode == "direct" else ("operation" if WORKSPACE_OP.search(goal) or domains == ["knowledge"] else "research")
+    if mode != "direct" and research_intent == "discover" and not post_actions:
+        task_kind = "research"
     updates = {
         "goal": goal,
         "mode": mode,
@@ -209,10 +211,10 @@ async def router_node(state: dict) -> dict:
         "post_actions": post_actions if mode == "plan" else [],
         "llm_calls": state.get("llm_calls", 0) + llm_delta,
     }
-    years = _recent_years(goal) if state.get("year_from") is None and state.get("year_to") is None else None
-    if years and mode != "direct":
+    years = _recent_years(goal) if research_intent != "discover" and state.get("year_from") is None and state.get("year_to") is None else None
+    if years and mode != "direct" and research_intent != "discover":
         updates["year_from"], updates["year_to"] = years
-    slots = [] if mode == "direct" else _missing_slots(goal, {**state, **updates}, suggested)
+    slots = [] if mode == "direct" or (research_intent == "discover" and not post_actions) else _missing_slots(goal, {**state, **updates}, suggested)
     event = {"step": "route", "mode": mode, "reason": route_info["rationale"], "source": route_info["source"]}
     count = state.get("clarify_count", 0)
     if slots and count >= MAX_CLARIFY:
@@ -234,12 +236,14 @@ async def router_node(state: dict) -> dict:
     return updates
 
 
-def route_route(state: dict) -> Literal["direct", "plan", "react", "clarify", "finish"]:
+def route_route(state: dict) -> Literal["direct", "plan", "react", "clarify", "finish", "finding"]:
     if state.get("stop_reason"):
         return "finish"
     if state.get("missing_slots"):
         return "clarify"
     mode = state.get("mode")
+    if mode != "direct" and state.get("research_intent") == "discover" and not state.get("post_actions") and state.get("task_kind") != "operation":
+        return "finding"
     return mode if mode in ("direct", "plan") else "react"
 
 
@@ -1009,13 +1013,18 @@ def finish_node(state: dict) -> dict:
         state = {**state, **selection}
     task_id = state.get("task_id")
     reason = state.get("stop_reason") or budget_exhausted(state) or "没有可继续的动作"
-    if state.get("output_mode") == "bibliography" and state.get("recommended_ids") is not None and not state.get("stop_reason"):
+    if state.get("output_mode") == "bibliography" and state.get("workflow_stage") == "select" and state.get("recommended_ids") is not None and not state.get("stop_reason"):
         reason = "书目筛选完成"
     if task_id and (state.get("cancelled") or is_cancel_requested(task_id)):
         store.clear_flag(task_id)
     if limited(state):
         reason = "来源限流，返回部分结果" if state.get("papers") else "来源限流，未取得候选论文"
     updates = {"stop_reason": reason, "events": with_event(state, {"step": "stop", "reason": reason})}
+    if (state.get("search_plan") or {}).get("pipeline") == "semantic-v1" and state.get("workflow_stage") != "select" and reason != "书目筛选完成":
+        count = len(state.get("recommended_ids") or [])
+        updates["answer"] = f"任务已停止：{reason}。已保留 {count} 篇完成相关性筛选的推荐；其余候选尚未完成筛选。"
+        if state.get("stop_reason") in ("failed", "needs_clarification"):
+            updates["answer"] = state.get("answer")
     answer = state.get("answer")
     finalized = any(event.get("step") == "finalize" for event in state.get("events") or [])
     if state.get("mode") != "direct" and (state.get("react_turns") or state.get("workflow_stage")):
@@ -1060,6 +1069,9 @@ def build(checkpointer=None):
         return run_node
 
     graph.add_node("router", router_node)
+    graph.add_node("plan_finding", finding.plan_node)
+    graph.add_node("search_finding", finding.search_node)
+    graph.add_node("select_finding", finding.select_node)
     graph.add_node("clarify", clarify_node)
     graph.add_node("gate_direct", gate_node)
     graph.add_node("direct_answer", direct_answer_node)
@@ -1090,7 +1102,10 @@ def build(checkpointer=None):
     graph.add_node("gate_done", gate_node)
     graph.add_node("finish", finish_node)
     graph.add_edge(START, "router")
-    graph.add_conditional_edges("router", route_route, {"direct": "gate_direct", "plan": "plan", "react": "react", "clarify": "clarify", "finish": "finish"})
+    graph.add_conditional_edges("router", route_route, {"direct": "gate_direct", "plan": "plan", "react": "react", "clarify": "clarify", "finish": "finish", "finding": "plan_finding"})
+    graph.add_conditional_edges("plan_finding", finding.plan_route, {"search": "search_finding", "finish": "finish"})
+    graph.add_edge("search_finding", "select_finding")
+    graph.add_conditional_edges("select_finding", finding.select_route, {"search": "search_finding", "finish": "finish"})
     graph.add_conditional_edges("clarify", clarify_route, {"router": "router", "finish": "finish"})
     graph.add_conditional_edges("gate_direct", gate_route, {"finish": "finish", "continue": "direct_answer"})
     graph.add_edge("direct_answer", "gate_done")

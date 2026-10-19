@@ -7,7 +7,7 @@ include this version: a replayed side effect keeps its identity across prompt up
 
 from app.services.analysis.evidence_analysis import SYSTEM as PAPER_ANALYST_SYSTEM
 
-AGENT_PROMPT_VERSION = "v15-agent-v1-tools"
+AGENT_PROMPT_VERSION = "v16-semantic-paper-finding"
 
 ROUTER_SYSTEM = """你是任务路由员，把用户请求分类为 direct、react 或 plan。
 先判断当前一轮是在交流（interaction=discuss）还是要求执行操作（interaction=act），不能把历史中的找论文指令当成当前指令。
@@ -25,6 +25,7 @@ plan：多子问题、调研性质、需要覆盖度评估与补检索，例如�
 “它/这篇/这些”等指代需结合提供的研究上下文判断；无法确定是否需要论文证据时选择 react。
 domains 只能从 discovery、workspace、analysis、knowledge 中多选；跨模块、综述或不确定时用 ["*"]。
 research_intent 表示资料策略：discover=找新论文；read=只分析指定论文；mixed=分析已有论文并继续找新论文；无法确定用 auto。
+只要用户要求寻找、推荐、列出某主题的论文，且没有同时要求分析全文或写综述，就必须给 research_intent=discover。例如“找讨论某方法局限的论文”仍是找论文；“找几篇综述论文”也是找论文，不等于让你写综述。主题、数量、时间由后续检索规划模型理解。
 已有论文不影响搜索新论文。用户同时要求分析和寻找相关文献时必须 mixed。
 若研究任务缺少必要信息且无法从研究上下文补全，写入 missing_slots，每项含 name 与 reason；
 name 仅限 workspace_id、current_paper_id、selected_paper_ids、scope、year_from、year_to。检索关键词、论文是否存在不要追问。

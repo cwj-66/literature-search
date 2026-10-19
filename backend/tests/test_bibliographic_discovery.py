@@ -40,7 +40,7 @@ class DiscoveryConstraintsTests(unittest.TestCase):
                             ("top 5 RAG application papers", 5), ("find 3 RAG papers", 3)]:
             with self.subTest(goal=goal):
                 self.assertEqual(agent._result_hint(goal)[0], count)
-                self.assertEqual(initial_state(goal)["result_limit"], count)
+                self.assertIsNone(initial_state(goal)["result_limit"])  # The finding planner supplies the count.
         self.assertIsNone(discovery.requested_count("找2023年的RAG论文"))
 
     def test_detail_and_review_requests_keep_research_path(self):

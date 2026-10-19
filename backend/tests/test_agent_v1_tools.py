@@ -1,104 +1,50 @@
-"""Agent handlers for decompose_question / rerank_papers: state adaptation layer."""
-
-import json
-import os
-import tempfile
-import unittest
+"""Registered tools share the same model-backed implementation as the finding graph."""
+import json,os,tempfile,unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
-
+from unittest.mock import AsyncMock,patch
 from app.agents import tooling
-from app.services.retrieval import ranking
+from app.infrastructure import llm
 from app.tools import research
-
-
-PLAN = {
-    "queries": ['("text embedding")', '("sentence embeddings") AND ("E5")'],
-    "exclusions": [],
-    "search_plan": {"core_concepts": ["text embedding"], "must_have_facets": [["text embedding"]]},
-    "_llm_used": 1,
-}
-
-EMBEDDING_PAPER = {"id": "arxiv:emb1", "title": "Text Embedding Models for Dense Retrieval",
-                   "abstract": "text embedding models study", "year": 2024}
-IR_PAPER = {"id": "arxiv:ir1", "title": "Web Search Ranking", "abstract": "information retrieval", "year": 2022}
-
-
-def score_all(papers, query, *, min_candidates=20):
-    return [{**p, "rank_score": 9} for p in papers], 1
-
+from finding_fixtures import PLAN,CANDIDATES,selection,dumps
 
 class AgentV1ToolHandlerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_decompose_handler_writes_state(self):
-        state = {"goal": "帮我找5篇有关向量大模型的论文", "messages": [], "queries": [],
-                 "search_plan": {}, "llm_calls": 0, "year_from": None, "year_to": None}
-        with patch("app.services.analysis.attribution.plan_search", new=AsyncMock(return_value=PLAN)):
-            content, updates = await tooling._tool_decompose_question(state, {"question": state["goal"]})
-        report = json.loads(content)
-        self.assertEqual(report["status"], "completed")
-        self.assertEqual(updates["llm_calls"], 1)
-        self.assertEqual(len(updates["queries"]), 2)
-        self.assertTrue(all("text embedding" in query or "sentence embeddings" in query for query in updates["queries"]))
-        self.assertEqual(updates["search_plan"]["resolved_question"], "帮我找5篇有关向量大模型的论文")
-        self.assertEqual(updates["search_plan"]["target_count"], 5)
-        self.assertEqual(updates["search_plan"]["core_concepts"], ["text embedding"])
+    async def test_decompose_handler_writes_model_plan_without_rewriting(self):
+        state={'goal':'找论文','llm_calls':0,'queries':['stale query'],'messages':[]}
+        with patch.object(llm,'complete',new=AsyncMock(return_value=dumps(PLAN))):
+            content,updates=await tooling._tool_decompose_question(state,{'question':state['goal']})
+        self.assertEqual(updates['queries'],PLAN['queries'])
+        self.assertEqual(updates['result_limit'],PLAN['target_count'])
+        self.assertEqual(updates['llm_calls'],1)
 
-    async def test_decompose_handler_clarification_writes_nothing(self):
-        state = {"goal": "那继续找", "messages": [], "queries": [], "search_plan": {}, "llm_calls": 0}
-        content, updates = await tooling._tool_decompose_question(state, {"question": "那继续找"})
-        report = json.loads(content)
-        self.assertTrue(report["needs_clarification"])
-        self.assertNotIn("queries", updates)
-        self.assertNotIn("search_plan", updates)
+    async def test_failed_decomposition_does_not_install_a_fake_plan(self):
+        state={'goal':'找论文','llm_calls':0,'messages':[]}
+        with patch.object(llm,'complete',new=AsyncMock(side_effect=llm.AnalysisError('failed'))):
+            content,updates=await tooling._tool_decompose_question(state,{'question':state['goal']})
+        self.assertEqual(json.loads(content)['status'],'failed')
+        self.assertNotIn('queries',updates)
+        self.assertEqual(updates['llm_calls'],1)
 
-    async def test_rerank_handler_updates_recommendation_state(self):
-        state = {"goal": "帮我找5篇有关向量大模型的论文", "papers": [EMBEDDING_PAPER, IR_PAPER],
-                 "queries": [], "search_plan": {}, "llm_calls": 0, "year_from": None, "year_to": None,
-                 "source_errors": {}}
-        with patch.object(ranking, "llm_rank", new=AsyncMock(side_effect=score_all)):
-            content, updates = await tooling._tool_rerank_papers(
-                state, {"resolved_question": "帮我找5篇有关向量大模型的论文"})
-        report = json.loads(content)
-        self.assertEqual(updates["recommended_ids"], ["arxiv:emb1"])
-        self.assertIn("arxiv:emb1", updates["recommendation_reasons"])
-        self.assertEqual(report["recommended_ids"], updates["recommended_ids"])
-        self.assertEqual(updates["llm_calls"], 1)
-        self.assertEqual(updates["papers"][0]["rank_score"], 9)
+    async def test_rerank_handler_uses_model_selection_and_provenance(self):
+        state={'goal':'找向量模型论文','papers':CANDIDATES,'search_plan':PLAN,'llm_calls':0,'source_errors':{}}
+        with patch.object(llm,'complete',new=AsyncMock(return_value=dumps(selection()))):
+            content,updates=await tooling._tool_rerank_papers(state,{'resolved_question':PLAN['resolved_question']})
+        self.assertEqual(updates['recommended_ids'],['arxiv:1','arxiv:2','arxiv:3'])
+        self.assertEqual(json.loads(content)['recommended_ids'],updates['recommended_ids'])
+        self.assertEqual(updates['papers'][0]['rank_score'],9)
 
-    async def test_rerank_handler_empty_pool_errors(self):
-        state = {"goal": "找论文", "papers": [], "llm_calls": 0, "year_from": None, "year_to": None}
-        content, updates = await tooling._tool_rerank_papers(state, {"resolved_question": "找论文"})
-        report = json.loads(content)
-        self.assertIn("error", report)
-        self.assertNotIn("recommended_ids", updates)
+    async def test_source_failures_remain_visible_in_tool_report(self):
+        state={'goal':'找论文','papers':CANDIDATES,'llm_calls':0,'source_errors':{'semantic_scholar':'timeout'}}
+        with patch.object(llm,'complete',new=AsyncMock(return_value=dumps(selection()))):
+            content,_=await tooling._tool_rerank_papers(state,{'resolved_question':PLAN['resolved_question'],'target_count':5})
+        self.assertIn('来源',json.loads(content)['shortfall_reason'])
 
-    async def test_rerank_handler_shortfall_mentions_source_errors(self):
-        state = {"goal": "帮我找5篇有关向量大模型的论文", "papers": [EMBEDDING_PAPER],
-                 "queries": [], "search_plan": {}, "llm_calls": 0, "year_from": None, "year_to": None,
-                 "source_errors": {"semantic_scholar": "timeout"}}
-        with patch.object(ranking, "llm_rank", new=AsyncMock(side_effect=score_all)):
-            content, _ = await tooling._tool_rerank_papers(
-                state, {"resolved_question": "帮我找5篇有关向量大模型的论文", "target_count": 5})
-        report = json.loads(content)
-        self.assertFalse(report["enough"])
-        self.assertIn("来源", report["shortfall_reason"])
+    async def test_empty_pool_reports_failure(self):
+        content,updates=await tooling._tool_rerank_papers({'papers':[]},{'resolved_question':'找论文'})
+        self.assertEqual(json.loads(content)['status'],'failed')
+        self.assertNotIn('recommended_ids',updates)
 
     def test_tools_registered_and_budgeted(self):
-        for name in ("decompose_question", "rerank_papers"):
-            self.assertIn(name, research.CATALOG)
-            self.assertEqual(research.CATALOG[name]["module"], "discovery")
-            self.assertIn(name, tooling.TOOL_REGISTRY)
-        self.assertIs(tooling.TOOL_REGISTRY["decompose_question"], tooling._tool_decompose_question)
-        self.assertIs(tooling.TOOL_REGISTRY["rerank_papers"], tooling._tool_rerank_papers)
-        self.assertIn("decompose_question", tooling.LLM_TOOLS)
-        self.assertIn("rerank_papers", tooling.LLM_TOOLS)
-
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {"PAPER_DB_PATH": str(Path(self.temp.name) / "papers.sqlite3"),
-                                           "RESEARCH_CHECKPOINT": "memory"})
-        self.env.start()
-
-    def tearDown(self):
-        self.env.stop()
-        self.temp.cleanup()
+        for name in ('decompose_question','rerank_papers'):
+            self.assertIn(name,research.CATALOG)
+            self.assertIn(name,tooling.TOOL_REGISTRY)
+            self.assertIn(name,tooling.LLM_TOOLS)

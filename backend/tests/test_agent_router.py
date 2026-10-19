@@ -149,8 +149,8 @@ class AgentRouterTests(RouterTestBase):
         self.assertEqual(mocks[0].call_count, 0)
         self.assertEqual(mocks[1].call_count, 1)
 
-    async def test_router_llm_failure_falls_back_to_plan(self):
-        """路由 LLM 失败 → 回退 plan（更彻底），事件记录回退，失败尝试计 1 次调用。"""
+    async def test_router_llm_failure_stops_without_guessing_a_search(self):
+        """A failed interpretation must not launch the legacy planning workflow."""
         managers = self.managers([llm.AnalysisError("模型调用失败")])
         mocks = [m.start() for m in managers]
         try:
@@ -158,11 +158,12 @@ class AgentRouterTests(RouterTestBase):
         finally:
             for m in reversed(managers):
                 m.stop()
-        self.assertEqual(result["status"], "waiting")  # 回退到计划流并等待审批
-        self.assertEqual(result["route"]["source"], "rule")
-        self.assertEqual(result["route"]["mode"], "plan")
+        self.assertEqual(result["status"], "done")
+        self.assertEqual(result["search_count"], 0)
+        self.assertIsNone(result["interrupt"])
+        mocks[0].assert_not_awaited()
         route_event = next(e for e in result["events"] if e["step"] == "route")
-        self.assertIn("回退", route_event["reason"])
+        self.assertIn("失败", route_event["reason"])
         self.assertEqual(result["llm_calls"], 1)  # 失败的尝试仍计费一次
 
     async def test_router_decision_cached(self):

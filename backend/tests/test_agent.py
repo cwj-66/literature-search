@@ -87,11 +87,14 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         # 覆盖度评估不可用时按规则回退，保证测试离线、确定性
         self.llm_guard = patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=llm.AnalysisError("模型调用失败")))
         self.llm_guard.start()
+        self.route_guard = patch("app.agents.agent._llm_route", new=AsyncMock(return_value={"mode": "plan", "rationale": "测试计划恢复", "research_intent": "auto"}))
+        self.route_guard.start()
         agent._GRAPH = None
         agent._CHECKPOINTER = None
 
     async def asyncTearDown(self):
         await agent.reset_graph()
+        self.route_guard.stop()
         self.llm_guard.stop()
         self.env.stop()
         self.temp.cleanup()
@@ -122,11 +125,14 @@ class AgentHitlTests(unittest.IsolatedAsyncioTestCase):
         self.env.start()
         self.llm_guard = patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=llm.AnalysisError("模型调用失败")))
         self.llm_guard.start()
+        self.route_guard = patch("app.agents.agent._llm_route", new=AsyncMock(return_value={"mode": "plan", "rationale": "测试计划恢复", "research_intent": "auto"}))
+        self.route_guard.start()
         agent._GRAPH = None
         agent._CHECKPOINTER = None
 
     async def asyncTearDown(self):
         await agent.reset_graph()
+        self.route_guard.stop()
         self.llm_guard.stop()
         self.env.stop()
         self.temp.cleanup()
@@ -559,11 +565,14 @@ class AgentSqliteCheckpointTests(unittest.IsolatedAsyncioTestCase):
         self.env.start()
         self.llm_guard = patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=llm.AnalysisError("模型调用失败")))
         self.llm_guard.start()
+        self.route_guard = patch("app.agents.agent._llm_route", new=AsyncMock(return_value={"mode": "plan", "rationale": "测试计划恢复", "research_intent": "auto"}))
+        self.route_guard.start()
         await agent.reset_graph()
 
     async def asyncTearDown(self):
         await agent.reset_graph()
         await asyncio.sleep(0.05)  # 让 aiosqlite 后台线程落定，避免 Windows 下偶发访问冲突
+        self.route_guard.stop()
         self.llm_guard.stop()
         self.env.stop()
         self.temp.cleanup()

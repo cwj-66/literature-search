@@ -108,11 +108,14 @@ class AgentRecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.env.start()
         self.llm_guard = patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=llm.AnalysisError("模型调用失败")))
         self.llm_guard.start()
+        self.route_guard = patch("app.agents.agent._llm_route", new=AsyncMock(return_value={"mode": "plan", "rationale": "测试计划恢复", "research_intent": "auto"}))
+        self.route_guard.start()
         await agent.reset_graph()
 
     async def asyncTearDown(self):
         await agent.reset_graph()
         await asyncio.sleep(0.05)  # 让 aiosqlite 后台线程落定，避免 Windows 下偶发访问冲突
+        self.route_guard.stop()
         self.llm_guard.stop()
         self.env.stop()
         self.temp.cleanup()
@@ -194,6 +197,8 @@ class ResearchApiTests(unittest.IsolatedAsyncioTestCase):
         self.env.start()
         self.llm_guard = patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=llm.AnalysisError("模型调用失败")))
         self.llm_guard.start()
+        self.route_guard = patch("app.agents.agent._llm_route", new=AsyncMock(return_value={"mode": "plan", "rationale": "测试计划恢复", "research_intent": "auto"}))
+        self.route_guard.start()
         agent._GRAPH = None
         agent._CHECKPOINTER = None
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
@@ -201,6 +206,7 @@ class ResearchApiTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.client.aclose()
         await agent.reset_graph()
+        self.route_guard.stop()
         self.llm_guard.stop()
         self.env.stop()
         self.temp.cleanup()

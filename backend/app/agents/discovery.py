@@ -12,6 +12,64 @@ FACETS = [(r"应用|落地|\bapplications?\b", APPLICATION),
           (r"医疗|医学|\b(?:medical|clinical|healthcare)\b", ["medical", "clinical", "healthcare", "medicine", "医疗", "医学"]),
           (r"教育|\beducation\b", ["education", "educational", "teaching", "learning support", "教育"])]
 
+EARLY_HINT = re.compile(r"早期|最早|最先|最初|奠基|经典|开山")
+RECENT_HINT = re.compile(r"最新|新近|最近")
+EN_TEMPORAL_WORDS = {"early", "earliest", "foundational", "seminal", "original", "pioneering",
+                     "first", "recent", "latest", "newest", "novel"}
+
+
+def is_temporal_term(term) -> bool:
+    text = str(term or "").strip()
+    if not text:
+        return False
+    if text.casefold() in EN_TEMPORAL_WORDS:
+        return True
+    return bool(EARLY_HINT.search(text) or RECENT_HINT.search(text))
+
+
+def temporal_of(goal) -> str | None:
+    text = goal or ""
+    if EARLY_HINT.search(text):
+        return "early"
+    if RECENT_HINT.search(text):
+        return "recent"
+    lowered = text.casefold()
+    if any(re.search(r"(?<![a-z0-9])" + re.escape(word) + r"(?![a-z0-9])", lowered) for word in
+           ("early", "earliest", "foundational", "seminal", "pioneering")):
+        return "early"
+    if any(re.search(r"(?<![a-z0-9])" + re.escape(word) + r"(?![a-z0-9])", lowered) for word in
+           ("latest", "newest", "recent")):
+        return "recent"
+    return None
+
+
+def temporal_free_groups(groups) -> list:
+    kept = []
+    for group in groups or []:
+        terms = [term for term in group if not is_temporal_term(term)]
+        if terms:
+            kept.append(terms)
+    return kept
+
+
+def strip_temporal(query: str) -> str:
+    """移除检索式中的时间限定词；布尔视图查询整组剔除，纯文本逐词剔除。"""
+    text = str(query or "").strip()
+    if not text:
+        return ""
+    from app.services.retrieval.search import parse_view_groups
+    groups = parse_view_groups(text)
+    if groups:
+        kept = temporal_free_groups(groups)
+        if not kept:
+            return ""
+        return " AND ".join("(" + " OR ".join(f'"{term}"' for term in group) + ")" for group in kept)
+    cleaned = EARLY_HINT.sub(" ", text)
+    cleaned = RECENT_HINT.sub(" ", cleaned)
+    for word in EN_TEMPORAL_WORDS:
+        cleaned = re.sub(r"(?<![a-z0-9])" + re.escape(word) + r"(?![a-z0-9])", " ", cleaned, flags=re.I)
+    return re.sub(r"\s+", " ", cleaned).strip(" ,;、") or text
+
 
 def number(text):
     if text.isdigit():
@@ -123,6 +181,7 @@ def select_bibliography(state):
         stopwords = {"find", "papers", "paper", "search", "recommend", "about", "please", "the", "and", "for", "top", "show", "give"}
         terms = [w for w in re.findall(r"[a-zA-Z]{3,}", goal) if w.casefold() not in stopwords]
         groups = [[term] for term in terms]
+    groups = temporal_free_groups(groups)
     found, reasons = [], {}
     for paper in state.get("papers") or []:
         if paper["id"] in (state.get("workflow_local_ids") or []):

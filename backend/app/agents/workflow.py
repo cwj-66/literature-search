@@ -207,7 +207,8 @@ async def search_node(state):
                      "gaps": _gap(state, f"检索失败:{type(exc).__name__}")}, []
         acc["events"] = with_event(state, {"step": "search", "query": query, "reason": "检索暂不可用，保留已有材料"})
     if len(acc.get("papers") or []) > ranking.DEFAULT_MIN_CANDIDATES and remaining_budget(acc)["llm_calls_left"] > 0:
-        ranked, llm_delta = await ranking.llm_rank(acc["papers"], query)
+        scoring_query = discovery.strip_temporal(query) or query
+        ranked, llm_delta = await ranking.llm_rank(acc["papers"], scoring_query)
         acc = {**acc, "papers": ranked, "llm_calls": acc.get("llm_calls", 0) + llm_delta}
     local = set(state.get("workflow_local_ids") or [])
     discovered = [p["id"] for p in acc.get("papers") or [] if p["id"] not in local]

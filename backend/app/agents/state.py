@@ -10,7 +10,6 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 from app.agents import store
-from app.agents.discovery import requested_count
 from app.tools.research_scope import ToolContext
 
 MAX_EXTRA_SEARCH = 2
@@ -440,7 +439,7 @@ def initial_state(goal: str, year_from: int | None = None, year_to: int | None =
         "plan_version": 0,
         "query_index": 0,
         "need_evidence": False,
-        "result_limit": requested_count(goal),
+        "result_limit": None,
         "output_mode": "research",
         "search_plan": {},
         "recommended_ids": None,
