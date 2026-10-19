@@ -484,3 +484,79 @@ def repair_route(state):
     if _stopped(state):
         return "finish"
     return "assess" if state.get("workflow_action") == "assess" else "synthesize"
+
+
+# ---------------------------------------------------------------------------
+# 复合指令尾部：逐篇分析与存工作区（post_actions）
+# ---------------------------------------------------------------------------
+
+
+def post_actions_route(state):
+    actions = state.get("post_actions") or []
+    if "analyze" in actions:
+        return "analyze"
+    if "save_to_workspace" in actions:
+        return "save"
+    return "judge"
+
+
+def after_analyze_route(state):
+    return "save" if "save_to_workspace" in (state.get("post_actions") or []) else "judge"
+
+
+def _post_paper_ids(state) -> list[str]:
+    papers = state.get("papers") or []
+    limit = state.get("result_limit") or MAX_TOOL_PAPERS
+    return [paper["id"] for paper in papers[:max(1, int(limit))]]
+
+
+async def analyze_papers_node(state):
+    if _stopped(state):
+        return {"stop_reason": _stopped(state)}
+    targets = _post_paper_ids(state)
+    if not targets:
+        return _patch(state, stage="analyze", workflow_stage="analyze",
+                      events=[{"step": "analyze", "reason": "无候选可分析，跳过"}])
+    try:
+        _, updates = await asyncio.wait_for(
+            tooling._tool_analyze_paper(state, {"paper_ids": targets[:MAX_TOOL_PAPERS]}), timeout=CALL_TIMEOUT)
+        acc, past = _merge(state, updates)
+    except Exception as exc:
+        from langgraph.errors import GraphInterrupt
+        if isinstance(exc, GraphInterrupt):
+            raise
+        return _patch(state, stage="analyze", workflow_stage="analyze",
+                      gaps=_gap(state, f"分析失败:{type(exc).__name__}"),
+                      events=[{"step": "analyze", "reason": "逐篇分析暂不可用，保留已有材料"}])
+    acc["events"] = with_event(acc, {"step": "analyze", "count": len(targets), "reason": "复合指令：逐篇分析入选论文"})
+    return {**{key: value for key, value in acc.items() if key not in state or state[key] != value},
+            "workflow_stage": "analyze", "past_steps": past}
+
+
+async def save_to_workspace_node(state):
+    if _stopped(state):
+        return {"stop_reason": _stopped(state)}
+    workspace_id = state.get("workspace_id")
+    if not workspace_id:
+        return _patch(state, stage="save", workflow_stage="save",
+                      gaps=_gap(state, "缺少工作区，无法执行 save_to_workspace"),
+                      events=[{"step": "save", "reason": "缺少工作区上下文，跳过保存"}])
+    targets = _post_paper_ids(state)
+    if not targets:
+        return _patch(state, stage="save", workflow_stage="save",
+                      events=[{"step": "save", "reason": "无候选可保存，跳过"}])
+    try:
+        _, updates = await asyncio.wait_for(
+            tooling._tool_catalog(state, "add_papers_to_workspace", {"paper_ids": targets, "workspace_id": workspace_id}),
+            timeout=CALL_TIMEOUT)
+        acc, past = _merge(state, updates)
+    except Exception as exc:
+        from langgraph.errors import GraphInterrupt
+        if isinstance(exc, GraphInterrupt):
+            raise
+        return _patch(state, stage="save", workflow_stage="save",
+                      gaps=_gap(state, f"保存失败:{type(exc).__name__}"),
+                      events=[{"step": "save", "reason": "存入工作区暂不可用，保留已有材料"}])
+    acc["events"] = with_event(acc, {"step": "save", "count": len(targets), "reason": "复合指令：入选论文存入工作区"})
+    return {**{key: value for key, value in acc.items() if key not in state or state[key] != value},
+            "workflow_stage": "save", "past_steps": past}
