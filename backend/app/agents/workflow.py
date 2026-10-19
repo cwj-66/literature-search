@@ -21,6 +21,7 @@ from app.agents.state import (
 from app.infrastructure import llm, rerank
 from app.schemas import PaperOut
 from app.services.analysis import evidence_analysis as ea, fulltext
+from app.services.retrieval import ranking
 from app.tools import paper_evidence
 from app.tools.research_scope import ToolContext, resolve
 
@@ -190,6 +191,9 @@ async def search_node(state):
                      "extra_search": state.get("extra_search", 0) + bool(seen),
                      "gaps": _gap(state, f"检索失败:{type(exc).__name__}")}, []
         acc["events"] = with_event(state, {"step": "search", "query": query, "reason": "检索暂不可用，保留已有材料"})
+    if len(acc.get("papers") or []) > ranking.DEFAULT_MIN_CANDIDATES and remaining_budget(acc)["llm_calls_left"] > 0:
+        ranked, llm_delta = await ranking.llm_rank(acc["papers"], query)
+        acc = {**acc, "papers": ranked, "llm_calls": acc.get("llm_calls", 0) + llm_delta}
     local = set(state.get("workflow_local_ids") or [])
     discovered = [p["id"] for p in acc.get("papers") or [] if p["id"] not in local]
     reads = state.get("workflow_reads") or {}
