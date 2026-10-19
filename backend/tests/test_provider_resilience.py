@@ -162,6 +162,35 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(papers), 1)
         self.assertGreaterEqual(sleep.await_args_list[-1].args[0], 1.1)
 
+    async def test_keyed_requests_do_not_inherit_anonymous_cooldown(self):
+        provider_cache.set_retry_at("Semantic Scholar", time.time() + 900)
+        search._COOLDOWN["Semantic Scholar"] = time.monotonic() + 900
+        calls = []
+        def handler(request):
+            calls.append(request)
+            self.assertEqual(request.headers.get("x-api-key"), "approved-key")
+            return httpx.Response(200, json=PAYLOAD)
+        with patch.dict(os.environ, {"SEMANTIC_SCHOLAR_API_KEY": "approved-key"}):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                rows, _ = await search.search_semantic_scholar(client, "fresh keyed query", 0, 10, None, None)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(rows), 1)
+        self.assertGreater(provider_cache.retry_at("Semantic Scholar"), time.time())
+
+    async def test_keyed_cooldown_survives_restart_but_not_key_rotation(self):
+        first = search.quota_scope("Semantic Scholar", {"x-api-key": "first-key"})
+        second = search.quota_scope("Semantic Scholar", {"x-api-key": "second-key"})
+        self.assertNotEqual(first, second)
+        self.assertNotIn("first-key", first)
+        provider_cache.set_retry_at(first, time.time() + 900)
+        self.clear_memory()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: self.fail("same key must honor its cooldown"))) as client:
+            with self.assertRaises(search.SourceFailure):
+                await search.request(client, "https://api.semanticscholar.org/graph/v1/paper/search", {"query": "blocked"}, {"x-api-key": "first-key"}, "Semantic Scholar")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=PAYLOAD))) as client:
+            result = await search.request(client, "https://api.semanticscholar.org/graph/v1/paper/search", {"query": "new key"}, {"x-api-key": "second-key"}, "Semantic Scholar")
+        self.assertEqual(result.status_code, 200)
+
     async def test_arxiv_outage_uses_only_indexed_arxiv_papers_with_explicit_notice(self):
         indexed = PaperOut(id="s2:" + "a" * 40, arxiv_id="2301.12345", title="Deep learning", sources=["semantic_scholar"])
         other = PaperOut(id="s2:" + "b" * 40, title="Other publisher", sources=["semantic_scholar"])

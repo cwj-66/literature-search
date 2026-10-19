@@ -26,7 +26,7 @@ SEARCH_LIMIT = 20
 LINK_LIMIT = 20
 LOCAL_LIMIT = 20
 CANDIDATE_LIMIT = 40
-CACHE_TTL_DAYS = 7
+CACHE_TTL_DAYS = 1
 
 
 def lock_for(local_id: str) -> asyncio.Lock:
@@ -124,7 +124,8 @@ def cache_key(local_id: str, weights: dict[str, float], model: str) -> str:
             (local_id,),
         ).fetchone()[0]
     signature = ",".join(f"{weights[name]:.6f}" for name in ("semantic", "keyword", "citation"))
-    return f"{ALGORITHM}|{model}|{signature}|{count}|{stamp}|{analyzed or ''}"
+    source_scope = search.quota_scope("Semantic Scholar", search.s2_headers())
+    return f"{ALGORITHM}|{model}|s2={semantic_enabled()}:{source_scope}|{signature}|{count}|{stamp}|{analyzed or ''}"
 
 
 def cache_fresh(data: dict, now: datetime | None = None) -> bool:
@@ -348,83 +349,14 @@ def _network(seed, center_id: str, scored: list[dict], warnings: list[str], comp
 
 
 async def compute(seed, weights: dict[str, float]) -> dict:
-    keywords = await asyncio.to_thread(latest_keywords, seed.local_id)
-    terms = relation_score.seed_terms(keywords, seed.title, seed.abstract)
-    local = await asyncio.to_thread(library.list_recent, 200)
-    found, outgoing, incoming, warnings, citation_known = await recall_remote(seed, terms)
-    seed_keys = identity_keys(seed) | {seed.id, seed.local_id}
-    groups: list[dict] = []
-    for paper in found:
-        remember(groups, paper, None, seed_keys, True)
-    for paper in outgoing:
-        remember(groups, paper, "out", seed_keys, True)
-    for paper in incoming:
-        remember(groups, paper, "in", seed_keys, True)
-    for paper in local:
-        if getattr(paper, "local_id", None) == seed.local_id:
-            continue
-        remember(groups, paper, None, seed_keys, False)
-    for group in groups:
-        group["shared"] = relation_score.match_terms(terms, group["paper"].title, group["paper"].abstract)
-        group["text"] = relation_score.embed_input(group["paper"].title, group["paper"].abstract)
-    chosen = limit_candidates(groups)
-    if len(chosen) < len(groups):
-        _warn(warnings, f"候选超过 {CANDIDATE_LIMIT} 篇，已保留外部检索、引用和本地论文中的 {len(chosen)} 篇")
-    seed_text = relation_score.embed_input(seed.title, seed.abstract)
-    texts = [seed_text] if seed_text else []
-    for group in chosen:
-        if group["text"] and group["text"] not in texts:
-            texts.append(group["text"])
-    semantic_available = bool(seed_text)
-    vectors: dict[str, list[float]] = {}
-    if texts:
-        try:
-            vectors = await embeddings.embed_many(texts, persist=False)
-        except embeddings.EmbeddingError as exc:
-            log.warning("embedding unavailable: %s", exc.message)
-            semantic_available = False
-            _warn(warnings, "语义向量未知／暂不可用，不按相似度为 0 计算")
-    seed_vector = vectors.get(seed_text) if semantic_available else None
-    if semantic_available and seed_vector is None:
-        semantic_available = False
-        _warn(warnings, "语义向量未知／暂不可用，不按相似度为 0 计算")
-    scored = []
-    for group in chosen:
-        vector = vectors.get(group["text"]) if semantic_available and group["text"] else None
-        if not semantic_available or seed_vector is None or vector is None:
-            semantic = None
-        else:
-            semantic = relation_score.cosine(seed_vector, vector)
-        judged = relation_score.judge(
-            semantic, group["shared"], len(terms), group["directions"], weights, citation_known,
-        )
-        scored.append({**judged, "paper": group["paper"]})
-    vectors.clear()
-    scored.sort(key=lambda item: (-item["strength"], -(item["paper"].year or 0), item["paper"].title.casefold()))
-    recommended = [item for item in scored if item["strength"] > 0][:10]
-    list_warnings = list(warnings)
-    if len(recommended) < 5:
-        list_warnings.append(f"候选论文不足 5 篇，已展示全部 {len(recommended)} 篇")
-    computed_at = datetime.now(timezone.utc).isoformat()
-    center_id = canonical_id(seed)
-    recommendations = {
-        "paper_id": center_id,
-        "paper_title": seed.title,
-        "algorithm_version": ALGORITHM,
-        "weights": weights,
-        "formula": relation_score.formula(weights, semantic_available, citation_known),
-        "note": NOTE,
-        "warnings": list_warnings,
-        "computed_at": computed_at,
-        "items": [_public_item(item) for item in recommended],
-    }
-    return {"recommendations": recommendations, "network": _network(seed, center_id, scored, warnings, computed_at)}
+    from app.services.retrieval import similarity
+    return await similarity.compute(seed, weights)
 
 
 async def bundle(raw: str, refresh: bool) -> dict:
     seed = await load_seed(raw)
     weights = relation_score.load_weights()
-    key = await asyncio.to_thread(cache_key, seed.local_id, weights, embeddings.model_name())
+    key = await asyncio.to_thread(cache_key, seed.local_id, weights, embeddings.siliconflow_model())
     async with lock_for(seed.local_id):
         if not refresh:
             cached = await asyncio.to_thread(read_cache, seed.local_id, key)
@@ -435,11 +367,22 @@ async def bundle(raw: str, refresh: bool) -> dict:
         return payload
 
 
-async def recommendations(raw: str, limit: int, refresh: bool) -> dict:
-    payload = await bundle(raw, refresh)
+def limited_result(payload: dict, limit: int) -> dict:
     data = dict(payload["recommendations"])
     data["items"] = list(data["items"])[:limit]
+    data["groups"] = [{**group, "items": group["items"][:limit]} for group in data.get("groups", [])]
     return data
+
+
+async def recommendations(raw: str, limit: int, refresh: bool) -> dict:
+    return limited_result(await bundle(raw, refresh), limit)
+
+
+async def discover(paper: PaperOut, limit: int) -> dict:
+    """Same scoring for Agent and UI; never scan unselected local documents."""
+    if getattr(paper, "local_id", None):
+        return await recommendations(paper.local_id, limit, False)
+    return limited_result(await compute(paper, relation_score.load_weights()), limit)
 
 
 async def network(raw: str, refresh: bool) -> dict:

@@ -234,6 +234,23 @@ export interface RecommendationItem {
   citation_score: number | null;
   reasons: RecommendationReason[];
   relations: string[];
+  categories?: string[];
+  sources?: string[];
+  recalled_by?: string[];
+  shared_keywords?: string[];
+  shared_reference_ids?: string[];
+  common_citing_ids?: string[];
+  evidence?: { type: string; via: string; source: string }[];
+}
+
+export interface RecommendationGroup {
+  key: string;
+  label: string;
+  status: string;
+  recall_count: number;
+  matched_count: number;
+  notes: string[];
+  items: RecommendationItem[];
 }
 
 export interface Recommendations {
@@ -246,6 +263,11 @@ export interface Recommendations {
   warnings: string[];
   computed_at: string;
   items: RecommendationItem[];
+  groups?: RecommendationGroup[];
+  candidate_count?: number;
+  vector_policy?: string;
+  search_plan?: { semantic: string[]; keyword: string[]; terms: string[]; planner: string };
+  source_status?: { category: string; source: string; status: string; count: number; query?: string; message?: string }[];
 }
 
 export interface PaperNetwork {
@@ -255,5 +277,5 @@ export interface PaperNetwork {
   warnings: string[];
   computed_at: string;
   nodes: { id: string; title: string; year: number | null; center: boolean }[];
-  edges: { source: string; target: string; type: string; label: string; directed: boolean }[];
+  edges: { source: string; target: string; type: string; label: string; directed: boolean; category?: string; strength?: number }[];
 }

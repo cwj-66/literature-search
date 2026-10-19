@@ -280,6 +280,15 @@ def semantic_has_key() -> bool:
     return bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip())
 
 
+def quota_scope(label: str, headers: dict | None = None) -> str:
+    """Keyed API quota must not inherit an anonymous/key-rotation cooldown."""
+    import hashlib
+    key = (headers or {}).get("x-api-key", "").strip()
+    if label == "Semantic Scholar" and key:
+        return f"{label}:key:{hashlib.sha256(key.encode()).hexdigest()[:16]}"
+    return label
+
+
 _CACHE_STATUS: ContextVar[dict | None] = ContextVar("provider_cache_status", default=None)
 _PROGRESS: ContextVar[object] = ContextVar("search_progress", default=None)
 
@@ -319,6 +328,7 @@ def record_cache(response: httpx.Response, stale: bool = False, retry_after: int
 async def request(client: httpx.AsyncClient, url: str, params: dict, headers: dict | None, label: str, allow_not_found: bool = False, on_items=None, accept=None) -> httpx.Response:
     cache_key = (url, tuple(sorted(params.items())))
     disk_key = provider_cache.key(url, params)
+    scope = quota_scope(label, headers)
     async with _GATES.setdefault(label, asyncio.Lock()):
         if label == "Semantic Scholar" and not semantic_enabled():
             raise SourceFailure("Semantic Scholar 已由管理员停用，请使用 arXiv")
@@ -337,8 +347,8 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
                 while len(_CACHE) > 32 or sum(len(value[1].content) for value in _CACHE.values()) > 16 * 1024 * 1024:
                     _CACHE.popitem(last=False)
                 return record_cache(stale)
-        disk_deadline = await cache_operation(provider_cache.retry_at, label, default=0)
-        remaining = max(_COOLDOWN.get(label, 0) - time.monotonic(), disk_deadline - time.time())
+        disk_deadline = await cache_operation(provider_cache.retry_at, scope, default=0)
+        remaining = max(_COOLDOWN.get(scope, 0) - time.monotonic(), disk_deadline - time.time())
         if remaining > 0:
             retry = math.ceil(remaining)
             if stale is not None:
@@ -395,14 +405,14 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
             await asyncio.sleep(max(0, wait))
         if response.status_code == 429:
             header_delay = retry_after_seconds(response)
-            strike = await cache_operation(provider_cache.bump_strike, label, default=1) or 1
+            strike = await cache_operation(provider_cache.bump_strike, scope, default=1) or 1
             if header_delay is None or not math.isfinite(header_delay):
                 base = 60 if label == "arXiv" else 120
                 header_delay = base * (2 ** (strike - 1))
             delay = max(1, min(header_delay, 900))
             retry = math.ceil(delay)
-            _COOLDOWN[label] = time.monotonic() + delay
-            await cache_operation(provider_cache.set_retry_at, label, time.time() + delay)
+            _COOLDOWN[scope] = time.monotonic() + delay
+            await cache_operation(provider_cache.set_retry_at, scope, time.time() + delay)
             logger.warning("%s upstream HTTP 429; retry_after=%s; server=%s", label, retry, response.headers.get("server", "unknown"))
             if stale is not None:
                 return record_cache(stale, True, retry)
@@ -432,7 +442,7 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
             logger.warning("%s response skipped by cache validation: %s", label, type(exc).__name__)
             return record_cache(stale, True) if stale is not None else response
         if response.status_code == 200:
-            await cache_operation(provider_cache.clear_strikes, label)
+            await cache_operation(provider_cache.clear_strikes, scope)
         response.extensions["paper_cached_at"] = time.time()
         await cache_operation(provider_cache.put, disk_key, response.headers.get("content-type", ""), response.content)
         _CACHE[cache_key] = (time.monotonic() + 600, response)

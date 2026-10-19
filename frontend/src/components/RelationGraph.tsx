@@ -55,11 +55,12 @@ export function RelationGraph({ data, onOpen }: { data: PaperNetwork; onOpen: (i
           },
         },
         edge: {
-          type: (datum) => (datum.data?.type === "similar" ? "quadratic" : "line"),
+          type: (datum) => (datum.data?.type === "cites" ? "line" : "quadratic"),
           style: {
-            stroke: (datum) => (datum.data?.type === "cites" ? tokens.brand : "#9a9d9f"),
-            lineWidth: 1.5,
-            lineDash: (datum) => (datum.data?.type === "similar" ? [5, 4] : []),
+            stroke: (datum) => (datum.data?.type === "cites" ? tokens.brand : datum.data?.type === "keyword" ? "#16845b" : datum.data?.type === "similar" ? "#9a9d9f" : "#8956c7"),
+            lineWidth: (datum) => 1 + 2 * Math.max(0, Math.min(1, Number(datum.data?.strength ?? 0.25))),
+            curveOffset: (datum: { data?: Record<string, unknown> }) => datum.data?.type === "keyword" ? -35 : datum.data?.type === "similar" ? 35 : 65,
+            lineDash: (datum) => (datum.data?.type === "cites" ? [] : datum.data?.type === "keyword" ? [2, 4] : [5, 4]),
             endArrow: (datum) => Boolean(datum.data?.directed),
             labelText: (datum) => String(datum.data?.label ?? ""),
             labelFontSize: 12,

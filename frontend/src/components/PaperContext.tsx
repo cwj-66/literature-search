@@ -48,7 +48,7 @@ export function PaperContext({ id, from }: { id: string; from: string }) {
       <Link to={from} className="back-link"><ArrowLeftOutlined aria-hidden /><span className="back-label">返回{returnLabel(from)}</span></Link>
       <nav className="view-tabs" aria-label="论文视图">
         <Link to={paperLocation(id, from)} aria-current={location.pathname === "/paper" ? "page" : undefined}>阅读与分析</Link>
-        <Link to={recommendLocation(id, from)} aria-current={location.pathname === "/recommend" ? "page" : undefined}>相关推荐</Link>
+        <Link to={recommendLocation(id, from)} aria-current={location.pathname === "/recommend" ? "page" : undefined}>相似度搜索</Link>
         <Link to={graphLocation(here, id)}>在图谱中定位</Link>
       </nav>
       <Button className="context-drawer-button" icon={<UnorderedListOutlined />} onClick={() => setDrawer(true)}>文献库</Button>

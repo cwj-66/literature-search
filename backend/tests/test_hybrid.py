@@ -2,9 +2,11 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.services.retrieval import hybrid
+from app.infrastructure import embeddings
+from app.infrastructure.db import connection
 from app.services.analysis.fulltext import PreparedText
 from app.schemas import PaperOut
 
@@ -36,6 +38,29 @@ class HybridTests(unittest.TestCase):
         self.assertTrue(hits)
         chunks = hybrid.load_chunks(["arxiv:2005.11401"])
         self.assertEqual(chunks[hits[0]]["paper_id"], "arxiv:2005.11401")
+
+
+class HybridVectorMigrationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_old_model_vectors_are_reencoded_before_comparison(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
+            "PAPER_DB_PATH": str(Path(directory) / "papers.sqlite3"),
+            "SILICONFLOW_EMBEDDING_MODEL": "BAAI/bge-m3",
+        }):
+            paper = PaperOut(id="arxiv:2005.11401", title="RAG")
+            prepared = PreparedText("Retrieval augmented generation.", "abstract", "abstract", None, None, {})
+            hybrid.index_prepared(paper, prepared)
+            with connection() as db, db:
+                db.execute("UPDATE paper_chunks SET embed_model = ?, vector = ?", ("old-model", "[0,1,0]"))
+            chunks = hybrid.load_chunks([paper.id])
+            async def encode(texts):
+                return {text: [1.0, 0.0] for text in texts}
+            with patch.object(embeddings, "embed_many", new=AsyncMock(side_effect=encode)) as embed:
+                hits = await hybrid.vector_search("retrieval", chunks, 5)
+            self.assertTrue(hits)
+            self.assertEqual(embed.await_count, 2)
+            self.assertTrue(all(c["embed_model"] == "BAAI/bge-m3" and c["vector"] == [1., 0.] for c in chunks.values()))
+            with connection() as db:
+                self.assertEqual(db.execute("SELECT DISTINCT embed_model FROM paper_chunks").fetchone()[0], "BAAI/bge-m3")
 
 
 if __name__ == "__main__":

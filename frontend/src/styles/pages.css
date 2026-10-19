@@ -529,6 +529,9 @@
 }
 .relation-cites { background: var(--accent); color: #fff; }
 .relation-similar { border: 1px dashed var(--line-strong); color: var(--muted); }
+.relation-keyword { border: 1px dotted #16845b; color: #16845b; }
+.swatch.keyword { border-top-style: dotted; border-top-color: #16845b; }
+.swatch.indirect { border-top-style: dashed; border-top-color: #8956c7; }
 .relation-weak { border: 1px solid var(--line); color: var(--faint); }
 .strength {
   display: flex;

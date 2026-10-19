@@ -194,11 +194,11 @@ def keyword_search(query: str, paper_ids: list[str] | None, limit: int) -> list[
 
 
 async def store_vectors(chunks: dict[str, dict]) -> None:
-    missing = [item for item in chunks.values() if not item.get("vector")]
+    model = embeddings.model_name()
+    missing = [item for item in chunks.values() if not item.get("vector") or item.get("embed_model") != model]
     if not missing:
         return
     vectors = await embeddings.embed_many([item["text"] for item in missing])
-    model = embeddings.model_name()
     with connection() as db, db:
         for item in missing:
             vector = vectors.get(item["text"])

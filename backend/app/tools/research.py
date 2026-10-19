@@ -75,7 +75,7 @@ class AnalyzeArgs(ScopeArgs):
 DEFINITIONS = (
     ("search_papers", "discovery", "搜索 arXiv、Semantic Scholar，保留来源错误和分页信息。", SearchPapersRequest),
     ("get_paper_details", "discovery", "获取论文作者、摘要、DOI、年份和原文链接；优先本地数据。", PaperArgs),
-    ("find_related_papers", "discovery", "按语义、主题和真实引用记录推荐相关论文，附评分与来源限制。", RelatedArgs),
+    ("find_related_papers", "discovery", "论文相似度搜索：从 arXiv 与 Semantic Scholar 分别召回引用、主题、关键词候选，分组返回依据与评分；临时向量不保存。", RelatedArgs),
     ("get_paper_references", "discovery", "获取论文引用的文献，最多 20 条；来源不可用时明确报告。", PaperArgs),
     ("get_paper_citations", "discovery", "获取引用该论文的文献，最多 20 条；空结果不代表无引用。", PaperArgs),
     ("list_workspace_papers", "workspace", "列出当前工作区成员、论文 ID、全文、索引和分析状态。", WorkspaceArgs),
@@ -217,14 +217,7 @@ async def execute(name: str, arguments: dict, context: ToolContext | None = None
         elif name == "get_paper_analysis":
             result = await asyncio.to_thread(_analysis, paper)
         elif name == "find_related_papers":
-            if ctx.accessible_paper_ids is not None:
-                # Discover public candidates without scanning unselected local PDFs.
-                result = await search_papers(query=paper.title, page_size=args["limit"])
-                return {**result, "tool": name, "seed_paper_id": paper.id}
-            # Existing recommendation service needs a local seed and caches its scoring results.
-            if not getattr(paper, "local_id", None):
-                raise ValueError("推荐前请先将种子论文加入工作区")
-            result = await recommend.recommendations(paper.local_id, args["limit"], False)
+            result = await recommend.discover(paper, args["limit"])
             result["status"] = "partial" if result.get("warnings") else "completed"
         else:
             ref = recommend.s2_paper_ref(paper)

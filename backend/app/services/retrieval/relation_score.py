@@ -4,7 +4,7 @@ import math
 import os
 import re
 
-ALGORITHM = "rel-v2"
+ALGORITHM = "rel-v3-three-channel"
 SIMILAR_COSINE = 0.55
 SIMILAR_SHARED = 2
 EMBED_LIMIT = 40

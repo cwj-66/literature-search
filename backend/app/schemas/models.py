@@ -260,6 +260,23 @@ class RecommendationItem(BaseModel):
     citation_score: float | None = Field(None, ge=0, le=1)
     reasons: list[ReasonOut]
     relations: list[str]
+    sources: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
+    recalled_by: list[str] = Field(default_factory=list)
+    shared_keywords: list[str] = Field(default_factory=list)
+    shared_reference_ids: list[str] = Field(default_factory=list)
+    common_citing_ids: list[str] = Field(default_factory=list)
+    evidence: list[dict] = Field(default_factory=list)
+
+
+class RecommendationGroup(BaseModel):
+    key: str
+    label: str
+    status: str
+    recall_count: int
+    matched_count: int
+    items: list[RecommendationItem]
+    notes: list[str] = Field(default_factory=list)
 
 
 class RecommendationResponse(BaseModel):
@@ -272,6 +289,11 @@ class RecommendationResponse(BaseModel):
     warnings: list[str]
     computed_at: str
     items: list[RecommendationItem]
+    groups: list[RecommendationGroup] = Field(default_factory=list)
+    source_status: list[dict] = Field(default_factory=list)
+    search_plan: dict = Field(default_factory=dict)
+    vector_policy: str = "ephemeral"
+    candidate_count: int = 0
 
 
 class NetworkNode(BaseModel):
@@ -287,6 +309,8 @@ class NetworkEdge(BaseModel):
     type: str
     label: str
     directed: bool
+    category: str | None = None
+    strength: float | None = None
 
 
 class NetworkResponse(BaseModel):

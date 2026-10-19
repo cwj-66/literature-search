@@ -22,16 +22,14 @@ class EmbeddingError(Exception):
 
 
 def model_name() -> str:
-    return os.getenv("EMBEDDING_MODEL", "text-embedding-v3").strip() or "text-embedding-v3"
+    return siliconflow_model()
 
 
 def credentials() -> tuple[str, str]:
-    silicon = os.getenv("SILICONFLOW_API_KEY", "").strip()
-    if silicon:
-        base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
-        return silicon, base
-    key = os.getenv("DASHSCOPE_API_KEY", "").strip()
-    base = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")
+    key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+    if not key:
+        raise EmbeddingError("未配置硅基流动密钥，无法计算语义向量")
+    base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
     return key, base
 
 
@@ -105,6 +103,18 @@ async def fetch_vectors(model: str, texts: list[str], key: str | None = None, ba
                 raise EmbeddingError("语义向量请求失败") from exc
             if response.status_code != 200:
                 log.warning("embedding request failed: %s", response.status_code)
+                try:
+                    error = response.json()
+                    detail = error.get("error", error)
+                    message = str(detail.get("message", "")) if isinstance(detail, dict) else ""
+                except (ValueError, AttributeError):
+                    message = ""
+                if "free quota exhausted" in message.casefold():
+                    raise EmbeddingError("向量模型免费额度已用尽，账号处于仅使用免费额度模式；请在服务商控制台处理额度或更换可用向量服务")
+                if response.status_code in (401, 403):
+                    raise EmbeddingError("向量服务认证或访问权限不足，请检查服务配置")
+                if response.status_code == 429:
+                    raise EmbeddingError("向量服务限流，请稍后重试")
                 raise EmbeddingError("语义向量请求失败")
             try:
                 rows = response.json().get("data")
@@ -144,10 +154,10 @@ def siliconflow_model() -> str:
     return os.getenv("SILICONFLOW_EMBEDDING_MODEL", "BAAI/bge-m3").strip() or "BAAI/bge-m3"
 
 
-async def embed_siliconflow(texts: list[str]) -> tuple[str, dict[str, list[float]]]:
+async def embed_siliconflow(texts: list[str], *, persist: bool = True) -> tuple[str, dict[str, list[float]]]:
     key = os.getenv("SILICONFLOW_API_KEY", "").strip()
     if not key:
         raise EmbeddingError("未配置硅基流动密钥，无法计算语义向量")
     base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
     model = siliconflow_model()
-    return model, await embed_many(texts, model, key, base)
+    return model, await embed_many(texts, model, key, base, persist=persist)
