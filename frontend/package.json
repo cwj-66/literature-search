@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --pretty false && vite build",
-    "test:graph": "node --test tests/knowledgeGraph.test.mjs tests/knowledgeThemes.test.mjs"
+    "test:graph": "node --test tests/knowledgeGraph.test.mjs tests/knowledgeThemes.test.mjs",
+    "test:research": "node --test tests/researchPresentation.test.mjs"
   },
   "dependencies": {
     "@antv/g6": "^5.1.1",

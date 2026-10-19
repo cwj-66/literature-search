@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AnalyzePaperResult, Paper, ResearchTask } from "./types";
 import { prepareWorkspace } from "./api";
+import { researchResults } from "./researchPresentation";
 
 export interface ResearchTurn {
   id: number; question: string; answeredAt?: number; pending?: boolean; error?: string;
@@ -138,8 +139,11 @@ export function chatMarkdown(chat: ResearchChat, workspace: string) {
   for (const turn of chat.turns) {
     lines.push(`## 用户\n\n${turn.question}`, "", `## 助手\n\n${turn.task?.answer || turn.error || turn.note || "尚未完成"}`, "");
     const refs = new Set(turn.task?.referenced_evidence_ids ?? (turn.task?.answer?.match(/E\d{4,}/g) ?? []));
-    for (const e of turn.task?.evidence ?? []) if (refs.has(e.evidence_id)) lines.push(`> [${e.evidence_id}] ${e.paper_id ?? ""}：${e.quote}`, "");
-    for (const p of turn.papers ?? []) lines.push(`- ${p.title}${p.doi ? ` · DOI ${p.doi}` : ""}`, "");
+    for (const e of turn.task?.evidence ?? []) if (refs.has(e.evidence_id) && e.material !== "metadata" && !e.quote.startsWith('{"id":')) lines.push(`> [${e.evidence_id}] ${e.paper_id ?? ""}：${e.quote}`, "");
+    const result = researchResults(turn);
+    if (result.recommended.length) lines.push(`推荐论文（${result.recommended.length} 篇）：`, "");
+    for (const p of result.recommended) lines.push(`- ${p.title}${p.doi ? ` · DOI ${p.doi}` : ""}`, "");
+    if (result.candidates.length) lines.push(`另有 ${result.candidates.length} 篇未选用候选，不等于推荐或已读。`, "");
   }
   return lines.join("\n");
 }

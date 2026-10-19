@@ -112,7 +112,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.search.return_value["papers"] = [public_paper()]
         with patch("app.services.papers.documents.get_text", side_effect=AssertionError("private PDF accessed")):
             result = await self.run_task("搜索论文", context={"workspace_id": "w", "accessible_paper_ids": []})
-        self.assertEqual(result["reading_status"][self.local.id]["basis"], "abstract")
+        self.assertEqual(result["reading_status"], {})
         self.assertFalse(any("The method uses" in e["quote"] for e in result["evidence"]))
 
     async def test_forged_quotes_are_rejected_before_synthesis(self):
@@ -142,7 +142,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_gap_retrieval_executes_once_and_changes_page(self):
         self.assessments = [{"coverage": "partial", "missing": ["其他方法"], "next_action": "paginate", "rationale": "补充"}]
-        result = await self.run_task("搜索论文", context={"accessible_paper_ids": []})
+        result = await self.run_task("搜索论文并分析实验", context={"accessible_paper_ids": []})
         self.assertEqual(self.search.await_count, 2)
         self.assertEqual([call.args[1] for call in self.search.await_args_list], [1, 2])
         self.assertEqual(result["search_count"], 2)
@@ -232,7 +232,8 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "done")
         self.assertIn(public_paper(2).id, result["discovered_paper_ids"])
         self.assertIn("限流", result["stop_reason"])
-        self.assertTrue(result["evidence"])
+        self.assertTrue(result["candidates"])
+        self.assertEqual(result["reading_status"], {})
 
     async def test_new_query_reads_new_papers_without_rereading_old_ones(self):
         self.assessments = [{"coverage": "partial", "missing": ["不同方法"], "next_action": "search_more",
@@ -241,7 +242,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             {"papers": [public_paper(2)], "source_errors": {}},
             {"papers": [public_paper(2), public_paper(3)], "source_errors": {}}]
         with patch("app.agents.workflow._read", wraps=workflow._read) as read:
-            result = await self.run_task("搜索论文", context={"accessible_paper_ids": []})
+            result = await self.run_task("搜索论文并分析实验", context={"accessible_paper_ids": []})
         self.assertEqual(read.await_count, 2)
         self.assertEqual(set(result["reading_status"]), {public_paper(2).id, public_paper(3).id})
         self.assertEqual(self.search.await_args_list[1].args[0], "alternative method")
@@ -256,7 +257,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_evidence_reads_more_existing_candidates_before_search(self):
         self.search.return_value["papers"] = [public_paper(n) for n in range(2, 6)]
         self.assessments = [{"coverage": "partial", "missing": ["其他方法的依据"], "next_action": "read_next", "rationale": "需要补读"}]
-        result = await self.run_task("搜索论文", context={"accessible_paper_ids": []})
+        result = await self.run_task("搜索论文并分析实验", context={"accessible_paper_ids": []})
         self.search.assert_awaited_once()
         self.assertEqual(len(result["reading_status"]), 4)
         self.assertEqual(result["deep_reads"], 4)
@@ -315,7 +316,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.search.return_value = {"papers": [], "source_errors": {}}
         result = await self.run_task("搜索论文", context={"accessible_paper_ids": []})
         self.assertEqual(result["status"], "done")
-        self.assertIn("不能确认", result["answer"])
+        self.assertIn("未筛选到", result["answer"])
         self.assertEqual(self.synthesis_count, 0)
 
     async def test_public_fulltext_failure_preserves_abstract_boundary(self):

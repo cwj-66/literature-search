@@ -28,7 +28,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from app.agents import store, workflow
+from app.agents import discovery, store, workflow
 from app.agents.prompts import (
     AGENT_PROMPT_VERSION, CLAIMS_SYSTEM, DIRECT_SYSTEM, JUDGE_SOURCE_RULES, JUDGE_SYSTEM, REACT_FORMAT_RETRY,
     REACT_SYSTEM, ROUTER_SYSTEM, OPERATION_SYSTEM,
@@ -82,7 +82,7 @@ RECENT_YEARS = re.compile(r"(?:近|最近|过去)\s*([0-9一二两三四五六�
 VAGUE_RECENT = re.compile(r"(?:近|最近)(?:几|些)年")
 COMPARATIVE_HINT = re.compile(r"对比|比较|综述|梳理|差异|各自|横向|区别")
 CN_DIGITS = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-QUANTITY_HINT = re.compile(r"([0-9一二两三四五六七八九十]{1,3})\s*篇(?:论文|文献|文章)?")
+QUANTITY_HINT = discovery.QUANTITY
 EARLIEST_HINT = re.compile(r"最早|最先")
 SORT_WORDS = re.compile(r"最早|最先|最新")
 
@@ -309,7 +309,7 @@ def _result_hint(goal: str) -> tuple[int | None, str | None, str]:
     """解析数量词与“最早/最新”排序词：返回 (数量上限, "asc" 或 None, 去掉数量/排序短语后的检索式)。"""
     text = goal or ""
     match = QUANTITY_HINT.search(text)
-    count = _cn_number(match.group(1)) if match else None
+    count = discovery.requested_count(goal)
     if count is None or not 1 <= count <= MAX_CANDIDATE_PAPERS:
         count = None
     order = "asc" if EARLIEST_HINT.search(text) else None
@@ -400,6 +400,7 @@ def _apply_plan_decision(decision, plan: list, queries: list) -> tuple[list, lis
 async def plan_node(state: dict) -> dict:
     # 中断前的更新不会保存：恢复后本节点从头重放，计数与事件都基于入参状态重新计算。
     planned_before = any(event.get("step") == "plan" for event in state.get("events") or [])
+    search_plan = state.get("search_plan") or {}
     if planned_before:
         plan = list(state.get("plan") or [])
         queries = list(state.get("queries") or [])
@@ -420,6 +421,7 @@ async def plan_node(state: dict) -> dict:
             if not str(planned.get("rationale") or "").startswith("模型规划不可用"):
                 store.cache_put(key, planned)
         queries = planned["queries"]
+        search_plan = {**(planned.get("search_plan") or {}), "exclusions": planned.get("exclusions") or []}
         plan = [{"action": "read" if local_read else "search", "query": query} for query in queries]
         llm_used = int(planned.get("_llm_used") or 1)
         llm_calls = state.get("llm_calls", 0) + (0 if cache_hit else llm_used)
@@ -434,6 +436,9 @@ async def plan_node(state: dict) -> dict:
         "queries": queries,
         "plan_version": state.get("plan_version", 0) + (0 if planned_before else 1),
         "query_index": 0,
+        "result_limit": discovery.requested_count(state.get("goal")) or state.get("result_limit"),
+        "sort_order": _result_hint(state.get("goal") or "")[1] or state.get("sort_order"),
+        "search_plan": search_plan,
         "llm_calls": llm_calls,
         "events": events,
         "cancelled": True if rejected else state.get("cancelled"),
@@ -988,8 +993,15 @@ def _partial_answer(state: dict, reason: str) -> str | None:
 
 
 def finish_node(state: dict) -> dict:
+    # Metadata selection does not need model budget after the final ranking call.
+    selection = {}
+    if state.get("output_mode") == "bibliography" and state.get("recommended_ids") is None:
+        selection = workflow.bibliography_node(state)
+        state = {**state, **selection}
     task_id = state.get("task_id")
     reason = state.get("stop_reason") or budget_exhausted(state) or "没有可继续的动作"
+    if state.get("output_mode") == "bibliography" and state.get("recommended_ids") is not None and not state.get("stop_reason"):
+        reason = "书目筛选完成"
     if task_id and (state.get("cancelled") or is_cancel_requested(task_id)):
         store.clear_flag(task_id)
     if limited(state):
@@ -1002,9 +1014,11 @@ def finish_node(state: dict) -> dict:
             partial = _partial_answer(state, reason)
             if partial:
                 updates["answer"] = partial
-        elif not finalized and state.get("task_kind") != "operation" and "【复核说明】" not in answer:
+        elif not finalized and state.get("output_mode") != "bibliography" and state.get("task_kind") != "operation" and "【复核说明】" not in answer:
             updates["answer"] = answer.rstrip() + f"\n\n【复核说明】任务在主张复核前停止（{reason}），以上结论未经核验。"
-    return updates
+    if state.get("recommended_ids") is None and state.get("workflow_stage"):
+        updates["recommended_ids"] = discovery.select_research(state)
+    return {**selection, **updates}
 
 
 def _tracing_enabled() -> bool:
@@ -1045,6 +1059,7 @@ def build(checkpointer=None):
     graph.add_node("gate", gate_node)
     graph.add_node("prepare_research", guarded(workflow.prepare_node))
     graph.add_node("search_literature", guarded(workflow.search_node))
+    graph.add_node("select_bibliography", guarded(workflow.bibliography_node))
     graph.add_node("read_paper", guarded(workflow.read_node))
     graph.add_node("extract_quotes", guarded(workflow.quote_node))
     graph.add_node("assess_evidence", guarded(workflow.assess_node))
@@ -1079,16 +1094,17 @@ def build(checkpointer=None):
 
     graph.add_conditional_edges("gate", research_entry, {"finish": "finish", "operation": "react_agent", "research": "prepare_research"})
     graph.add_conditional_edges("prepare_research", workflow.prepare_route, {"finish": "finish", "search": "search_literature", "read": "read_paper"})
-    graph.add_edge("search_literature", "read_paper")
+    graph.add_conditional_edges("search_literature", workflow.search_route, {"finish": "finish", "read": "read_paper", "bibliography": "select_bibliography"})
+    graph.add_conditional_edges("select_bibliography", workflow.bibliography_route, {"expand": "expand_research", "actions": "post_actions_gate", "finish": "finish"})
     graph.add_edge("read_paper", "extract_quotes")
     graph.add_conditional_edges("extract_quotes", workflow.read_route, {"finish": "finish", "read": "read_paper", "assess": "assess_evidence"})
     graph.add_conditional_edges("assess_evidence", workflow.assess_route, {"finish": "finish", "more_read": "select_next_papers", "expand": "expand_research", "synthesize": "synthesize_evidence"})
     graph.add_edge("select_next_papers", "read_paper")
     graph.add_edge("expand_research", "search_literature")
     graph.add_conditional_edges("synthesize_evidence", workflow.synthesis_route, {"finish": "finish", "claims": "post_actions_gate"})
-    graph.add_conditional_edges("post_actions_gate", workflow.post_actions_route, {"analyze": "analyze_papers", "save": "save_to_workspace", "judge": "gate_judge"})
+    graph.add_conditional_edges("post_actions_gate", workflow.post_actions_route, {"analyze": "analyze_papers", "save": "save_to_workspace", "judge": "gate_judge", "finish": "finish"})
     graph.add_conditional_edges("analyze_papers", workflow.after_analyze_route, {"save": "save_to_workspace", "judge": "gate_judge"})
-    graph.add_edge("save_to_workspace", "gate_judge")
+    graph.add_conditional_edges("save_to_workspace", lambda state: "finish" if state.get("output_mode") == "bibliography" else "judge", {"finish": "finish", "judge": "gate_judge"})
     graph.add_conditional_edges("react_agent", react_route, {"tools": "tool_node", "done": "gate_judge"})
     graph.add_edge("tool_node", "gate_tools")
     graph.add_conditional_edges("gate_tools", gate_route, {"finish": "finish", "continue": "react_agent"})

@@ -13,14 +13,14 @@ import re
 import httpx
 from pydantic import BaseModel, Field
 
-from app.agents import store, tooling
+from app.agents import discovery, store, tooling
 from app.agents.state import (
     MAX_ASSESS, MAX_TOOL_PAPERS, SCIENTIFIC_MATERIALS, add_evidence, hard_stop,
     is_cancel_requested, remaining_budget, with_event, QuoteVerifier,
 )
 from app.infrastructure import llm, rerank
 from app.schemas import PaperOut
-from app.services.analysis import evidence_analysis as ea, fulltext
+from app.services.analysis import attribution, evidence_analysis as ea, fulltext
 from app.services.retrieval import ranking
 from app.tools import paper_evidence
 from app.tools.research_scope import ToolContext, resolve
@@ -146,16 +146,31 @@ async def prepare_node(state):
         intent = "mixed" if papers and READ_HINT.search(goal) else "discover"
     elif intent == "auto":
         intent = "read" if papers else "discover"
+    output_mode = "bibliography" if intent == "discover" and discovery.bibliography_goal(goal) else "research"
     if not papers and intent == "read":
         return _patch(state, stage="prepare", stop_reason="未选择研究资料", answer="请先选择需要分析的论文。")
     known = {paper["id"]: paper for paper in state.get("papers") or []}
     for paper in papers:
         known[paper.id] = paper.model_dump(mode="json")
     queries = list(state.get("queries") or [goal])
+    search_plan = state.get("search_plan") or {}
+    llm_calls = state.get("llm_calls", 0)
+    if output_mode == "bibliography" and not search_plan and remaining_budget(state)["llm_calls_left"] > 0:
+        planned, updates, cached = await _call(state, "plan_discovery", {"goal": goal}, lambda: attribution.plan_search(goal))
+        if planned.get("queries"):
+            queries = planned["queries"]
+            search_plan = {**(planned.get("search_plan") or {}), "exclusions": planned.get("exclusions") or []}
+        llm_calls += 0 if cached else int(planned.get("_llm_used") or 1)
+    else:
+        updates = {}
     if papers and intent in ("mixed", "discover") and re.search(r"类似|相关|similar|related", goal, re.I):
         # Resolve "similar to these" using authorized titles before searching.
         queries = [f"{query} {papers[0].title}" for query in queries]
-    return _patch(state, stage="prepare", research_intent=intent, queries=queries,
+    if output_mode == "bibliography":
+        queries = [discovery.protect_query(query, goal, search_plan) for query in queries]
+    return _patch(state, stage="prepare", **updates, research_intent=intent, queries=queries,
+                  output_mode=output_mode, search_plan=search_plan, llm_calls=llm_calls,
+                  result_limit=discovery.requested_count(goal) or state.get("result_limit") or (5 if output_mode == "bibliography" else None),
                   workflow_local_ids=[p.id for p in papers], papers=list(known.values()),
                   workflow_batch_ids=[p.id for p in papers][:min(MAX_TOOL_PAPERS, state.get("max_deep_reads", MAX_TOOL_PAPERS))] if intent != "discover" else [],
                   gaps=_gap(state, f"本次最多细读{MAX_TOOL_PAPERS}篇，超出部分尚未逐篇阅读" if len(papers) > MAX_TOOL_PAPERS else None),
@@ -206,11 +221,47 @@ async def search_node(state):
     metadata = [{"paper_id": p["id"], "material": "metadata", "tool": "search_literature", "verified": False,
                  "quote": json.dumps({k: p.get(k) for k in ("id", "title", "authors", "year", "url")}, ensure_ascii=False)}
                 for p in acc.get("papers") or [] if p["id"] in discovered][:state.get("result_limit") or 20]
-    acc.update(add_evidence(acc, metadata)[0])
+    if state.get("output_mode") != "bibliography":
+        acc.update(add_evidence(acc, metadata)[0])
     return {**{key: value for key, value in acc.items() if key not in state or state[key] != value},
             "workflow_searches": [*seen, signature], "workflow_discovered_ids": discovered,
             "workflow_batch_ids": batch,
             "workflow_stage": "search", "workflow_action": "read", "past_steps": past}
+
+
+def search_route(state):
+    if _stopped(state):
+        return "finish"
+    return "bibliography" if state.get("output_mode") == "bibliography" else "read"
+
+
+def bibliography_node(state):
+    ids, reasons, matched = discovery.select_bibliography(state)
+    limit = state.get("result_limit") or 5
+    sufficient = len(ids) >= limit
+    budget = remaining_budget(state)
+    can_expand = not sufficient and budget["api_calls_left"] > 0 and budget["extra_search_left"] > 0 and not tooling.limited(state)
+    coverage = {"coverage": "sufficient" if sufficient else "partial" if ids else "insufficient",
+                "missing": [] if sufficient else [f"还缺 {limit - len(ids)} 篇主题匹配的论文"],
+                "next_action": "search_more" if can_expand else "synthesize",
+                "rationale": f"按标题与摘要筛选，{matched} 篇符合主题，推荐 {len(ids)} 篇；不以缺少正文作为淘汰理由"}
+    if ids:
+        answer = f"推荐 {len(ids)} 篇，已根据标题与摘要匹配检索主题。"
+        if len(ids) < limit:
+            answer += f"本次仅找到 {len(ids)} 篇符合条件的论文，未补入无关候选。"
+    else:
+        answer = "本次未筛选到符合主题的论文，已保留检索候选供查看。可以调整检索词后重试。"
+    return _patch(state, stage="select", recommended_ids=ids, recommendation_reasons=reasons,
+                  answer=answer, coverage=coverage, claims=[], review={"final_status": "bibliography"},
+                  events=[{"step": "select", "count": len(ids), "reason": coverage["rationale"]}])
+
+
+def bibliography_route(state):
+    if _stopped(state):
+        return "finish"
+    if (state.get("coverage") or {}).get("next_action") == "search_more":
+        return "expand"
+    return "actions" if state.get("post_actions") else "finish"
 
 
 def _targets(state):
@@ -413,6 +464,8 @@ def expand_node(state):
     cov = state.get("coverage") or {}
     queries = list(state.get("queries") or [state.get("goal") or ""])
     query = tooling._clean_query(cov.get("new_query"), state)
+    if query:
+        query = discovery.protect_query(query, state.get("goal") or "", state.get("search_plan"))
     index = state.get("query_index", 0)
     if query and query not in queries:
         queries.append(query)
@@ -428,6 +481,7 @@ def expand_node(state):
 
 
 async def synthesize_node(state):
+    recommended_ids = discovery.select_research(state)
     items = list((state.get("evidence_items") or {}).values())
     scientific = any(item.get("material") in SCIENTIFIC_MATERIALS for item in items)
     if not items or (READ_HINT.search(state.get("goal") or "") and not scientific):
@@ -435,10 +489,10 @@ async def synthesize_node(state):
         answer = "未取得足以回答问题的论文内容，不能确认论文细节。"
         if papers:
             answer += "\n已找到的候选论文：\n" + "\n".join(f"- {p['title']}（{p['id']}）" for p in papers[:state.get("result_limit") or 8])
-        return _patch(state, stage="synthesize", answer=answer, claims=[],
+        return _patch(state, stage="synthesize", answer=answer, claims=[], recommended_ids=recommended_ids,
                       stop_reason="没有可引用的论文证据", events=[{"step": "synthesize", "reason": "如实返回候选与材料缺口"}])
     material = {"goal": state.get("goal"), "history": state.get("conversation_history"),
-                "papers": [{k: p.get(k) for k in ("id", "title", "authors", "year", "url")} for p in state.get("papers") or []],
+                "papers": [{k: p.get(k) for k in ("id", "title", "authors", "year", "url")} for p in state.get("papers") or [] if p["id"] in recommended_ids],
                 "evidence": items, "gaps": state.get("gaps") or [], "coverage": state.get("coverage"),
                 "result_limit": state.get("result_limit"), "feedback": state.get("workflow_feedback") or []}
     async def produce():
@@ -456,7 +510,7 @@ async def synthesize_node(state):
     if not answer:
         answer = "回答生成暂不可用，已保留论文和原文证据。\n" + "\n".join(
             f"[{item['evidence_id']}] {item.get('paper_id')}：{item['quote'][:200]}" for item in items[:5])
-    return _patch(state, stage="synthesize", **updates, answer=answer,
+    return _patch(state, stage="synthesize", **updates, answer=answer, recommended_ids=recommended_ids,
                   llm_calls=state.get("llm_calls", 0) + (0 if cached else 1),
                   events=[{"step": "synthesize", "reason": "依据已核对原文综合回答"}])
 
@@ -497,7 +551,7 @@ def post_actions_route(state):
         return "analyze"
     if "save_to_workspace" in actions:
         return "save"
-    return "judge"
+    return "finish" if state.get("output_mode") == "bibliography" else "judge"
 
 
 def after_analyze_route(state):
@@ -505,6 +559,8 @@ def after_analyze_route(state):
 
 
 def _post_paper_ids(state) -> list[str]:
+    if state.get("recommended_ids") is not None:
+        return list(state["recommended_ids"])
     papers = state.get("papers") or []
     limit = state.get("result_limit") or MAX_TOOL_PAPERS
     return [paper["id"] for paper in papers[:max(1, int(limit))]]

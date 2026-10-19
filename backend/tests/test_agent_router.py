@@ -113,11 +113,11 @@ class AgentRouterTests(RouterTestBase):
                 m.stop()
         self.assertEqual(result["status"], "done")
         self.assertEqual(result["mode"], "react")
-        self.assertEqual(mocks[0].call_count, 0)
-        search.assert_awaited_once()
-        self.assertTrue({"prepare", "search", "assess", "synthesize"} <= {e["step"] for e in result["events"]})
+        self.assertEqual(mocks[0].call_count, 1)
+        self.assertLessEqual(search.await_count, 3)
+        self.assertTrue({"prepare", "search", "select"} <= {e["step"] for e in result["events"]})
         self.assertFalse(any(e["step"] == "plan" for e in result["events"]))
-        self.assertIn("不能确认", result["answer"])
+        self.assertIn("未筛选到", result["answer"])
 
     async def test_override_plan_forces_interrupt_for_simple_goal(self):
         """override：简单问题强制 plan → 仍触发审批中断。"""
@@ -219,9 +219,9 @@ class AgentRouterTests(RouterTestBase):
         managers = self.managers([route_json("react"), assess, assess], search=search)
         mocks = [m.start() for m in managers]
         try:
-            simple = await agent.run("检索增强是什么", auto_approve=True, task_id="simple-budget")
+            simple = await agent.run("分析这类论文的检索增强方法", auto_approve=True, task_id="simple-budget")
             self.assertEqual(mocks[0].call_count, 0)
-            planned = await agent.run("检索增强是什么", auto_approve=True, task_id="planned-budget", mode="plan")
+            planned = await agent.run("分析这类论文的检索增强方法", auto_approve=True, task_id="planned-budget", mode="plan")
         finally:
             for m in reversed(managers):
                 m.stop()

@@ -7,9 +7,9 @@ import type { ResearchChat, ResearchTurn as Turn } from "../../researchChats";
 import { CopyOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
 import { Button, message } from "antd";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
-import { CollectButton } from "../../components/CollectButton";
-import { formatAuthors, paperFacts } from "../../components/PaperRow";
 import { paperKey } from "../../types";
+import { ResearchPaperResults } from "../../components/ResearchPaperResults";
+import { researchHistory, researchSummary } from "../../researchPresentation";
 import { paperLocation } from "../../workspace";
 import { useWorkspaceProject } from "./shared";
 
@@ -18,7 +18,7 @@ import { useWorkspaceProject } from "./shared";
 const WELCOME = ["你好！我是你的 AI 研究助手。", "我可以帮你搜索和阅读学术论文、梳理研究方向、提炼关键信息，并将有价值的论文加入当前工作区。你想研究什么主题呢？"];
 const RESEARCH_STEP: Record<string, string> = {
   route: "理解研究目标", plan: "制定研究计划", prepare: "确认研究资料", search: "寻找相关论文",
-  read: "阅读论文", quotes: "核对原文依据", assess: "检查资料是否充分", expand: "补充检索",
+  select: "筛选推荐论文", read: "阅读论文", quotes: "核对原文依据", assess: "检查资料是否充分", expand: "补充检索",
   synthesize: "整理研究结论", claims: "检查结论依据", judge: "复核回答", revise: "修订回答",
   finalize: "完成复核", stop: "研究结束",
 };
@@ -130,7 +130,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
         if (!alive) return;
         const pending = task.status === "running";
         setTurns(current => current.map(turn => turn.id === activeTask!.id ? { ...turn, task, pending,
-          papers: task.papers?.length ? task.papers : undefined, answeredAt: pending ? turn.answeredAt : Date.now(),
+          papers: task.recommended ?? task.papers, total: task.candidate_count, answeredAt: pending ? turn.answeredAt : Date.now(),
           error: task.status === "failed" ? "任务执行失败，可重试原问题。" : undefined } : turn));
         setPollError("");
         if (!pending) {
@@ -153,7 +153,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
     if (!question || busy || disabled) return;
     const turnId = retry?.id ?? Date.now();
     const request = retry?.request ?? { selectedIds: [...selectedIds], mode,
-      history: turns.filter(t => t.id !== turnId && t.task?.answer).slice(-6).map(t => `用户：${t.question}\n助手：${t.task?.answer}`).join("\n\n").slice(-16000) };
+      history: turns.filter(t => t.id !== turnId && t.task?.answer).slice(-6).map(researchHistory).join("\n\n").slice(-16000) };
     const turn: Turn = { id: turnId, question, pending: true, request };
     stopRequested.current = false; setPreparing(true); setDraft(""); setPollError("");
     setTurns(current => retry ? current.map(t => t.id === turnId ? turn : t) : [...current, turn]);
@@ -170,7 +170,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
         workspaceId: id, scope, selectedPaperIds: request.selectedIds.slice(0, 50), accessiblePaperIds: request.selectedIds, conversationHistory: request.history });
       if (stopRequested.current) await cancelResearchTask(task.task_id);
       setTurns(current => current.map(t => t.id === turnId ? { ...t, pending: task.status === "running", task,
-        answeredAt: task.status === "running" ? undefined : Date.now(), papers: task.papers?.length ? task.papers : undefined } : t));
+        answeredAt: task.status === "running" ? undefined : Date.now(), papers: task.recommended ?? task.papers, total: task.candidate_count } : t));
     } catch (err) {
       setTurns(current => current.map(t => t.id === turnId ? { ...t, pending: false, error: err instanceof Error ? err.message : "研究任务失败" } : t));
     } finally { setPreparing(false); }
@@ -196,7 +196,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
         : paused?.type === "clarify" ? (approved ? { scope, selected_paper_ids: selectedIds.slice(0, 50), accessible_paper_ids: selectedIds } : { abort: true })
         : { approved_ids: approved ? paused?.paper_ids ?? [] : [] };
       const task = await researchDecision(turn.task.task_id, { ...decision, accessible_paper_ids: selectedIds, background: true }, abort.signal);
-      setTurns(current => current.map(item => item.id === turn.id ? { ...item, pending: task.status === "running", task, papers: task.papers?.length ? task.papers : undefined, answeredAt: Date.now(), error: undefined } : item));
+      setTurns(current => current.map(item => item.id === turn.id ? { ...item, pending: task.status === "running", task, papers: task.recommended ?? task.papers, total: task.candidate_count, answeredAt: Date.now(), error: undefined } : item));
       projects.syncPapers(id, await workspacePapers(id, abort.signal));
     } catch (err) {
       if (!abort.signal.aborted) setTurns(current => current.map(item => item.id === turn.id ? { ...item, error: err instanceof Error ? err.message : "任务恢复失败" } : item));
@@ -235,22 +235,26 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                 actions={!turn.pending && (turn.error || turn.note || turn.task?.status === "failed" || turn.task?.stop_reason?.includes("取消"))
                   ? <Button size="small" icon={<ReloadOutlined />} aria-label="重试原问题" disabled={busy || disabled} onClick={() => void send(turn)}>重试原问题</Button> : null}>
                 {turn.pending ? <p className="pending">{RESEARCH_STEP[turn.task?.events?.at(-1)?.step ?? ""] ?? "正在研究并收集资料"}…</p> : null}
-                {turn.task?.events?.some(event => RESEARCH_STEP[event.step]) ? <details className="research-evidence">
-                  <summary>查看研究过程</summary>
-                  <ol>{turn.task.events.filter(event => RESEARCH_STEP[event.step]).map((event, index) => <li key={index}>
-                    {RESEARCH_STEP[event.step]}{event.reason ? `：${event.reason}` : ""}
-                  </li>)}</ol>
-                </details> : null}
+                {turn.task?.output_mode === "bibliography" ? <ResearchPaperResults turn={turn} from={here} /> : null}
                 {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer}</p> : null}
-                {turn.task?.reading_status && Object.keys(turn.task.reading_status).length ? <p className="small-print">
-                  已检查 {Object.keys(turn.task.reading_status).length} 篇论文：
-                  {Object.values(turn.task.reading_status).filter(row => row.basis === "full_text").length} 篇取得正文依据，
-                  {Object.values(turn.task.reading_status).filter(row => row.basis === "abstract").length} 篇仅有摘要，
-                  {Object.values(turn.task.reading_status).filter(row => row.basis === "unavailable").length} 篇缺少相关内容。
-                </p> : null}
+                {turn.task?.output_mode !== "bibliography" ? <ResearchPaperResults turn={turn} from={here} /> : null}
+                {turn.task?.events?.some(event => RESEARCH_STEP[event.step]) ? <details className="research-evidence">
+                  <summary>{researchSummary(turn)} · 查看研究过程</summary>
+                  <ol>{Array.from(new Set(turn.task.events.filter(event => RESEARCH_STEP[event.step]).map(event => event.step))).map(step => {
+                    const events = turn.task!.events!.filter(event => event.step === step);
+                    return <li key={step}>{RESEARCH_STEP[step]}{events.length > 1 ? `（${events.length} 次）` : ""}{events.at(-1)?.reason ? `：${events.at(-1)!.reason}` : ""}</li>;
+                  })}</ol>
+                  {turn.task.reading_status && Object.keys(turn.task.reading_status).length ? <p className="small-print">
+                    资料读取：{Object.values(turn.task.reading_status).filter(row => row.basis === "full_text").length} 篇提供正文依据，
+                    {Object.values(turn.task.reading_status).filter(row => row.basis === "abstract").length} 篇提供摘要依据，
+                    {Object.values(turn.task.reading_status).filter(row => row.basis === "unavailable").length} 篇未提取到可用引文（不代表论文无关）。
+                  </p> : null}
+                  {turn.task.gaps?.length ? <details><summary>依据与局限</summary><ul>{turn.task.gaps.map((gap, index) => <li key={index}>{gap}</li>)}</ul></details> : null}
+                  {Object.entries(turn.task.source_errors ?? {}).map(([source, error]) => <p key={source} className="small-print">来源状态 · {source}：{error}</p>)}
+                </details> : null}
                 {(() => {
                   const referencedIds = turn.task?.referenced_evidence_ids ?? (turn.task?.answer?.match(/E\d{4,}/g) ?? []);
-                  const evidence = (turn.task?.evidence ?? []).filter(e => referencedIds.includes(e.evidence_id));
+                  const evidence = (turn.task?.evidence ?? []).filter(e => referencedIds.includes(e.evidence_id) && e.material !== "metadata" && !e.quote.startsWith('{"id":'));
                   return evidence.length ? <details className="research-evidence"><summary>查看引用依据 · {evidence.length} 条</summary>{evidence.map(e => <p key={e.evidence_id}><strong>[{e.evidence_id}]</strong> {e.paper_id ? <Link to={paperLocation(e.paper_id, here)}>查看论文</Link> : null}<br />{e.quote}</p>)}</details> : null;
                 })()}
                 {turn.task?.status === "waiting" ? <div>
@@ -266,17 +270,6 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                 {turn.error ? <p className="inline-error" role="alert">{turn.error}</p> : null}
                 {turn.task?.stop_reason?.includes("取消") ? <p className="small-print">任务已停止，已取得的结果保留。</p> : null}
 
-                {turn.papers ? <>
-                  <p className="small-print">本次涉及的论文{typeof turn.total === "number" ? `，找到 ${turn.total.toLocaleString("zh-CN")} 篇` : ""}。下面是前 {turn.papers.length} 篇，可以收藏到这个工作区。</p>
-                  {turn.papers.map(paper => <article className="assistant-hit" key={paperKey(paper)}>
-                    <h3><Link to={paperLocation(paperKey(paper), here)}>{paper.title}</Link></h3>
-                    <p className="paper-byline">{formatAuthors(paper.authors)}</p>
-                    <p className="paper-facts">{paperFacts(paper).map(item => <span key={item}>{item}</span>)}</p>
-                    <CollectButton paper={paper} onSaved={saved => setSelectedIds(ids => [...new Set([...ids, paperKey(saved)])])} />
-                  </article>)}
-                  {!turn.papers.length ? <p className="empty-hint">没有找到相关论文。</p> : null}
-                  <p className="assistant-more"><Link to={`/search?q=${encodeURIComponent(turn.question)}`}>在论文搜索中查看全部</Link></p>
-                </> : null}
               </AssistantBubble>
             </div>)}
           </div>

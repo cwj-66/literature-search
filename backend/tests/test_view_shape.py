@@ -20,6 +20,11 @@ class ViewShapeValidationTests(unittest.TestCase):
     def test_quote_inside_term_rejected(self):
         self.assertIsNone(parse_view_groups('("a"b") AND ("c")'))
 
+    def test_multiple_or_groups_preserve_every_required_facet(self):
+        query = '("RAG" OR "retrieval-augmented generation") AND ("application" OR "applied")'
+        self.assertEqual(parse_view_groups(query), [["RAG", "retrieval-augmented generation"], ["application", "applied"]])
+        self.assertEqual(compile_query_dialect(query, "s2"), '("RAG"|"retrieval-augmented generation")+("application"|"applied")')
+
     def test_unbalanced_parens_rejected(self):
         self.assertIsNone(parse_view_groups('("a" AND ("b")'))
 

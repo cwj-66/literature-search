@@ -222,7 +222,7 @@ def merge_papers(groups: list[list[PaperOut]], sort: str) -> list[PaperOut]:
     return [paper for paper, _ in merged]
 
 
-_VIEW_RE = re.compile(r'^\(("[^"]+"(?: OR "[^"]+")*)\)(?: AND \("[^"]+(?: OR "[^"]+")*"\))+$|^\(("[^"]+"(?: OR "[^"]+")*)\)$')
+_VIEW_RE = re.compile(r'\("[^"]+"(?: OR "[^"]+")*\)(?: AND \("[^"]+"(?: OR "[^"]+")*\))*')
 
 
 def parse_view_groups(query: str) -> list[list[str]] | None:
@@ -232,7 +232,7 @@ def parse_view_groups(query: str) -> list[list[str]] | None:
     引号内嵌引号、括号不平衡）一律返回 None，交给各源原样处理。
     """
     text = query.strip()
-    if not _VIEW_RE.match(text):
+    if not _VIEW_RE.fullmatch(text):
         return None
     factors = re.split(r'"\) AND \("', text[1:-1])
     groups = []
@@ -251,8 +251,8 @@ def compile_query_dialect(query: str, source: str) -> str:
         return query
     if source == "arxiv":
         return " AND ".join("(" + " OR ".join(f'all:"{term}"' for term in group) + ")" for group in groups)
-    # Semantic Scholar 检索接口直接接受 (a OR b) AND c 布尔语法。
-    return " AND ".join("(" + " OR ".join(f'"{term}"' for term in group) + ")" for group in groups)
+    # Boolean queries use the bulk endpoint's + (AND) and | (OR) grammar.
+    return "+".join("(" + "|".join(f'"{term}"' for term in group) + ")" for group in groups)
 
 
 def arxiv_search_query(query: str, year_from: int | None, year_to: int | None) -> str:
@@ -665,6 +665,9 @@ async def search_s2_relevance(client, query: str, offset: int, limit: int, year_
 
 
 async def search_semantic_scholar(client: httpx.AsyncClient, query: str, offset: int, limit: int, year_from: int | None, year_to: int | None, sort: str = "relevance") -> tuple[list[PaperOut], int]:
+    if sort == "relevance" and parse_view_groups(query):
+        papers, total = await search_s2_bulk(client, query, year_from, year_to, sort, offset + limit)
+        return papers[offset:offset + limit], total
     if sort == "date_asc":
         papers, total = await search_s2_bulk(client, query, year_from, year_to, sort, offset + limit)
         words = re.findall(r"[\w]+", query, flags=re.UNICODE)

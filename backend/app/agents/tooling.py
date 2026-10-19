@@ -125,6 +125,9 @@ def _rule_rewrite_query(query: str, state: dict) -> str | None:
     """规则路径的确定性改写：逐步放松检索式——视图查询丢最后一个 AND 组，普通查询丢最后一个词。"""
     seen = set(state.get("query_fingerprints") or [])
     candidates: list[str] = []
+    from app.agents.discovery import required_groups
+    if required_groups(state.get("goal") or "", state.get("search_plan")):
+        return next((item for item in state.get("queries") or [] if item != query and query_fingerprint(item) not in seen), None)
     if ") AND (" in query:
         candidates.append(query.rsplit(" AND (", 1)[0].rstrip())
     words = query.split()

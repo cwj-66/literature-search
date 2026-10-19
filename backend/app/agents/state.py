@@ -10,6 +10,7 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 from app.agents import store
+from app.agents.discovery import requested_count
 from app.tools.research_scope import ToolContext
 
 MAX_EXTRA_SEARCH = 2
@@ -115,6 +116,10 @@ class AgentState(TypedDict, total=False):
     evidence_sources: dict
     evidence_items: dict
     result_limit: int | None
+    output_mode: str
+    search_plan: dict
+    recommended_ids: list[str] | None
+    recommendation_reasons: dict
     sort_order: str | None
     gaps: list
     coverage: dict | None
@@ -433,7 +438,11 @@ def initial_state(goal: str, year_from: int | None = None, year_to: int | None =
         "plan_version": 0,
         "query_index": 0,
         "need_evidence": False,
-        "result_limit": None,
+        "result_limit": requested_count(goal),
+        "output_mode": "research",
+        "search_plan": {},
+        "recommended_ids": None,
+        "recommendation_reasons": {},
         "sort_order": None,
     }
 
@@ -448,7 +457,11 @@ def _status_of(state: dict) -> str:
 
 
 def public_state(state: dict) -> dict:
+    from app.agents.discovery import output_papers
     items = state.get("evidence_items") or {}
+    recommended = output_papers(state)
+    selected = {paper["id"] for paper in recommended}
+    candidates = [paper for paper in state.get("papers") or [] if paper["id"] not in selected]
     return {
         **{key: state.get(key) for key in ToolContext.model_fields},
         "parent_task_id": state.get("parent_task_id"),
@@ -469,8 +482,16 @@ def public_state(state: dict) -> dict:
         "plan": state.get("plan") or [],
         "plan_version": state.get("plan_version", 0),
         "queries": state.get("queries") or [],
-        "paper_ids": [paper.get("id") for paper in state.get("papers") or []],
-        "papers": state.get("papers") or [],
+        "paper_ids": [paper["id"] for paper in recommended],
+        "papers": recommended,
+        "recommended": recommended,
+        "candidates": candidates,
+        "candidate_count": len(state.get("papers") or []),
+        "source_errors": state.get("source_errors") or {},
+        "source_retry_after": state.get("source_retry_after") or {},
+        "result_limit": state.get("result_limit"),
+        "output_mode": state.get("output_mode"),
+        "recommendation_reasons": state.get("recommendation_reasons") or {},
         "evidence_ids": state.get("evidence_ids") or [],
         "evidence": [{**item, "quote": str(item.get("quote") or "")[:900]} for item in items.values()],
         "referenced_evidence_ids": list(dict.fromkeys(

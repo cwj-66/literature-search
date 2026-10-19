@@ -7,7 +7,7 @@ include this version: a replayed side effect keeps its identity across prompt up
 
 from app.services.analysis.evidence_analysis import SYSTEM as PAPER_ANALYST_SYSTEM
 
-AGENT_PROMPT_VERSION = "v12-untrusted-data"
+AGENT_PROMPT_VERSION = "v13-bibliographic-results"
 
 ROUTER_SYSTEM = """你是任务路由员，把用户请求分类为 direct、react 或 plan。
 direct：问候、闲聊、稳定的通用知识或概念解释，不依赖具体论文、工作区数据或实时外部信息。

@@ -401,8 +401,9 @@ def _dedupe_views(views: list) -> list:
 
 
 def _plan_from_payload(payload: dict, question: str) -> dict:
+    from app.agents.discovery import protect_query
     views = _dedupe_views(payload.get("query_views"))
-    queries = [query for query in (_compile_view(view.get("concept_groups")) for view in views) if query]
+    queries = [protect_query(query, question, payload) for query in (_compile_view(view.get("concept_groups")) for view in views) if query]
     if not queries:
         raise ValueError("检索计划缺少可用查询视角")
     return {

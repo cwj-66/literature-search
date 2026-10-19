@@ -91,12 +91,20 @@ export interface ResearchEvent {
 }
 
 export interface ResearchTask {
+  output_mode?: "bibliography" | "research";
+  result_limit?: number | null;
+  recommended?: Paper[];
+  candidates?: Paper[];
+  candidate_count?: number;
+  recommendation_reasons?: Record<string, string>;
+  source_errors?: Record<string, string>;
+  search_count?: number;
   workflow_stage?: string;
   research_intent?: "auto" | "discover" | "read" | "mixed";
   discovered_paper_ids?: string[];
   reading_status?: Record<string, { status: string; basis: "full_text" | "abstract" | "unavailable"; evidence_count: number }>;
   papers?: Paper[];
-  evidence?: { evidence_id: string; paper_id?: string; quote: string }[];
+  evidence?: { evidence_id: string; paper_id?: string; quote: string; material?: string }[];
   referenced_evidence_ids?: string[];
   task_id: string;
   status: "waiting" | "done" | string;
