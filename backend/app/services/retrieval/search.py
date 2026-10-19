@@ -222,11 +222,45 @@ def merge_papers(groups: list[list[PaperOut]], sort: str) -> list[PaperOut]:
     return [paper for paper, _ in merged]
 
 
+def parse_view_groups(query: str) -> list[list[str]] | None:
+    """解析 SearchPlan 编译出的布尔视图查询 '("a" OR "b") AND ("c")' 为概念组列表。
+
+    不是视图形态（含顶层括号分组）时返回 None，交给各源原样处理。
+    """
+    text = query.strip()
+    if not (text.startswith("(") and ")" in text):
+        return None
+    groups = []
+    for factor in re.split(r"\)\s+AND\s+\(", text):
+        factor = factor.strip().strip("()").strip()
+        terms = [term.strip().strip('"') for term in factor.split(" OR ")]
+        terms = [term for term in terms if term]
+        if not terms:
+            return None
+        groups.append(terms)
+    return groups or None
+
+
+def compile_query_dialect(query: str, source: str) -> str:
+    """把布尔视图查询编译为指定数据源的检索语法；非视图查询原样返回。"""
+    groups = parse_view_groups(query)
+    if not groups:
+        return query
+    if source == "arxiv":
+        return " AND ".join("(" + " OR ".join(f'all:"{term}"' for term in group) + ")" for group in groups)
+    # Semantic Scholar 检索接口直接接受 (a OR b) AND c 布尔语法。
+    return " AND ".join("(" + " OR ".join(f'"{term}"' for term in group) + ")" for group in groups)
+
+
 def arxiv_search_query(query: str, year_from: int | None, year_to: int | None) -> str:
     # Treat UI input as literal keywords. Explicit AND/grouping prevents arXiv's
     # implicit term operators from escaping the submittedDate restriction.
-    words = re.findall(r"[^\s\"]+", query)
-    term = "(" + " AND ".join(f'all:"{word}"' for word in words) + ")"
+    groups = parse_view_groups(query)
+    if groups:
+        term = compile_query_dialect(query, "arxiv")
+    else:
+        words = re.findall(r"[^\s\"]+", query)
+        term = "(" + " AND ".join(f'all:"{word}"' for word in words) + ")"
     if year_from or year_to:
         start = f"{year_from or 1900}0101"
         end = f"{year_to or 2100}1231"
@@ -514,9 +548,10 @@ async def search_s2_bulk(client, query: str, year_from: int | None, year_to: int
     words = re.findall(r"[\w]+", query, flags=re.UNICODE)
     if not words:
         raise SourceFailure("请输入有效的检索关键词")
+    view = compile_query_dialect(query, "s2") if parse_view_groups(query) else None
     # date_asc 先多取几页，回到调用侧做相关性过滤后再取最早
     cap = min(target * 5, 200) if sort == "date_asc" else target
-    params = {"query": " + ".join(words), "fields": S2_FIELDS,
+    params = {"query": view or " + ".join(words), "fields": S2_FIELDS,
               "sort": "publicationDate:asc" if sort == "date_asc"
               else ("publicationDate:desc" if sort == "date" else "citationCount:desc")}
     year = s2_year(year_from, year_to)
@@ -590,7 +625,7 @@ async def search_s2_relevance(client, query: str, offset: int, limit: int, year_
             state["windowed"] = True
         return [], 0
     limit = max(1, min(limit, 100, S2_RELEVANCE_CAP - offset))
-    params = {"query": query, "offset": offset, "limit": limit, "fields": S2_FIELDS}
+    params = {"query": compile_query_dialect(query, "s2"), "offset": offset, "limit": limit, "fields": S2_FIELDS}
     year = s2_year(year_from, year_to)
     if year:
         params["year"] = year
