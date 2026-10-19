@@ -6,6 +6,7 @@ QUANTITY = re.compile(rf"(?<![0-9])({NUMBER})\s*(?:篇(?:论文|文献|文章)?|
 DETAILS = re.compile(r"分析|比较|对比|梳理|总结|评估|解读|实验结果|实现细节|(?:写|做|帮我).{0,6}综述|研究脉络|analy[sz]e|compare|summari[sz]e|explain|how\b|^review\b", re.I)
 FIND = re.compile(r"找|搜索|检索|推荐|寻找|论文|文献|文章|\b(?:find|search|recommend|papers?|articles?)\b", re.I)
 RAG = ["RAG", "retrieval-augmented generation", "retrieval augmented generation", "检索增强生成"]
+EMBEDDING = ["text embedding", "text embeddings", "sentence embedding", "sentence embeddings", "dense embedding", "dense embeddings", "embedding model", "embedding models", "BGE", "E5", "向量模型", "向量大模型", "文本向量"]
 APPLICATION = ["application", "applications", "applied", "deployment", "deployed", "real-world", "real world", "clinical", "healthcare", "medical", "education", "educational", "industrial", "industry", "legal", "finance", "financial", "nutrigenetics", "应用", "落地"]
 FACETS = [(r"应用|落地|\bapplications?\b", APPLICATION),
           (r"医疗|医学|\b(?:medical|clinical|healthcare)\b", ["medical", "clinical", "healthcare", "medicine", "医疗", "医学"]),
@@ -47,6 +48,8 @@ def required_groups(goal, plan=None):
     groups = []
     if any(contains(goal, term) for term in RAG):
         groups.append(RAG)
+    if re.search(r"向量(?:大)?模型|文本向量|\b(?:text|sentence|dense) embeddings?\b|\bembedding models?\b", goal, re.I):
+        groups.append(EMBEDDING)
     for pattern, synonyms in FACETS:
         if re.search(pattern, goal, re.I):
             groups.append(synonyms)
@@ -108,9 +111,10 @@ def select_bibliography(state):
     plan = state.get("search_plan") or {}
     groups = required_groups(goal, plan)
     core = [str(term) for term in plan.get("core_concepts") or [] if isinstance(term, str)]
-    if not plan.get("must_have_facets") and core:
-        known = {term.casefold() for group in groups for term in group}
-        groups.extend([term] for term in core if term.casefold() not in known)
+    for term in core:
+        if not any(contains(term, alias) or contains(alias, term) for group in groups for alias in group):
+            aliases = next((row for row in plan.get("likely_synonyms") or [] if isinstance(row, list) and term in row), [term])
+            groups.append(aliases)
     if not groups:
         from app.services.retrieval.search import parse_view_groups
         queries = state.get("queries") or [goal]

@@ -364,7 +364,9 @@ SEARCH_PLAN_SYSTEM = """你是检索计划规划员，把研究问题转成结�
  "query_views":[{"name":"视角名","concept_groups":[["组内OR","同义词"],["组间AND的另一组"]]}],
  "exclusions":["要排除的词"],
  "rationale":"一句话理由"}
-规则：query_views 给2到3个互补视角（如直接术语/同义改写/方法或应用变体）；每个视角2到4个concept_group，每组不超过5个词；歧义拆成不同视角而不是选一种解释；不得发明年份或数据源；不要把综述类文献当强制概念。"""
+规则：query_views 给2到3个互补视角（如直接术语/同义改写/方法或应用变体）；每个视角1到4个concept_group，每组不超过5个词；歧义拆成不同视角而不是选一种解释；不得发明年份或数据源；不要把综述类文献当强制概念。
+所有视角都必须保留用户原始核心主题。宽泛的 search、IR、AI 不能替代“大模型”“文本向量模型”等明确主题，也不是这些主题的同义词。
+“向量大模型/向量模型”通常指 text embedding models、sentence embeddings、dense embeddings，可以用 E5、BGE 等模型术语形成互补视角，不要转为任意信息检索论文。不要为了凑多个AND组虚构额外条件。"""
 
 MAX_PLAN_QUERIES = 4
 

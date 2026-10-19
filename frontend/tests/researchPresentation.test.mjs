@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../src/researchPresentation.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { researchResults, researchSummary, researchHistory } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const { researchResults, researchSummary, researchHistory, researchHasActivity } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 const pool = Array.from({ length: 24 }, (_, i) => ({ id: `p:${i}`, title: `Paper number ${i}.` }));
 
 test('24 candidates do not become 24 recommended cards', () => {
@@ -31,4 +31,20 @@ test('progress and follow-up context use the chosen set, not the pool', () => {
   assert.match(history, /p:7/);
   assert.doesNotMatch(history, /p:0：/);
   assert.doesNotMatch(history, /p:23/);
+});
+
+test('a conversational reply has no research activity or zero-paper report', () => {
+  const turn = { question:'是找不到吗', task:{answer:'这次没找够，不代表不存在。',search_count:0,reading_status:{},events:[{step:'route'},{step:'direct'},{step:'stop'}]} };
+  assert.equal(researchHasActivity(turn), false);
+  assert.equal(researchSummary(turn), '已回复');
+  assert.doesNotMatch(researchHistory(turn), /上轮任务记录/);
+});
+
+test('follow-up history distinguishes a partial source failure from no matching results', () => {
+  const turn = {question:'找5篇向量模型论文',task:{goal:'找5篇向量模型论文',answer:'找到2篇',recommended:pool.slice(0,2),result_limit:5,queries:['text embedding'],search_count:1,candidate_count:20,source_errors:{semantic_scholar:'timeout'},stop_reason:'书目筛选完成'}};
+  const history = researchHistory(turn);
+  assert.match(history, /"requested":5/);
+  assert.match(history, /"recommended":2/);
+  assert.match(history, /semantic_scholar.*timeout/);
+  assert.match(history, /text embedding/);
 });

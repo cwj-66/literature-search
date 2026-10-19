@@ -16,13 +16,26 @@ export function researchResults(turn: ResearchTurn) {
 }
 
 export function researchSummary(turn: ResearchTurn) {
+  if (!researchHasActivity(turn)) return "已回复";
   const result = researchResults(turn);
   const searches = turn.task?.search_count ?? (turn.task?.events ?? []).filter(e => e.step === "search").length;
   const reads = Object.keys(turn.task?.reading_status ?? {}).length;
   return [`检索 ${searches} 次`, ...(reads ? [`读取资料 ${reads} 篇`] : []), `推荐 ${result.recommended.length} 篇`].join(" · ");
 }
 
+export function researchHasActivity(turn: ResearchTurn) {
+  return Boolean(turn.task?.search_count || Object.keys(turn.task?.reading_status ?? {}).length ||
+    turn.task?.events?.some(event => ["search", "read", "quotes", "assess", "expand", "synthesize"].includes(event.step)));
+}
+
 export function researchHistory(turn: ResearchTurn) {
   const papers = researchResults(turn).recommended;
-  return `用户：${turn.question}\n助手：${turn.task?.answer ?? ""}${papers.length ? "\n本轮最终推荐（后续‘这些论文’指此集合）：\n" + papers.map(p => `${p.id}：${p.title}`).join("\n") : ""}`;
+  const task = turn.task;
+  const activity = researchHasActivity(turn) ? "\n上轮任务记录（只描述此次执行，不代表整个领域）：" + JSON.stringify({
+    status: task?.status, goal: task?.goal ?? turn.question, queries: task?.queries,
+    requested: task?.result_limit, recommended: papers.length,
+    candidate_count: task?.candidate_count ?? turn.total, searches: task?.search_count,
+    source_errors: task?.source_errors, stop_reason: task?.stop_reason,
+  }) : "";
+  return `用户：${turn.question}\n助手：${task?.answer ?? ""}${activity}${papers.length ? "\n本轮最终推荐（后续‘这些论文’指此集合）：\n" + papers.map(p => `${p.id}：${p.title}`).join("\n") : ""}`;
 }

@@ -15,6 +15,7 @@ import re
 from pydantic import ValidationError
 
 from app.agents import store
+from app.agents import discovery
 from app.agents.prompts import ASSESS_SYSTEM, DOMAIN_PROMPTS
 from app.agents.state import (
     ABSTRACT_CHARS, DOMAINS, MAX_ASSESS, MAX_ASSESS_PAPERS, MAX_CANDIDATE_PAPERS, MAX_DEEP, MAX_EXTRA_SEARCH,
@@ -52,7 +53,7 @@ OPERATION_TOOLS = {"search_papers", "get_paper_details", "list_workspace_papers"
                    "query_knowledge_graph", "analyze_research_trends"}
 PRIVILEGED_TOOLS = {"add_papers_to_workspace", "remove_paper_from_workspace", "save_papers_to_workspace", "request_deep_analysis"}
 API_TOOLS = {"search_papers", "get_paper_details", "find_related_papers", "get_paper_references", "get_paper_citations", "retrieve_paper_evidence"}
-LLM_TOOLS = {"analyze_paper", "request_deep_analysis"}
+LLM_TOOLS = {"analyze_paper", "request_deep_analysis", "decompose_question", "rerank_papers"}
 PRODUCER_TOOLS = API_TOOLS | {"list_workspace_papers"}
 TOOL_TIMEOUT = float(os.getenv("RESEARCH_TOOL_TIMEOUT", "120"))
 LLM_TOOL_TIMEOUT = float(os.getenv("RESEARCH_LLM_TOOL_TIMEOUT", "600"))
@@ -504,6 +505,85 @@ async def _tool_search_papers(state: dict, args: dict) -> tuple[str, dict]:
     }
 
 
+async def _tool_decompose_question(state: dict, args: dict) -> tuple[str, dict]:
+    validated = research_tools.MODELS["decompose_question"].model_validate(args).model_dump()
+    context = validated.get("context")
+    if not context:
+        context = [str(msg.get("content"))[:500] for msg in (state.get("messages") or [])
+                   if isinstance(msg, dict) and msg.get("role") == "user"][-3:] or None
+    report = await research_tools.decompose_question(validated["question"], context)
+    if report["needs_clarification"]:
+        return json.dumps(report, ensure_ascii=False), {
+            "events_extra": [{"step": "tool", "name": "decompose_question", "summary": "needs_clarification"}],
+            "past_extra": [["decompose_question", "needs_clarification"]],
+        }
+    plan = report.get("search_plan") or {}
+    protected = [discovery.protect_query(query, report["resolved_question"], plan) for query in report["queries"]]
+    queries = list(dict.fromkeys([*(state.get("queries") or []), *protected]))
+    search_plan = {**plan, "resolved_question": report["resolved_question"], "target_count": report["target_count"]}
+    return json.dumps(report, ensure_ascii=False), {
+        "queries": queries,
+        "search_plan": search_plan,
+        "llm_calls": state.get("llm_calls", 0) + report["llm_calls"],
+        "events_extra": [{"step": "tool", "name": "decompose_question", "summary": "completed"}],
+        "past_extra": [["decompose_question", "completed"]],
+    }
+
+
+async def _tool_rerank_papers(state: dict, args: dict) -> tuple[str, dict]:
+    papers = state.get("papers") or []
+    if not papers:
+        return json.dumps({"tool": "rerank_papers", "status": "failed",
+                           "error": "没有候选论文，请先调用 search_papers"}, ensure_ascii=False), {
+            "events_extra": [{"step": "tool", "name": "rerank_papers", "summary": "failed: 无候选"}],
+            "past_extra": [["rerank_papers", "failed"]],
+        }
+    raw = dict(args or {})
+    validated = research_tools.MODELS["rerank_papers"].model_validate({**raw, "candidates": papers}).model_dump()
+    goal = state.get("goal") or ""
+    resolved = (raw.get("resolved_question") or goal).strip()
+    if not resolved:
+        return json.dumps({"tool": "rerank_papers", "status": "failed", "error": "缺少检索目标"},
+                          ensure_ascii=False), {
+            "events_extra": [{"step": "tool", "name": "rerank_papers", "summary": "failed: 无目标"}],
+            "past_extra": [["rerank_papers", "failed"]],
+        }
+    explicit_target = raw.get("target_count")
+    target = int(explicit_target) if explicit_target else (discovery.requested_count(goal) or 5)
+    constraints = validated.get("constraints") or {"year_from": state.get("year_from"),
+                                                   "year_to": state.get("year_to"), "exclusions": []}
+    groups = discovery.required_groups(resolved, state.get("search_plan") or {})
+    report = await research_tools.rerank_papers(resolved, papers, target_count=target,
+                                                constraints=constraints, groups=groups)
+    if report.get("shortfall_reason") and state.get("source_errors"):
+        detail = "；部分来源调用失败：" + "；".join(
+            f"{name}: {str(err)[:80]}" for name, err in state["source_errors"].items())
+        report["shortfall_reason"] = report["shortfall_reason"] + detail
+    known = {paper["id"]: paper for paper in papers}
+    for paper in report["recommended"]:
+        if paper["id"] in known and paper.get("score") is not None:
+            known[paper["id"]] = {**known[paper["id"]], "rank_score": paper["score"]}
+    content = {
+        "tool": "rerank_papers", "status": "completed",
+        "recommended_ids": report["recommended_ids"], "enough": report["enough"],
+        "shortfall_reason": report["shortfall_reason"],
+        "remaining_candidates": report["remaining_candidates"],
+        "filtered_out_count": report["filtered_out_count"],
+        "recommended": [{"id": paper["id"], "title": paper.get("title"), "year": paper.get("year"),
+                         "score": paper.get("score"), "reason": paper.get("reason")}
+                        for paper in report["recommended"]],
+    }
+    return json.dumps(content, ensure_ascii=False), {
+        "recommended_ids": report["recommended_ids"],
+        "recommendation_reasons": report["reasons"],
+        "papers": list(known.values()),
+        "llm_calls": state.get("llm_calls", 0) + report["llm_calls"],
+        "events_extra": [{"step": "tool", "name": "rerank_papers",
+                          "summary": "enough" if report["enough"] else "shortfall"}],
+        "past_extra": [["rerank_papers", "completed"]],
+    }
+
+
 def _has_scope(state: dict) -> bool:
     return bool(state.get("workspace_id") or state.get("current_paper_id") or state.get("selected_paper_ids"))
 
@@ -881,6 +961,8 @@ def _catalog_handler(name):
 TOOL_REGISTRY = {
     **{name: _catalog_handler(name) for name in research_tools.CATALOG},
     "search_papers": _tool_search_papers,
+    "decompose_question": _tool_decompose_question,
+    "rerank_papers": _tool_rerank_papers,
     "retrieve_paper_evidence": _tool_retrieve_paper_evidence,
     "analyze_paper": _tool_analyze_paper,
     "assess_coverage": _tool_assess_coverage,

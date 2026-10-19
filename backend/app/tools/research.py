@@ -13,6 +13,8 @@ from app.services.papers import library, workspaces
 from app.services.retrieval import recommend, search
 from app.tools import analyze_paper as analyze_tool, index_paper as index_tool
 from app.tools.add_papers_to_workspace import AddPapersToWorkspaceRequest, add_papers_to_workspace
+from app.tools.decompose_question import DecomposeQuestionRequest, decompose_question
+from app.tools.rerank_papers import RerankPapersRequest, rerank_papers
 from app.tools.search_papers import SearchPapersRequest, search_papers
 from app.tools.research_scope import ToolContext, resolve
 from app.tools import paper_evidence
@@ -73,7 +75,9 @@ class AnalyzeArgs(ScopeArgs):
 
 
 DEFINITIONS = (
-    ("search_papers", "discovery", "搜索 arXiv、Semantic Scholar，保留来源错误和分页信息。", SearchPapersRequest),
+    ("decompose_question", "discovery", "拆解找论文需求：消解指代、确定数量与年份约束、生成围绕原始主题的检索式；不调用论文 API。找论文流程第一步，“继续找/换条件”类请求先经它还原成独立任务；无法确定主题时返回 needs_clarification。", DecomposeQuestionRequest),
+    ("search_papers", "discovery", "按关键词搜索学术论文，返回候选论文 ID、摘要、链接和来源状态；结果是待筛选候选（找论文流程第二步），可能包含相关性不足的条目，需经 rerank_papers 筛选后才能作为推荐；支持年份、来源、排序与分页，不自动导入文献库。中文关键词映射不代表覆盖中文文献库。", SearchPapersRequest),
+    ("rerank_papers", "discovery", "对候选论文去重并按完整检索目标做主题相关性筛选与排序，输出最终推荐、评分、推荐理由、未入选候选与不足原因；不用无关论文凑数。找论文流程最后一步，回答中的推荐必须以此结果为准。", RerankPapersRequest),
     ("get_paper_details", "discovery", "获取论文作者、摘要、DOI、年份和原文链接；优先本地数据。", PaperArgs),
     ("find_related_papers", "discovery", "论文相似度搜索：从 arXiv 与 Semantic Scholar 分别召回引用、主题、关键词候选，分组返回依据与评分；临时向量不保存。", RelatedArgs),
     ("get_paper_references", "discovery", "获取论文引用的文献，最多 20 条；来源不可用时明确报告。", PaperArgs),
@@ -189,6 +193,10 @@ async def execute(name: str, arguments: dict, context: ToolContext | None = None
     args = MODELS[name].model_validate(args).model_dump()
     if name == "search_papers":
         return await search_papers(**args)
+    if name == "decompose_question":
+        return await decompose_question(**args)
+    if name == "rerank_papers":
+        return await rerank_papers(**args)
     if name == "list_workspace_papers":
         if ctx.accessible_paper_ids is not None:
             papers = await asyncio.to_thread(resolve, ctx)

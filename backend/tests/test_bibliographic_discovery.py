@@ -20,6 +20,20 @@ def paper(i, relevant=True):
 
 
 class DiscoveryConstraintsTests(unittest.TestCase):
+    def test_vector_model_topic_cannot_be_satisfied_by_generic_ir_results(self):
+        state = {**initial_state('帮我找5篇有关向量大模型的论文'),
+                 'search_plan': {'must_have_facets': [['IR','search','text embedding']]},
+                 'papers': [{'id':'bad','title':'A query suggestion workflow for life science IR-systems.'},
+                            {'id':'good','title':'BGE: General Text Embeddings for Semantic Search'}]}
+        self.assertEqual(discovery.select_bibliography(state)[0], ['good'])
+
+    def test_core_topic_is_required_even_if_plan_has_overly_generic_facets(self):
+        state = {**initial_state('find papers about graph neural networks'),
+                 'search_plan': {'core_concepts':['graph neural network'], 'must_have_facets':[['search','IR']]},
+                 'papers': [{'id':'bad','title':'Query suggestion for IR systems'},
+                            {'id':'good','title':'Graph neural network search'}]}
+        self.assertEqual(discovery.select_bibliography(state)[0], ['good'])
+
     def test_quantity_variants(self):
         for goal, count in [("帮我找三个有关RAG的应用的论文", 3), ("找 3 个关于RAG的论文", 3),
                             ("推荐三份医疗RAG文献", 3), ("找三篇RAG", 3), ("找二十一篇论文", 21),

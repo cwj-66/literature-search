@@ -144,6 +144,8 @@ class CoverageAssessment(BaseModel):
 
 class TaskRoute(BaseModel):
     mode: Literal["direct", "react", "plan"]
+    interaction: Literal["act", "discuss"] = "act"
+    resolved_goal: str | None = Field(None, max_length=2000)
     rationale: str = ""
     domains: list[str] = Field(default_factory=list)
     missing_slots: list[dict] = Field(default_factory=list)

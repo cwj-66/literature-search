@@ -20,6 +20,47 @@ def routed(mode):
 
 
 class DirectChatTests(unittest.IsolatedAsyncioTestCase):
+    async def test_result_discussion_answers_without_searching_or_plan_review(self):
+        history = '用户：帮我找5篇有关向量大模型的论文\n助手：本次推荐2篇\n上轮任务记录：{"recommended":2,"requested":5,"source_errors":{}}'
+        for goal in ('是找不到吗', '这几篇论文明显不相关', '为什么这些论文只有两篇', '先别搜，聊聊思路'):
+            with self.subTest(goal=goal), self.no_research(), \
+                 patch('app.agents.workflow.prepare_node', new=AsyncMock(side_effect=AssertionError('discussion must not start research'))), \
+                 patch.object(llm, 'complete', new=AsyncMock(side_effect=[
+                     json.dumps({'mode':'react','interaction':'discuss','rationale':'解释上轮结果'}),
+                     json.dumps({'answer':'这次只筛选出两篇，不代表领域只有两篇；上一轮主题匹配需要修正。'})])) as complete:
+                result = await agent.run(goal, context={'conversation_history':history,'accessible_paper_ids':[]})
+            self.assertEqual(result['mode'], 'direct')
+            self.assertEqual(result['search_count'], 0)
+            self.assertEqual(result['recommended'], [])
+            self.assertIsNone(result['interrupt'])
+            self.assertIn(history, complete.await_args_list[1].args[0][1]['content'])
+            await agent.reset_graph()
+
+    async def test_explicit_search_followup_restores_topic_without_granting_paper_access(self):
+        history = '用户：帮我找5篇有关向量大模型的论文\n助手：找到2篇。'
+        state = agent.initial_state('那继续找', context={'conversation_history':history, 'accessible_paper_ids':[]})
+        decision = {'mode':'react','interaction':'act','resolved_goal':'继续搜索5篇文本向量模型论文','research_intent':'discover'}
+        with patch.object(llm, 'complete', new=AsyncMock(return_value=json.dumps(decision))):
+            routed_state = await agent.router_node(state)
+        self.assertEqual(routed_state['goal'], decision['resolved_goal'])
+        self.assertEqual(routed_state['route']['user_goal'], '那继续找')
+        self.assertEqual({**state,**routed_state}['accessible_paper_ids'], [])
+        planned = {'queries':['("text embedding")'], 'search_plan':{'core_concepts':['text embedding']}, '_llm_used':1}
+        with patch('app.services.analysis.attribution.plan_search', new=AsyncMock(return_value=planned)) as planner:
+            prepared = await agent.workflow.prepare_node({**state,**routed_state})
+        planner.assert_awaited_once_with(decision['resolved_goal'])
+        self.assertEqual(prepared['result_limit'], 5)
+        self.assertEqual(prepared['output_mode'], 'bibliography')
+
+    async def test_identical_followup_routes_use_their_own_history(self):
+        with patch.object(llm, 'complete', new=AsyncMock(return_value=json.dumps({'mode':'direct','interaction':'discuss'}))) as complete:
+            a = agent.initial_state('是找不到吗', context={'conversation_history':'上一轮5篇向量模型，只找到2篇'})
+            b = agent.initial_state('是找不到吗', context={'conversation_history':'上一轮3篇医疗RAG，来源超时'})
+            await agent.router_node(a)
+            await agent.router_node(a)
+            await agent.router_node(b)
+        self.assertEqual(complete.await_count, 2)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.env = patch.dict(os.environ, {"PAPER_DB_PATH": str(Path(self.temp.name) / "papers.sqlite3"),

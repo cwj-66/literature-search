@@ -9,7 +9,7 @@ import { Button, message } from "antd";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { paperKey } from "../../types";
 import { ResearchPaperResults } from "../../components/ResearchPaperResults";
-import { researchHistory, researchSummary } from "../../researchPresentation";
+import { researchHasActivity, researchHistory, researchSummary } from "../../researchPresentation";
 import { paperLocation } from "../../workspace";
 import { useWorkspaceProject } from "./shared";
 
@@ -234,13 +234,12 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                 onCopy={turn.task?.answer ? () => void copy(turn.task!.answer!) : undefined}
                 actions={!turn.pending && (turn.error || turn.note || turn.task?.status === "failed" || turn.task?.stop_reason?.includes("取消"))
                   ? <Button size="small" icon={<ReloadOutlined />} aria-label="重试原问题" disabled={busy || disabled} onClick={() => void send(turn)}>重试原问题</Button> : null}>
-                {turn.pending ? <p className="pending">{RESEARCH_STEP[turn.task?.events?.at(-1)?.step ?? ""] ?? "正在研究并收集资料"}…</p> : null}
-                {turn.task?.output_mode === "bibliography" ? <ResearchPaperResults turn={turn} from={here} /> : null}
+                {turn.pending ? <p className="pending">{RESEARCH_STEP[turn.task?.events?.at(-1)?.step ?? ""] ?? "正在回复"}…</p> : null}
                 {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer}</p> : null}
-                {turn.task?.output_mode !== "bibliography" ? <ResearchPaperResults turn={turn} from={here} /> : null}
-                {turn.task?.events?.some(event => RESEARCH_STEP[event.step]) ? <details className="research-evidence">
+                <ResearchPaperResults turn={turn} from={here} />
+                {turn.task && researchHasActivity(turn) ? <details className="research-evidence">
                   <summary>{researchSummary(turn)} · 查看研究过程</summary>
-                  <ol>{Array.from(new Set(turn.task.events.filter(event => RESEARCH_STEP[event.step]).map(event => event.step))).map(step => {
+                  <ol>{Array.from(new Set((turn.task.events ?? []).filter(event => RESEARCH_STEP[event.step]).map(event => event.step))).map(step => {
                     const events = turn.task!.events!.filter(event => event.step === step);
                     return <li key={step}>{RESEARCH_STEP[step]}{events.length > 1 ? `（${events.length} 次）` : ""}{events.at(-1)?.reason ? `：${events.at(-1)!.reason}` : ""}</li>;
                   })}</ol>

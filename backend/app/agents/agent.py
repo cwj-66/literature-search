@@ -175,12 +175,20 @@ async def router_node(state: dict) -> dict:
             decision, cache_hit = await cached_call("router", {"goal": goal, "context": context}, lambda: _llm_route(goal, context))
             llm_delta = 0 if cache_hit else 1
             mode = decision["mode"]
+            discuss = decision.get("interaction") == "discuss"
+            if discuss:
+                mode = "direct"
             domains = [domain for domain in decision.get("domains") or [] if domain in DOMAINS or domain == "*"]
             suggested = decision.get("missing_slots") or []
             research_intent = decision.get("research_intent", "auto")
             post_actions = [action for action in decision.get("post_actions") or [] if action in ("analyze", "save_to_workspace")]
-            route_info = {"mode": mode, "rationale": decision.get("rationale") or "", "source": "llm"}
-            if mode == "direct" and PAPER_SPECIFIC.search(goal):
+            route_info = {"mode": mode, "rationale": decision.get("rationale") or "", "source": "llm",
+                          "interaction": decision.get("interaction", "act")}
+            if not discuss and state.get("conversation_history") and (decision.get("resolved_goal") or "").strip():
+                route_info["user_goal"] = goal
+                goal = decision["resolved_goal"].strip()
+                route_info["resolved_goal"] = goal
+            if mode == "direct" and not discuss and PAPER_SPECIFIC.search(goal):
                 mode = "react"
                 route_info = {"mode": mode, "rationale": "问题明确涉及论文或工作区，保留研究工具与证据流程", "source": "rule"}
         except llm.AnalysisError:
@@ -192,6 +200,7 @@ async def router_node(state: dict) -> dict:
         domains = ["*"]
     task_kind = "chat" if mode == "direct" else ("operation" if WORKSPACE_OP.search(goal) or domains == ["knowledge"] else "research")
     updates = {
+        "goal": goal,
         "mode": mode,
         "route": route_info,
         "task_kind": task_kind,
