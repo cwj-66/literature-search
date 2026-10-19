@@ -1,6 +1,7 @@
 """Structured paper analysis through an OpenAI-compatible chat API."""
 
 import asyncio
+import contextvars
 import json
 import logging
 import math
@@ -9,6 +10,7 @@ import random
 import re
 import time
 import weakref
+from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
@@ -50,6 +52,37 @@ class OutputLimitError(AnalysisError):
 
 class ContextLimitError(AnalysisError):
     pass
+
+
+@dataclass
+class UsageMeter:
+    """Accumulates prompt/completion tokens for the LLM calls made while it is attached."""
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    def add(self, prompt_tokens: int, completion_tokens: int) -> None:
+        self.prompt_tokens += int(prompt_tokens or 0)
+        self.completion_tokens += int(completion_tokens or 0)
+
+    @property
+    def total(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+
+_USAGE_METER: contextvars.ContextVar[UsageMeter | None] = contextvars.ContextVar("llm_usage_meter", default=None)
+
+
+def usage_meter() -> UsageMeter | None:
+    return _USAGE_METER.get()
+
+
+def attach_usage_meter(meter: UsageMeter):
+    return _USAGE_METER.set(meter)
+
+
+def detach_usage_meter(token) -> None:
+    _USAGE_METER.reset(token)
 
 
 _GATES = weakref.WeakKeyDictionary()
@@ -210,6 +243,10 @@ async def complete(messages: list[dict]) -> str:
             await asyncio.sleep(delay)
     try:
         data = response.json()
+        meter = _USAGE_METER.get()
+        if meter is not None:
+            usage = data.get("usage") or {}
+            meter.add(usage.get("prompt_tokens"), usage.get("completion_tokens"))
         choice = data["choices"][0]
         content = choice["message"].get("content")
     except (KeyError, IndexError, TypeError, ValueError) as exc:

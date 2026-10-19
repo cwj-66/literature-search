@@ -1256,6 +1256,11 @@ async def _run_segment(task_id: str, graph_input, max_seconds, recovering: bool 
     channel = _CHANNELS.get(task_id) or _Channel()
     config = {"configurable": {"thread_id": task_id}, "recursion_limit": 128}
     store.set_deadline(task_id, max_seconds)
+    meter = llm.UsageMeter()
+    if recovering:
+        prior = await asyncio.to_thread(get_task, task_id) or {}
+        meter.add(prior.get("tokens_used") or 0, 0)
+    meter_token = llm.attach_usage_meter(meter)
     try:
         compiled = await graph()
         if isinstance(graph_input, dict):
@@ -1274,13 +1279,14 @@ async def _run_segment(task_id: str, graph_input, max_seconds, recovering: bool 
                 if isinstance(update, dict):
                     live_state.update(update)
                     # Polling clients need the same stage/evidence progress as SSE clients.
-                    await asyncio.to_thread(save_task, task_id, task_id, "running", {**public_state(live_state), "status": "running"})
+                    await asyncio.to_thread(save_task, task_id, task_id, "running", {**public_state(live_state), "status": "running", "tokens_used": meter.total})
                 channel.publish({"type": "node", "node": node, "update": _compact_update(update if isinstance(update, dict) else {})})
         state, paused, _ = await _snapshot(task_id)
         state = state or {}
         if recovering:
             state["events"] = list(state.get("events") or []) + [{"step": "recover", "reason": "任务恢复后继续执行", "task_id": task_id}]
         payload = public_state(state)
+        payload["tokens_used"] = meter.total
         if paused is not None:
             payload.update(interrupt=paused, status="waiting")
             await asyncio.to_thread(save_task, task_id, task_id, "waiting", payload)
@@ -1301,6 +1307,7 @@ async def _run_segment(task_id: str, graph_input, max_seconds, recovering: bool 
         channel.publish({"type": "error", "task_id": task_id, "message": message})
         raise
     finally:
+        llm.detach_usage_meter(meter_token)
         store.clear_deadline(task_id)
         _release_local(task_id)
 
