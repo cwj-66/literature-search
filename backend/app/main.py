@@ -500,7 +500,8 @@ async def start_research(payload: ResearchStart):
             await asyncio.to_thread(workspaces.require, context.workspace_id)
         starter = agent.start_background if payload.background else agent.run
         return await starter(payload.goal, payload.year_from, payload.year_to, payload.auto_approve,
-                             mode=payload.mode, context=context.model_dump(), max_seconds=payload.max_seconds)
+                             mode=payload.mode, context=context.model_dump(), max_seconds=payload.max_seconds,
+                             budget=payload.budget)
     except agent.TaskConflict as exc:
         raise HTTPException(status_code=409, detail=exc.message) from None
     except ValueError as exc:

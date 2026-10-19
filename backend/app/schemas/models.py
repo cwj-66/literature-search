@@ -94,6 +94,7 @@ class ResearchStart(BaseModel):
     current_paper_id: str | None = Field(None, min_length=1, max_length=500)
     selected_paper_ids: list[str] = Field(default_factory=list, max_length=50)
     mode: Literal["auto", "react", "plan"] = "auto"
+    budget: Literal["fast", "medium", "high"] = "medium"
     background: bool = False
     max_seconds: int | None = Field(None, ge=30, le=3600)
 

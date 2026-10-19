@@ -507,7 +507,7 @@ async def react_agent(state: dict) -> dict:
     if halt:
         return {"stop_reason": halt, "events": with_event(state, {"step": "react_stop", "reason": halt})}
     turns = state.get("react_turns", 0)
-    if turns + 1 > MAX_REACT:
+    if turns + 1 > state.get("max_react", MAX_REACT):
         return {"stop_reason": "达到最大迭代次数", "events": with_event(state, {"step": "react_stop", "reason": "达到最大迭代次数"})}
     messages = list(state.get("messages") or [])
     fresh = not (messages and msg_role(messages[0]) == "system")
@@ -786,7 +786,7 @@ def judge_route(state: dict) -> Literal["revise", "finalize"]:
     rounds = review.get("rounds") or state.get("judge_round") or 0
     failing = any(claim.get("status") in FAILING_STATUSES for claim in state.get("claims") or [])
     failing = failing or bool(review.get("coverage_note")) or bool(review.get("multi_paper_note"))
-    if failing and rounds < MAX_JUDGE_ROUNDS:
+    if failing and rounds < state.get("max_judge_rounds", MAX_JUDGE_ROUNDS):
         return "revise"
     return "finalize"
 
@@ -1209,11 +1209,12 @@ def _release_local(task_id: str) -> None:
         channel.close()
 
 
-def _prepare_new(task_id: str, goal: str, year_from, year_to, auto_approve, mode, context, max_seconds, parent_task_id) -> dict:
+def _prepare_new(task_id: str, goal: str, year_from, year_to, auto_approve, mode, context, max_seconds, parent_task_id,
+                 budget: str | None = None) -> dict:
     _claim_local(task_id)
     try:
         initial = initial_state(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context,
-                                max_seconds=max_seconds, parent_task_id=parent_task_id)
+                                max_seconds=max_seconds, parent_task_id=parent_task_id, budget=budget)
         store.claim_new(task_id, public_state(initial))
         return initial
     except Exception:
@@ -1326,22 +1327,25 @@ def _spawn(task_id: str, coro) -> None:
 
 async def run(goal: str = "", year_from: int | None = None, year_to: int | None = None, auto_approve: bool = False, resume=None,
               task_id: str | None = None, mode: str = "auto", context: dict | None = None, max_seconds: int | None = None,
-              parent_task_id: str | None = None) -> dict:
+              parent_task_id: str | None = None, budget: str | None = None) -> dict:
     """阻塞执行（新任务或 resume）。同一任务的并发执行或重复恢复抛 TaskConflict。"""
     task_id = task_id or uuid4().hex
     if resume is not None:
         graph_input, state = await _prepare_resume(task_id, resume)
         return await _run_segment(task_id, graph_input, state.get("max_seconds"), recovering=True)
-    initial = _prepare_new(task_id, goal, year_from, year_to, auto_approve, mode, context, max_seconds, parent_task_id)
+    initial = _prepare_new(task_id, goal, year_from, year_to, auto_approve, mode, context, max_seconds, parent_task_id,
+                           budget=budget)
     return await _run_segment(task_id, initial, initial["max_seconds"])
 
 
 async def start_background(goal: str, year_from: int | None = None, year_to: int | None = None, auto_approve: bool = False,
                            task_id: str | None = None, mode: str = "auto", context: dict | None = None,
-                           max_seconds: int | None = None, parent_task_id: str | None = None) -> dict:
+                           max_seconds: int | None = None, parent_task_id: str | None = None,
+                           budget: str | None = None) -> dict:
     """创建任务后立即返回 task_id，图在后台执行；进度通过 SSE 订阅。"""
     task_id = task_id or uuid4().hex
-    initial = _prepare_new(task_id, goal, year_from, year_to, auto_approve, mode, context, max_seconds, parent_task_id)
+    initial = _prepare_new(task_id, goal, year_from, year_to, auto_approve, mode, context, max_seconds, parent_task_id,
+                            budget=budget)
     _spawn(task_id, _run_segment(task_id, initial, initial["max_seconds"]))
     return {"task_id": task_id, **public_state(initial), "status": "running"}
 

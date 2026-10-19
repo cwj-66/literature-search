@@ -357,7 +357,10 @@ class QuoteVerifier:
 
 def initial_state(goal: str, year_from: int | None = None, year_to: int | None = None, auto_approve: bool = False,
                   task_id: str | None = None, mode: str = "auto", context: dict | None = None,
-                  max_seconds: int | None = None, parent_task_id: str | None = None) -> dict:
+                  max_seconds: int | None = None, parent_task_id: str | None = None,
+                  budget: str | None = None) -> dict:
+    from app.agents.budgets import resolve_budget
+    preset = resolve_budget(budget)
     return {
         **ToolContext.model_validate(context or {}).model_dump(),
         "task_id": task_id,
@@ -411,10 +414,13 @@ def initial_state(goal: str, year_from: int | None = None, year_to: int | None =
         "llm_calls": 0,
         "extra_search": 0,
         "deep_reads": 0,
-        "max_extra_search": MAX_EXTRA_SEARCH,
-        "max_api_calls": MAX_API,
-        "max_llm_calls": MAX_LLM,
-        "max_deep_reads": MAX_DEEP,
+        "max_extra_search": preset.max_extra_search,
+        "max_api_calls": preset.max_api_calls,
+        "max_llm_calls": preset.max_llm_calls,
+        "max_deep_reads": preset.max_deep_reads,
+        "max_react": preset.max_react,
+        "max_judge_rounds": preset.max_judge_rounds,
+        "budget": preset.label,
         "plan_version": 0,
         "query_index": 0,
         "need_evidence": False,
