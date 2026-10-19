@@ -351,3 +351,111 @@ async def decompose(question: str) -> dict:
     except (llm.AnalysisError, ValueError, TypeError, ValidationError):
         pass
     return {"queries": [question], "exclusions": [], "rationale": "模型规划不可用，已使用原始问题检索"}
+
+
+SEARCH_PLAN_SYSTEM = """你是检索计划规划员，把研究问题转成结构化的检索计划（不输出任何数据库语法）。
+输出JSON：
+{"question_type":"broad_landscape|specific_relation|method_application|mechanism|comparison|seminal_work|recent_progress|systematic_search",
+ "core_concepts":["核心概念，英文术语"],
+ "must_have_facets":[["必须命中的概念组，组内放同义词"]],
+ "optional_facets":[["可选概念，不得提升为强制AND"]],
+ "likely_synonyms":[[同义词组]],
+ "boundaries":["明确的排除边界，没有则空"],
+ "query_views":[{"name":"视角名","concept_groups":[["组内OR","同义词"],["组间AND的另一组"]]}],
+ "exclusions":["要排除的词"],
+ "rationale":"一句话理由"}
+规则：query_views 给2到3个互补视角（如直接术语/同义改写/方法或应用变体）；每个视角2到4个concept_group，每组不超过5个词；歧义拆成不同视角而不是选一种解释；不得发明年份或数据源；不要把综述类文献当强制概念。"""
+
+MAX_PLAN_QUERIES = 4
+
+
+def _compile_view(groups: list) -> str | None:
+    compiled = []
+    for group in groups or []:
+        terms = [str(term).strip() for term in group if str(term).strip()]
+        if not terms:
+            continue
+        quoted = " OR ".join(f'"{term}"' for term in terms)
+        compiled.append(f"({quoted})")
+    return " AND ".join(compiled) if compiled else None
+
+
+def _view_terms(groups: list) -> set:
+    return {str(term).strip().lower() for group in groups or [] for term in group if str(term).strip()}
+
+
+def _dedupe_views(views: list) -> list:
+    accepted: list[dict] = []
+    accepted_terms: set = set()
+    for view in views or []:
+        terms = _view_terms(view.get("concept_groups"))
+        if not terms:
+            continue
+        baseline = accepted_terms or terms
+        overlap = len(terms & baseline) / max(1, len(terms | baseline))
+        if accepted_terms and overlap >= 0.9:
+            continue
+        accepted.append(view)
+        accepted_terms |= terms
+    return accepted
+
+
+def _plan_from_payload(payload: dict, question: str) -> dict:
+    views = _dedupe_views(payload.get("query_views"))
+    queries = [query for query in (_compile_view(view.get("concept_groups")) for view in views) if query]
+    if not queries:
+        raise ValueError("检索计划缺少可用查询视角")
+    return {
+        "queries": queries[:MAX_PLAN_QUERIES],
+        "exclusions": [str(item) for item in payload.get("exclusions") or []],
+        "rationale": str(payload.get("rationale") or ""),
+        "search_plan": {
+            "question_type": str(payload.get("question_type") or ""),
+            "core_concepts": payload.get("core_concepts") or [],
+            "must_have_facets": payload.get("must_have_facets") or [],
+            "optional_facets": payload.get("optional_facets") or [],
+            "likely_synonyms": payload.get("likely_synonyms") or [],
+            "boundaries": payload.get("boundaries") or [],
+            "views": [{"name": str(view.get("name") or ""), "concept_groups": view.get("concept_groups") or []} for view in views],
+        },
+    }
+
+
+async def plan_search(question: str) -> dict:
+    """结构化检索计划（SearchPlan）+ 确定性编译；LLM 失败两级修复后回退 decompose。
+
+    兼容旧式 {"queries": [...]} 输出：直接采用，保持单次 LLM 调用契约。
+    """
+    messages = [{"role": "system", "content": SEARCH_PLAN_SYSTEM}, {"role": "user", "content": question}]
+    candidate = None
+    for attempt in range(2):
+        try:
+            candidate = ea.parse_json(await llm.complete(messages))
+            break
+        except llm.AnalysisError:
+            candidate = None
+            break
+        except (ValueError, TypeError, ValidationError, json.JSONDecodeError):
+            candidate = None
+            if attempt == 0:
+                messages = [*messages,
+                            {"role": "assistant", "content": "（上一轮输出不符合要求）"},
+                            {"role": "user", "content": "请重新输出符合要求的检索计划 JSON，包含至少一个可用的 query_views。"}]
+                continue
+            break
+    if candidate is not None:
+        # 结构不合法（含旧式输出）直接走兜底，不为纠错再花一次调用。
+        if candidate.get("query_views"):
+            try:
+                return _plan_from_payload(candidate, question)
+            except (ValueError, TypeError):
+                pass
+        elif candidate.get("queries"):
+            queries = [str(item).strip() for item in candidate.get("queries") or [] if str(item).strip()]
+            if queries:
+                return {
+                    "queries": queries[:MAX_PLAN_QUERIES],
+                    "exclusions": [str(item) for item in candidate.get("exclusions") or []],
+                    "rationale": str(candidate.get("rationale") or ""),
+                }
+    return await decompose(question)

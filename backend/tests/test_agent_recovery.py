@@ -48,12 +48,12 @@ class AgentCacheTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     async def test_plan_decompose_cached_across_replay(self):
-        decompose = AsyncMock(return_value={"queries": ["q1"], "exclusions": [], "rationale": "按主题拆分检索"})
-        with patch("app.services.analysis.attribution.decompose", new=decompose):
+        plan_search = AsyncMock(return_value={"queries": ["q1"], "exclusions": [], "rationale": "按主题拆分检索"})
+        with patch("app.services.analysis.attribution.plan_search", new=plan_search):
             first = await agent.plan_node({**agent.initial_state("同一个问题", auto_approve=True)})
             second = await agent.plan_node({**agent.initial_state("同一个问题", auto_approve=True)})
             other = await agent.plan_node({**agent.initial_state("另一个问题", auto_approve=True)})
-        self.assertEqual(decompose.call_count, 2)
+        self.assertEqual(plan_search.call_count, 2)
         self.assertEqual(first["queries"], ["q1"])
         self.assertEqual(second["queries"], ["q1"])
         self.assertEqual(first["llm_calls"], 1)

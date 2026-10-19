@@ -72,7 +72,7 @@ class RouterTestBase(unittest.IsolatedAsyncioTestCase):
     def managers(self, llm_side_effect, search=None, answer=None, extra=None):
         chunk = {"text": "Retrieval reduces hallucination with citations.", "chunk_id": "c1", "section": "intro", "paragraph_ids": ["p1"]}
         managers = [
-            manager("app.services.analysis.attribution.decompose", AsyncMock(return_value=planned())),
+            manager("app.services.analysis.attribution.plan_search", AsyncMock(return_value=planned())),
             manager("app.infrastructure.llm.complete", AsyncMock(side_effect=llm_side_effect)),
             manager("app.services.retrieval.search.search_papers", search or AsyncMock(return_value=found(5))),
             manager("app.services.retrieval.hybrid.retrieve", AsyncMock(return_value=[chunk])),

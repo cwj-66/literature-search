@@ -413,7 +413,7 @@ async def plan_node(state: dict) -> dict:
             planned = {"queries": [state["goal"]], "rationale": "读取指定论文并提取问题相关原文"}
             cache_hit = True
         elif planned is None:
-            planned = await attribution.decompose(state["goal"])
+            planned = await attribution.plan_search(state["goal"])
             if not str(planned.get("rationale") or "").startswith("模型规划不可用"):
                 store.cache_put(key, planned)
         queries = planned["queries"]
