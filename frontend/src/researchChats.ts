@@ -6,7 +6,7 @@ import { researchResults } from "./researchPresentation";
 export interface ResearchTurn {
   id: number; question: string; answeredAt?: number; pending?: boolean; error?: string;
   papers?: Paper[]; total?: number; analysis?: AnalyzePaperResult; task?: ResearchTask; note?: string;
-  request?: { selectedIds: string[]; history: string; mode: "deep" | "standard" };
+  request?: { selectedIds: string[]; history: string };
 }
 export interface ResearchChat {
   id: string; title: string; titleEdited?: boolean; pinned?: boolean; archived?: boolean;

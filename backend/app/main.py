@@ -22,9 +22,9 @@ from app.schemas import (
     ResearchResume, ResearchStart, SearchResponse,
 )
 from app.services.analysis import analysis, analysis_store, attribution
-from app.services.knowledge_graph import knowledge_graph, themes
+from app.services.knowledge_graph import knowledge_graph, themes, tools as knowledge_tools
 from app.services.papers import ccf, library, metadata, upload
-from app.services.retrieval import hybrid, recommend
+from app.services.retrieval import hybrid, recommend, tools as relation_tools
 from app.services.retrieval.search import SourceFailure, fetch_paper, normalize_query, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
 import app.tools.analyze_paper as analyze_tool
 import app.tools.index_paper as index_tool
@@ -510,6 +510,43 @@ async def invoke_research_tool(tool_name: str, payload: ToolInvocation):
         raise HTTPException(status_code=502, detail=str(exc)) from None
     except (sqlite3.Error, OSError):
         raise HTTPException(status_code=503, detail="研究工具存储暂不可用") from None
+
+
+@app.get("/api/paper-relations/tools")
+async def relation_tool_catalog():
+    return {"tools": relation_tools.TOOLS}
+
+
+@app.get("/api/knowledge-graph/tools")
+async def knowledge_tool_catalog():
+    return {"tools": knowledge_tools.TOOLS}
+
+
+async def _invoke_module_tool(module, tool_name: str, payload: ToolInvocation):
+    if tool_name not in module.CATALOG:
+        raise HTTPException(status_code=404, detail="该模块不提供此工具")
+    try:
+        return await module.execute(tool_name, payload.arguments, payload.context)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except workspaces.WorkspaceNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except (SourceFailure, llm.AnalysisError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="模块工具存储暂不可用") from None
+
+
+@app.post("/api/paper-relations/tools/{tool_name}")
+async def invoke_relation_tool(tool_name: str, payload: ToolInvocation):
+    return await _invoke_module_tool(relation_tools, tool_name, payload)
+
+
+@app.post("/api/knowledge-graph/tools/{tool_name}")
+async def invoke_knowledge_tool(tool_name: str, payload: ToolInvocation):
+    return await _invoke_module_tool(knowledge_tools, tool_name, payload)
 
 
 @app.post("/api/research/tasks")

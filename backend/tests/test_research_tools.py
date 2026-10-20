@@ -17,6 +17,8 @@ from app.services.papers import documents, library, processing, upload, workspac
 from app.tools import BACKGROUND_TOOLS, TOOLS, research, index_paper as index_tool
 from app.tools.research_scope import ToolContext, resolve
 from app.tools import paper_evidence
+from app.services.retrieval import tools as relation_tools
+from app.services.knowledge_graph import tools as knowledge_tools
 
 
 async def embed(texts):
@@ -44,9 +46,9 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     def test_catalog_has_exact_chat_and_background_sets(self):
-        self.assertEqual(len(TOOLS), 9)
+        self.assertEqual(len(TOOLS), 4)
         self.assertEqual({t["name"] for t in BACKGROUND_TOOLS}, {"acquire_paper_fulltext", "parse_paper", "index_paper"})
-        self.assertEqual({t["module"] for t in TOOLS}, {"discovery", "knowledge"})
+        self.assertEqual({t["module"] for t in TOOLS}, {"discovery"})
         self.assertTrue(set(research.CATALOG) <= set(agent.TOOL_REGISTRY))
         self.assertTrue(all(t["parameters"]["type"] == "object" for t in TOOLS))
         for tool in BACKGROUND_TOOLS:
@@ -78,10 +80,10 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 resolve(ctx, [self.b.id])
             with self.assertRaises(ValueError):
-                await research.execute("query_knowledge_graph", {"paper_ids": [self.b.id]}, ctx)
+                await knowledge_tools.execute("query_knowledge_graph", {"paper_ids": [self.b.id]}, ctx)
             with self.assertRaises(ValueError):
-                await research.execute("analyze_research_trends", {"paper_ids": [self.b.id]}, ctx)
-            graph = await research.execute("query_knowledge_graph", {}, ctx)
+                await knowledge_tools.execute("analyze_research_trends", {"paper_ids": [self.b.id]}, ctx)
+            graph = await knowledge_tools.execute("query_knowledge_graph", {}, ctx)
             self.assertEqual(graph["total_papers"], len(ids))
         self.assertEqual(resolve(ToolContext(workspace_id="one", accessible_paper_ids=[])), [])
 
@@ -156,16 +158,16 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
 
 
     async def test_citation_unavailable_is_not_no_citations(self):
-        with patch("app.services.retrieval.search.fetch_s2_links", new=AsyncMock(side_effect=research.search.SourceFailure("429"))), \
+        with patch("app.services.retrieval.search.fetch_s2_links", new=AsyncMock(side_effect=relation_tools.search.SourceFailure("429"))), \
              patch("app.services.retrieval.search.semantic_enabled", return_value=True):
-            result = await research.execute("get_paper_citations", {"paper_id": self.a.id}, self.ctx)
+            result = await relation_tools.execute("get_paper_citations", {"paper_id": self.a.id}, self.ctx)
         self.assertEqual(result["status"], "unavailable")
         self.assertTrue(result["warnings"])
 
     async def test_graph_and_trends_only_describe_explicit_sample(self):
-        graph = await research.execute("query_knowledge_graph", {}, self.ctx)
+        graph = await knowledge_tools.execute("query_knowledge_graph", {}, self.ctx)
         self.assertEqual(graph["total_papers"], 1)
-        stats = await research.execute("analyze_research_trends", {}, self.ctx)
+        stats = await knowledge_tools.execute("analyze_research_trends", {}, self.ctx)
         self.assertEqual(stats["sample_size"], 1)
         self.assertEqual(stats["year_distribution"], [{"year": 2024, "count": 1}])
         self.assertTrue(any("不能代表" in warning for warning in stats["warnings"]))
@@ -183,12 +185,12 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
     async def test_api_catalog_context_and_invalid_arguments(self):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             catalog = (await client.get("/api/tools")).json()
-            self.assertEqual(len(catalog["chat_tools"]), 9)
-            response = await client.post("/api/research/tools/query_knowledge_graph", json={"context": self.ctx.model_dump()})
+            self.assertEqual(len(catalog["chat_tools"]), 4)
+            response = await client.post("/api/knowledge-graph/tools/query_knowledge_graph", json={"context": self.ctx.model_dump()})
             self.assertEqual(response.status_code, 200, response.text)
-            bad = await client.post("/api/tools/query_knowledge_graph", json={"arguments": {"paper_ids": []}})
+            bad = await client.post("/api/knowledge-graph/tools/query_knowledge_graph", json={"arguments": {"paper_ids": []}})
             self.assertEqual(bad.status_code, 422)
-            escape = await client.post("/api/tools/query_knowledge_graph", json={"arguments": {"paper_ids": [self.b.id]}, "context": self.ctx.model_dump()})
+            escape = await client.post("/api/knowledge-graph/tools/query_knowledge_graph", json={"arguments": {"paper_ids": [self.b.id]}, "context": self.ctx.model_dump()})
             self.assertEqual(escape.status_code, 400)
             hidden = await client.post("/api/research/tools/index_paper", json={})
             self.assertEqual(hidden.status_code, 404)
@@ -204,13 +206,6 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(documents.get_text(saved.local_id), parsed["text"])
 
 
-    async def test_metadata_and_sample_statistics_are_not_original_paper_evidence(self):
-        state = agent.initial_state("查询论文详情", context=self.ctx.model_dump())
-        content, updates = await agent._run_business_tool(state, "get_paper_details", {"paper_id": self.a.id})
-        records = json.loads(content)["record_evidence"]
-        self.assertEqual(records[0]["material"], "metadata")
-        self.assertTrue(all(source["material"] == "metadata" for source in updates["evidence_sources"].values()))
-        self.assertEqual(updates["evidence_sources"]["E0001"]["tool"], "get_paper_details")
 
     async def test_removed_tools_are_unavailable_in_catalog_agent_and_http(self):
         removed = {"list_workspace_papers", "add_papers_to_workspace", "remove_paper_from_workspace",

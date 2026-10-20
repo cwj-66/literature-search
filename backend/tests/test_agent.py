@@ -305,7 +305,7 @@ class AgentToolTests(unittest.IsolatedAsyncioTestCase):
             content2, second = await agent._tool_assess_coverage(state, {})
         self.assertEqual(llm_mock.call_count, 2)
         self.assertIn("fallback", content1)
-        self.assertEqual(first["coverage"]["next_action"], "read_next")  # 规则回退：未读且未深读
+        self.assertEqual(first["coverage"]["next_action"], "synthesize")  # 规则回退：未读且未深读
         self.assertEqual(second["llm_calls"], 1)  # 失败尝试也计入调用预算
 
 

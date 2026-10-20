@@ -32,21 +32,11 @@ import app.tools.analyze_paper as analyze_tool
 from app.tools import research as research_tools
 from app.tools.research_scope import ToolContext
 
-ASSESS_TOOL = {
-    "name": "assess_coverage", "module": "discovery",
-    "description": "评估当前候选与证据的覆盖度，返回 next_action（search_more/paginate/read_next/synthesize/stop）和 new_query；由你据此决定是否换检索词、翻页（search_papers 的 page）或补取证据。",
-    "parameters": {"type": "object", "properties": {}},
-}
-ALL_TOOLS = (*research_tools.CHAT_TOOLS, ASSESS_TOOL)
-DOMAIN_TOOLS = {domain: {tool["name"] for tool in ALL_TOOLS if tool["module"] == domain} for domain in DOMAINS}
-# Remaining tools resolve their own paper and sample inputs; no workspace/analysis tool dependencies.
-DOMAIN_DEPENDENCIES = {domain: set() for domain in DOMAINS}
-LEGACY_TOOLS = {"save_papers_to_workspace", "request_deep_analysis"}
-OPERATION_TOOLS = {"search_papers", "get_paper_details", "get_paper_references", "get_paper_citations",
-                   "query_knowledge_graph", "analyze_research_trends"}
-PRIVILEGED_TOOLS = LEGACY_TOOLS
-API_TOOLS = {"search_papers", "get_paper_details", "find_related_papers", "get_paper_references", "get_paper_citations"}
-LLM_TOOLS = {"request_deep_analysis", "decompose_question", "rerank_papers"}
+ASSESS_TOOL = research_tools.CATALOG["assess_coverage"]
+ALL_TOOLS = research_tools.CHAT_TOOLS
+PRIVILEGED_TOOLS: set[str] = set()
+API_TOOLS = {"search_papers"}
+LLM_TOOLS = {"decompose_question", "rerank_papers", "assess_coverage"}
 PRODUCER_TOOLS = API_TOOLS
 TOOL_TIMEOUT = float(os.getenv("RESEARCH_TOOL_TIMEOUT", "120"))
 LLM_TOOL_TIMEOUT = float(os.getenv("RESEARCH_LLM_TOOL_TIMEOUT", "600"))
@@ -61,17 +51,8 @@ _CURRENT_OP: contextvars.ContextVar[str | None] = contextvars.ContextVar("resear
 
 
 def allowed_tools(state: dict) -> set[str]:
-    legacy = LEGACY_TOOLS if state.get("accessible_paper_ids") is None else set()
-    domains = [domain for domain in state.get("domains") or [] if domain in DOMAINS or domain == "*"]
-    if not domains or "*" in domains:
-        names = {tool["name"] for tool in ALL_TOOLS}
-    else:
-        names = set()
-        for domain in domains:
-            names |= DOMAIN_TOOLS[domain] | DOMAIN_DEPENDENCIES[domain]
-    if state.get("task_kind") == "operation":
-        return names & OPERATION_TOOLS
-    return names | legacy
+    """A fixed capability boundary; domains and legacy context cannot broaden it."""
+    return set(research_tools.CATALOG)
 
 
 def catalog_for(state: dict) -> list[dict]:
@@ -281,9 +262,11 @@ def assessment_updates(state: dict, assessment: dict, llm_delta: int, fallback: 
 
 
 async def _tool_assess_coverage(state: dict, args: dict) -> tuple[str, dict]:
-    assessment, llm_delta, fallback = await run_coverage_assessment(state)
-    content = json.dumps({**assessment, "fallback": fallback, "remaining_budget": remaining_budget(state)}, ensure_ascii=False)
-    return content, assessment_updates(state, assessment, llm_delta, fallback)
+    report = await research_tools.execute("assess_coverage", args, state=state)
+    llm_delta, fallback = report.pop("llm_calls"), report.pop("fallback")
+    report.pop("tool", None)
+    content = json.dumps({**report, "fallback": fallback, "remaining_budget": remaining_budget(state)}, ensure_ascii=False)
+    return content, assessment_updates(state, report, llm_delta, fallback)
 
 
 # ---------------------------------------------------------------------------
@@ -765,71 +748,22 @@ async def _tool_request_deep_analysis(state: dict, args: dict) -> tuple[str, dic
     }
 
 
-def _metadata_records(name: str, report: dict) -> list[dict]:
-    if name == "get_paper_details" and report.get("paper"):
-        paper = report["paper"]
-        return [{"paper_id": paper.get("id"), "record": {key: paper.get(key) for key in ("id", "title", "authors", "year", "doi", "url")}}]
-    if name in {"get_paper_references", "get_paper_citations"} and report.get("status") == "completed":
-        return [{"paper_id": paper["id"], "record": {"relation": name, "seed": report.get("paper_id"), "paper_id": paper["id"], "title": paper["title"]}}
-                for paper in report.get("papers", [])]
-    if name == "find_related_papers":
-        return [{"paper_id": None, "record": item} for item in report.get("items", [])]
-    if name == "analyze_research_trends":
-        return [{"paper_id": None, "record": {key: report.get(key) for key in ("sample_size", "year_distribution", "topics", "missing_analysis_count", "missing_year_count", "warnings")}}]
-    if name == "query_knowledge_graph":
-        return [{"paper_id": None, "record": {"scope": report.get("scope"), "total_papers": report.get("total_papers"), "edges": report.get("edges")}}]
-    return []
 
 
-async def _tool_catalog(state: dict, name: str, args: dict) -> tuple[str, dict]:
-    context = ToolContext(**{key: state[key] for key in ToolContext.model_fields if key in state})
-    report = await research_tools.execute(name, args, context)
-    updates = {"events_extra": [{"step": "tool", "name": name, "summary": report.get("status", "completed")}],
-               "past_extra": [[name, report.get("status")]]}
-    acc = {**state}
-    if name in API_TOOLS:
-        updates["api_calls"] = state.get("api_calls", 0) + 1
-    records = _metadata_records(name, report)
-    if records:
-        material = "sample_statistics" if name == "analyze_research_trends" else "metadata"
-        evidence_updates, added = add_evidence(acc, [
-            {"paper_id": record["paper_id"], "quote": json.dumps(record["record"], ensure_ascii=False, default=str),
-             "material": material, "tool": name, "verified": False}
-            for record in records
-        ])
-        acc.update(evidence_updates)
-        updates.update(evidence_updates)
-        report["record_evidence"] = [{"evidence_id": item["evidence_id"], "record": record["record"], "tool": name, "material": material}
-                                     for item, record in zip(added, records)]
-    candidates = [report["paper"]] if report.get("paper") else report.get("papers", [])
-    known = {paper["id"]: paper for paper in state.get("papers") or []}
-    for paper in candidates:
-        if isinstance(paper, dict) and paper.get("id"):
-            known[paper["id"]] = paper
-    if candidates:
-        updates["papers"] = list(known.values())
-    return json.dumps(report, ensure_ascii=False, default=str), updates
 
 
-def _catalog_handler(name):
-    async def handle(state, args):
-        return await _tool_catalog(state, name, args)
-    return handle
 
 
 TOOL_REGISTRY = {
-    **{name: _catalog_handler(name) for name in research_tools.CATALOG},
-    "search_papers": _tool_search_papers,
     "decompose_question": _tool_decompose_question,
+    "search_papers": _tool_search_papers,
     "rerank_papers": _tool_rerank_papers,
     "assess_coverage": _tool_assess_coverage,
-    "save_papers_to_workspace": _tool_save_papers_to_workspace,
-    "request_deep_analysis": _tool_request_deep_analysis,
 }
 
 
 async def _run_business_tool(state: dict, name: str, args: dict) -> tuple[str, dict]:
-    handler = TOOL_REGISTRY.get(name)
+    handler = TOOL_REGISTRY.get(name) if name in allowed_tools(state) else None
     if handler is None:
         return json.dumps({"error": f"未知工具：{name}"}, ensure_ascii=False), {}
     return await handler(state, args or {})

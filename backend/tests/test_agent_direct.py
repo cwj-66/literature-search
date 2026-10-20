@@ -104,18 +104,19 @@ class DirectChatTests(unittest.IsolatedAsyncioTestCase):
         router_messages = complete.await_args_list[0].args[0]
         self.assertIn("arxiv:2401.12345", router_messages[0]["content"])
 
-    async def test_explicit_paper_questions_cannot_bypass_evidence_flow(self):
+    async def test_unsupported_paper_operations_do_not_force_reading_workflows(self):
         for goal in ("这篇论文的 RAG 是怎么实现的？", "查看当前论文的实验结果", "工作区有哪些论文？", "分析 arxiv:2401.12345 的局限性"):
             with self.subTest(goal=goal), patch.object(llm, "complete", new=AsyncMock(return_value=routed("direct"))):
                 result = await agent.router_node(agent.initial_state(goal))
-            self.assertEqual(result["mode"], "react")
-            self.assertEqual(agent.route_route(result), "react" if "arxiv:" in goal else "clarify")
+            self.assertEqual(result["mode"], "direct")
+            self.assertEqual(agent.route_route(result), "direct")
+            self.assertEqual(result["post_actions"], [])
 
-    async def test_research_and_complex_tasks_keep_existing_routes(self):
-        for goal, mode in (("帮我找十篇 RAG 论文", "react"), ("对比近三年幻觉抑制方法并写综述", "plan")):
+    async def test_search_requests_use_finding_for_simple_and_planned_modes(self):
+        for goal, mode in (("帮我找十篇 RAG 论文", "react"), ("找近三年幻觉抑制方法相关论文", "plan")):
             with self.subTest(goal=goal), patch.object(llm, "complete", new=AsyncMock(return_value=routed(mode))):
                 result = await agent.router_node(agent.initial_state(goal))
-            self.assertEqual(agent.route_route(result), mode)
+            self.assertEqual(agent.route_route(result), "finding")
         with patch.object(llm, "complete", new=AsyncMock(side_effect=AssertionError("identifier shortcut"))):
             result = await agent.router_node(agent.initial_state("arxiv:2401.12345"))
         self.assertEqual(result["mode"], "react")

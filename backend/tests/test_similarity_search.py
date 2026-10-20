@@ -10,7 +10,7 @@ from app.infrastructure import embeddings
 from app.schemas import PaperOut
 from app.services.retrieval import similarity as sim
 from app.services.retrieval import recommend, search
-from app.tools import research
+from app.services.retrieval import tools as relation_tools
 from app.tools.research_scope import ToolContext
 
 
@@ -188,13 +188,13 @@ class SimilarityTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(plan["semantic"])
         self.assertTrue(plan["keyword"])
 
-    async def test_agent_uses_same_service_in_restricted_context(self):
+    async def test_relationship_module_uses_same_service_in_restricted_context(self):
         p = paper(1)
         response = {"items": [], "groups": [{"key": key, "items": []} for key in sim.LABELS], "warnings": []}
-        with patch.object(research, "_paper", new=AsyncMock(return_value=p)), \
+        with patch.object(relation_tools, "_paper", new=AsyncMock(return_value=p)), \
              patch.object(recommend, "discover", new=AsyncMock(return_value=response)) as discover, \
-             patch.object(research, "search_papers", new=AsyncMock(side_effect=AssertionError("must not degrade to title search"))):
-            result = await research.execute("find_related_papers", {"paper_id": p.id}, ToolContext(accessible_paper_ids=[p.id]))
+             patch.object(relation_tools.search, "search_papers", new=AsyncMock(side_effect=AssertionError("must not degrade to title search"))):
+            result = await relation_tools.execute("find_related_papers", {"paper_id": p.id}, ToolContext(accessible_paper_ids=[p.id]))
         discover.assert_awaited_once_with(p, 10)
         self.assertEqual(len(result["groups"]), 3)
 

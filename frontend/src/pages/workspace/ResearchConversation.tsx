@@ -15,7 +15,7 @@ import { useWorkspaceProject } from "./shared";
 
 
 
-const WELCOME = ["你好！我是你的 AI 研究助手。", "我可以帮你搜索和阅读学术论文、梳理研究方向、提炼关键信息，并将有价值的论文加入当前工作区。你想研究什么主题呢？"];
+const WELCOME = ["你好！我是你的 AI 研究助手。", "告诉我研究主题和要求，我可以帮你搜索、筛选学术论文，也可以回答一般问题。论文关系和知识图谱请在对应模块中查看。"];
 const RESEARCH_STEP: Record<string, string> = {
   route: "理解研究目标", plan: "制定研究计划", prepare: "确认研究资料", search: "寻找相关论文",
   select: "筛选推荐论文", read: "阅读论文", quotes: "核对原文依据", assess: "检查资料是否充分", expand: "补充检索",
@@ -98,8 +98,6 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
     try { localStorage.setItem(key, String(now)); } catch { /* the greeting still renders */ }
     return now;
   });
-  const [mode, setMode] = useState<"deep" | "standard">("deep");
-  const [modeOpen, setModeOpen] = useState(false);
   const scope = "selected" as const;
   const [selectedIds, setSelectedIds] = useState<string[]>(chat.selectedIds);
   const [preparing, setPreparing] = useState(false);
@@ -152,7 +150,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
     const question = retry?.question ?? draft.trim();
     if (!question || busy || disabled) return;
     const turnId = retry?.id ?? Date.now();
-    const request = retry?.request ?? { selectedIds: [...selectedIds], mode,
+    const request = retry?.request ?? { selectedIds: [...selectedIds],
       history: turns.filter(t => t.id !== turnId && t.task?.answer).slice(-6).map(researchHistory).join("\n\n").slice(-16000) };
     const turn: Turn = { id: turnId, question, pending: true, request };
     stopRequested.current = false; setPreparing(true); setDraft(""); setPollError("");
@@ -166,7 +164,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
       if (stopRequested.current) {
         setTurns(current => current.map(t => t.id === turnId ? { ...t, pending: false, note: "已停止，任务尚未开始。" } : t)); return;
       }
-      const task = await startResearch(question, { autoApprove: request.mode !== "deep", mode: "auto", background: true,
+      const task = await startResearch(question, { autoApprove: true, mode: "auto", background: true,
         workspaceId: id, scope, selectedPaperIds: request.selectedIds.slice(0, 50), accessiblePaperIds: request.selectedIds, conversationHistory: request.history });
       if (stopRequested.current) await cancelResearchTask(task.task_id);
       setTurns(current => current.map(t => t.id === turnId ? { ...t, pending: task.status === "running", task,
@@ -257,7 +255,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                   return evidence.length ? <details className="research-evidence"><summary>查看引用依据 · {evidence.length} 条</summary>{evidence.map(e => <p key={e.evidence_id}><strong>[{e.evidence_id}]</strong> {e.paper_id ? <Link to={paperLocation(e.paper_id, here)}>查看论文</Link> : null}<br />{e.quote}</p>)}</details> : null;
                 })()}
                 {turn.task?.status === "waiting" ? <div>
-                  <p>{turn.task.interrupt?.hint || "请确认研究计划后继续。"}</p>
+                  <p>{turn.task.interrupt?.hint || "请确认本次操作后继续。"}</p>
                   {turn.task.interrupt?.queries?.map(query => <p key={query}>{query}</p>)}
                   {turn.task.interrupt?.paper_ids?.map(ref => <p key={ref}>{project?.papers[ref]?.paper.title || ref}</p>)}
                   {turn.task.interrupt?.type === "clarify" ? <p className="small-print">请在上方资料栏中添加论文，再点击确认继续。</p> : null}
@@ -275,7 +273,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
         </div>
         {pollError ? <p className="assistant-attach-note" role="status">{pollError}</p> : null}
         {attachNote ? <p className="assistant-attach-note" role="status">{attachNote}</p> : null}
-        <p className="research-access-hint">{selectedIds.length ? `本对话可访问 ${selectedIds.length} 篇论文，助手按需检索和阅读。` : "尚未选择本地资料，可以直接搜索新论文。"}</p>
+        <p className="research-access-hint">{selectedIds.length ? `已选择 ${selectedIds.length} 篇本地资料；搜索新论文无需选择本地资料。` : "可以直接输入需求，搜索和筛选论文。"}</p>
         <form className="assistant-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
           <button type="button" className="assistant-clip" aria-label="上传 PDF" disabled={attaching || busy || disabled} onClick={() => fileRef.current?.click()}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 12.2 14.6 6a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a4.4 4.4 0 0 1-6.2-6.2l7.6-7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
@@ -283,17 +281,6 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
           <textarea value={draft} rows={1} maxLength={2000} placeholder="输入一个研究问题..." aria-label="研究问题" disabled={busy || disabled} onChange={event => setDraft(event.target.value)} onKeyDown={event => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); }
           }} />
-          <div className="assistant-mode">
-            <button type="button" className="assistant-mode-btn" aria-expanded={modeOpen} onClick={() => setModeOpen(open => !open)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M4 12h16M12 4c2.2 2.4 3.3 5.1 3.3 8S14.2 17.6 12 20c-2.2-2.4-3.3-5.1-3.3-8S9.8 6.4 12 4Z" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
-              {mode === "deep" ? "确认研究计划" : "自动执行计划"}
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
-            </button>
-            {modeOpen ? <div className="assistant-mode-menu" role="menu">
-              <button type="button" role="menuitem" onClick={() => { setMode("deep"); setModeOpen(false); }}>确认研究计划</button>
-              <button type="button" role="menuitem" onClick={() => { setMode("standard"); setModeOpen(false); }}>自动执行计划</button>
-            </div> : null}
-          </div>
           {busy ? <Button className="research-stop" aria-label="停止任务" icon={<StopOutlined />} onClick={() => void stop()}>停止任务</Button> : null}
           <button className="assistant-send" type="submit" disabled={!draft.trim() || busy || disabled} aria-label="发送">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6.5 18.5 12 13 17.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>

@@ -2088,48 +2088,7 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
 }
 .assistant-clip:hover:not(:disabled) { background: var(--subtle); color: var(--ink); }
 .assistant-clip svg { width: 18px; height: 18px; }
-.assistant-mode { position: relative; flex: none; }
-.assistant-mode-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: var(--fs-xs);
-  font-weight: 500;
-  white-space: nowrap;
-  transition: border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
-}
-.assistant-mode-btn:hover { border-color: var(--accent-border); background: var(--accent-tint); color: var(--accent); }
-.assistant-mode-btn svg { width: 15px; height: 15px; }
-.assistant-mode-menu {
-  position: absolute;
-  right: 0;
-  bottom: 42px;
-  display: grid;
-  min-width: 156px;
-  padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
-  animation: pop-in var(--dur-2) var(--ease-out) backwards;
-}
-.assistant-mode-menu button {
-  padding: 8px 10px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  text-align: left;
-  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
-}
-.assistant-mode-menu button:hover { background: var(--subtle); color: var(--ink); }
+
 .assistant-composer textarea {
   flex: 1;
   min-height: 36px;
@@ -2468,7 +2427,6 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
   .research-picker-footer { flex-wrap: wrap; gap: 8px; }
   .research-picker-footer span { min-width: 100px; }
   .research-layout .assistant-composer { margin: 8px; }
-  .research-layout .assistant-mode { display: none; }
 }
 
 /* Name editing is available beside the item, with keyboard-accessible controls. */

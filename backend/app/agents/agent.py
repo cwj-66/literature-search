@@ -46,7 +46,7 @@ from app.agents.store import (
 )
 from app.agents.tooling import (
     ASSESS_TOOL, PRIVILEGED_TOOLS, TOOL_REGISTRY, _clean_query, _downgrade_action, _is_privileged, _rule_assess,
-    _run_business_tool, _analyze_workflow_papers, _tool_assess_coverage, _tool_catalog, _tool_request_deep_analysis,
+    _run_business_tool, _analyze_workflow_papers, _tool_assess_coverage, _tool_request_deep_analysis,
     _tool_save_papers_to_workspace, _tool_search_papers, assessment_updates,
     catalog_for, domain_prompt, limited, route, run_coverage_assessment, tool_node,
 )
@@ -188,19 +188,17 @@ async def router_node(state: dict) -> dict:
                 route_info["user_goal"] = goal
                 goal = decision["resolved_goal"].strip()
                 route_info["resolved_goal"] = goal
-            if mode == "direct" and not discuss and PAPER_SPECIFIC.search(goal):
-                mode = "react"
-                route_info = {"mode": mode, "rationale": "问题明确涉及论文或工作区，保留研究工具与证据流程", "source": "rule"}
         except llm.AnalysisError:
             return {"stop_reason": "需求理解暂不可用", "answer": "暂时无法理解本次请求，请重试。尚未发起论文检索。",
                     "llm_calls": state.get("llm_calls", 0) + 1,
                     "events": with_event(state, {"step": "route", "reason": "需求理解失败，未执行检索"})}
     route_info["requested"] = requested
-    if mode == "plan":
-        domains = ["*"]
-    task_kind = "chat" if mode == "direct" else ("operation" if WORKSPACE_OP.search(goal) or domains == ["knowledge"] else "research")
-    if mode != "direct" and research_intent == "discover" and not post_actions:
-        task_kind = "research"
+    # The chat surface only chats or discovers papers. Model output cannot enable
+    # module operations, full-text workflows, or old write/analysis post-actions.
+    domains = ["discovery"]
+    post_actions = []
+    research_intent = "auto" if mode == "direct" else "discover"
+    task_kind = "chat" if mode == "direct" else "research"
     updates = {
         "goal": goal,
         "mode": mode,
