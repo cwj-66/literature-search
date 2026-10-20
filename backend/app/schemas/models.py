@@ -250,6 +250,7 @@ class ReasonOut(BaseModel):
 
 class RecommendationItem(BaseModel):
     id: str
+    aliases: list[str] = Field(default_factory=list)
     title: str
     year: int | None = None
     authors: list[str] = Field(default_factory=list)

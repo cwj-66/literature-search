@@ -269,7 +269,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                   <button type="button" disabled={busy || disabled} onClick={() => void decide(turn, false)}>拒绝本次操作</button>
                 </div> : null}
                 {turn.note ? <p className="small-print">{turn.note}</p> : null}
-                {turn.analysis ? <><p className="small-print">已使用论文分析，提取研究内容、技术方案、创新点、实验结果和局限性。</p><AnalyzeResult result={turn.analysis} /></> : null}
+                {turn.analysis ? <><p className="small-print">基于论文分析结果</p><AnalyzeResult result={turn.analysis} /></> : null}
                 {turn.error ? <p className="inline-error" role="alert">{turn.error}</p> : null}
                 {turn.task?.stop_reason?.includes("取消") ? <p className="small-print">任务已停止，已取得的结果保留。</p> : null}
 

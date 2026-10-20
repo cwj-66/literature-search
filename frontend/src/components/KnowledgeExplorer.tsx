@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button, Checkbox, Drawer, Empty, Input, Select } from "antd";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { KIND_COLOR, KIND_LABEL, type EntityEdge, type EntityGraph, type EntityNode } from "../graphData";
+import { KIND_COLOR, KIND_LABEL, KIND_TINT, RELATIONS as EDGE_STYLE, type EntityEdge, type EntityGraph, type EntityNode } from "../graphData";
 import { useMediaQuery } from "../hooks";
 import { canvasGraph, filterGraph } from "../knowledgeGraph";
 import { ExplorerCanvas } from "./ExplorerCanvas";
@@ -105,7 +105,7 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
     setFilling(true); setFillNote("");
     try {
       const result = await onFill(paperIds());
-      setFillNote(result.failed ? `已查询 ${result.queried} 篇，${result.failed} 篇未能完整获取。已保留查到的引用，外部论文不会加入工作区。` : `已查询 ${result.queried} 篇。外部论文不会加入当前工作区。`);
+      setFillNote(result.failed ? `已查询 ${result.queried} 篇，${result.failed} 篇未能完整获取，已保留查到的引用。` : `已查询 ${result.queried} 篇。`);
     } catch (err) {
       setFillNote(err instanceof Error ? err.message : "引用补全失败，请重试");
     } finally { setFilling(false); }
@@ -115,7 +115,7 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
     setFilling(true); setFillNote("");
     try {
       const result = await onFillSimilar(paperIds());
-      setFillNote(result.failed ? `已尝试补全相似关系，${result.failed} 篇未能完成。已保留原图，外部论文不会加入图谱。` : `已写入工作区内相似关系。外部论文不会加入图谱。`);
+      setFillNote(result.failed ? `已补全相似关系，${result.failed} 篇未能完成，原图已保留。` : "已写入工作区内相似关系。");
     } catch (err) {
       setFillNote(err instanceof Error ? err.message : "相似关系补全失败，已保留原图");
     } finally { setFilling(false); }
@@ -156,20 +156,19 @@ export function KnowledgeExplorer({ data, scope, paperHref, paperKey, workspaceI
       </div>
       <div className="kg-workspace kg-exploration-workspace">
         <section className="kg-graph-panel" aria-label="关系网络画布">
-          <h2 className="kg-panel-title">当前工作区关系网络</h2>
           <ExplorerCanvas data={canvas} selected={selectedNode?.id ?? ""} onSelect={select} onSelectEdge={selectEdge} scope={scope} resetKey={resetKey} />
           <div className="kg-node-key">
-            <span><i style={{ background: "#e7f0ff", border: `1.5px solid ${KIND_COLOR.paper}` }} />论文</span>
-            <span><i style={{ background: "#e5f8ef", border: `1.5px solid ${KIND_COLOR.keyword}`, borderRadius: 999 }} />关键词</span>
-            <span><i style={{ background: "#f3e9ff", border: `1.5px solid ${KIND_COLOR.author}`, borderRadius: "50%" }} />作者</span>
-            <span><i style={{ background: "#fff6e8", border: `1.5px solid ${KIND_COLOR.venue}` }} />期刊／会议</span>
-            <span>箭头：已确认引用</span>
-            <span>虚线：主题相似（推荐缓存，不是引用）</span>
+            <span><i className="is-paper" />论文</span>
+            <span><i className="is-keyword" style={{ background: KIND_TINT.keyword, borderColor: KIND_COLOR.keyword }} />关键词</span>
+            <span><i className="is-author" style={{ background: KIND_COLOR.author }} />作者</span>
+            <span><i className="is-venue" style={{ background: KIND_TINT.venue, borderColor: KIND_COLOR.venue }} />期刊／会议</span>
+            <span className="kg-key-line"><svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="19" y2="4" stroke={EDGE_STYLE.cites.color} strokeWidth="1.6" /><path d="M19 1 L25 4 L19 7 z" fill={EDGE_STYLE.cites.color} /></svg>引用，指向被引论文</span>
+            <span className="kg-key-line"><svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="25" y2="4" stroke={EDGE_STYLE.similar.color} strokeWidth="1.6" strokeDasharray="6 5" /></svg>主题相似，非引用</span>
           </div>
         </section>
-        {narrow ? <Drawer open={Boolean(selectedNode || selectedEdge)} onClose={() => { select(""); setEdgeId(""); }} title="详情" placement="bottom" height="72%">{detail}</Drawer> : <aside className="kg-inspector kg-detail" aria-label="实体详情">{detail}</aside>}
+        {narrow ? <Drawer open={Boolean(selectedNode || selectedEdge)} onClose={() => { select(""); setEdgeId(""); }} title="详情" placement="bottom" height="72%">{detail}</Drawer> : <aside className="kg-inspector kg-detail" aria-label="实体详情"><div className="kg-detail-body" key={selectedNode?.id || edgeId || "none"}>{detail}</div></aside>}
       </div>
-      <p className="kg-data-note">范围：当前筛选的 {papers.length} 篇论文；不代表整个研究领域。当前绘制 {canvas.nodes.filter(node => node.kind === "paper").length}/{papers.length} 篇，顶部统计使用全部筛选结果。没有共同关系的论文会单独显示。</p>
+      <p className="kg-data-note">已绘制 {canvas.nodes.filter(node => node.kind === "paper").length}/{papers.length} 篇论文，统计基于全部筛选结果，不代表整个研究领域。</p>
     </>}
   </div>;
 }
@@ -187,7 +186,7 @@ function GraphDetail({ node, edge, nodes, papers, edges, picks, idOf, onPick, on
         <h2>{byId.get(edge.source)?.label ?? "论文"}</h2>
         <p className="kg-detail-copy">与</p>
         <h2>{byId.get(edge.target)?.label ?? "论文"}</h2>
-        <p className="kg-data-note">依据是推荐缓存里已经算过的主题相似，两端都在当前工作区。这不是引用关系，也不会把外部论文画进图谱。</p>
+        <p className="kg-data-note">两篇论文都在当前工作区，主题相似不代表引用。</p>
       </>;
     }
     return <>
@@ -195,13 +194,11 @@ function GraphDetail({ node, edge, nodes, papers, edges, picks, idOf, onPick, on
       <h2>{byId.get(edge.source)?.label ?? "引用方"}</h2>
       <p className="kg-detail-copy">引用了</p>
       <h2>{byId.get(edge.target)?.label ?? "被引用方"}</h2>
-      <p className="kg-data-note">箭头从引用方指向被引用方。记录来自文献平台的参考文献或被引列表，不是主题相似，也不表示改进或继承。</p>
+      <p className="kg-data-note">记录来自文献平台的参考文献或被引列表，不表示改进或继承。</p>
     </>;
   }
   if (!node) return <>
-    <p className="kg-eyebrow">从这里继续</p>
     <h2>选择一个节点</h2>
-    <p className="kg-data-note">点击论文、关键词、作者或引用箭头，查看它在当前筛选范围内的联系。</p>
     <div className="kg-neighbors">{papers.slice(0, 8).map(item => <button type="button" key={item.id} onClick={() => onSelect(item.id)}><span>{item.label}</span><small>{item.year ?? "年份未知"}</small></button>)}</div>
   </>;
   if (node.kind === "paper") {

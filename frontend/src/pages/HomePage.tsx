@@ -34,7 +34,7 @@ function CreateWorkspace({ open, onClose }: { open: boolean; onClose: () => void
     width={640}
     centered
     destroyOnHidden
-    title={<div className="ws-modal-title"><h2>创建研究工作区</h2><p>为你的研究建立一个独立空间。</p></div>}
+    title={<div className="ws-modal-title"><h2>创建研究工作区</h2></div>}
     footer={null}
     onCancel={onClose}
     styles={{ content: { borderRadius: 18, padding: "22px 24px 20px" }, header: { marginBottom: 18 }, body: { padding: 0 } }}
@@ -185,7 +185,6 @@ export default function HomePage() {
     <header className="ws-home-head">
       <div>
         <h1>研究工作区</h1>
-        <p>管理你的研究项目、论文和调研进度。</p>
       </div>
       <div className="ws-home-tools">
         <div className="ws-search">
@@ -208,7 +207,6 @@ export default function HomePage() {
       <button type="button" className="ws-card ws-card-new" onClick={() => setCreating(true)}>
         <span className="ws-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg></span>
         <strong>新建工作区</strong>
-        <em>创建一个新的研究主题</em>
       </button>
       {shown.map(item => {
         const count = Object.keys(item.papers).length;

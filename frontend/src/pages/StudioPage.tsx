@@ -73,7 +73,7 @@ function Studio({ project }: { project: Project }) {
     } catch (err) { setError(errorText(err)); }
   }
   return <main className="ws-page workspace-studio">
-    <header className="ws-page-head"><div><h1>研究台</h1><p>只研究「{project.name}」里的论文。每个对话独立选择论文，问答和引用自动保存。</p></div>
+    <header className="ws-page-head"><div><h1>研究台</h1><p>范围：「{project.name}」中的论文</p></div>
       <Button type="primary" icon={<PlusOutlined />} disabled={!ready} loading={creating} onClick={create}>新建对话</Button>
     </header>
     {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => { setError(""); setRetry(v => v + 1); }}>重试</Button>} /> : null}

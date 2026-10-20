@@ -95,7 +95,7 @@ function StartPicker() {
   }, [retry]);
   const here = location.pathname + location.search;
   return <main className="page page-medium">
-    <header className="page-head"><div><h1 className="page-title">论文相似度搜索</h1><p className="page-sub">选择中心论文，分别从引用、主题和关键词三个角度发现相关文献。</p></div></header>
+    <header className="page-head"><div><h1 className="page-title">论文相似度搜索</h1></div></header>
     {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => setRetry(v => v + 1)}>重试</Button>} /> : null}
     {!choices && !error ? <Skeleton active /> : null}
     {choices && !choices.length ? <Empty description={<>文献库还没有论文，<Link to="/search">先检索并加入一篇</Link>。</>} /> : null}

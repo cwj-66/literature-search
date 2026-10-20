@@ -288,7 +288,8 @@ async def compute(seed, weights):
                 categories.append("keyword")
                 relations.append("keyword")
                 reasons.append({"type": "keyword", "text": f"原文共同关键词：{'、'.join(shared)}；按本次候选样本 IDF 加权"})
-            scored.append({"id": canonical_id(paper), "title": paper.title, "authors": paper.authors,
+            scored.append({"id": canonical_id(paper), "aliases": sorted(identity_keys(paper) | {paper.id}),
+                           "title": paper.title, "authors": paper.authors,
                            "abstract": paper.abstract, "year": paper.year, "venue": paper.venue,
                            "url": paper.url or paper.pdf_url, "citation_count": paper.citation_count,
                            "sources": paper.sources, "categories": categories, "relations": relations,

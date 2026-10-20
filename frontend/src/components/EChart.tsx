@@ -21,7 +21,10 @@ export function EChart({ option, height, ariaLabel, onClick }: {
     observer.observe(el);
     return () => { observer.disconnect(); chart.dispose(); chartRef.current = null; };
   }, []);
-  useEffect(() => { chartRef.current?.setOption(option, { notMerge: true }); }, [option]);
+  useEffect(() => {
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    chartRef.current?.setOption(still ? { ...option, animation: false } : option, { notMerge: true });
+  }, [option]);
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || !onClick) return;

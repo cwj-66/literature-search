@@ -5,11 +5,12 @@ import re
 from datetime import datetime, timezone
 
 from app.infrastructure import embeddings
+from app.services.papers.paper_merge import identity_keys
 from app.services.retrieval import recommend, relation_score
 
 logger = logging.getLogger(__name__)
 
-SATELLITES_PER_CATEGORY = 5
+SATELLITES_PER_CATEGORY = 1
 CATEGORIES = ("citation", "semantic", "keyword")
 SCORE_FIELDS = {"citation": "citation_score", "semantic": "semantic_score", "keyword": "keyword_score"}
 SOURCE_NAME = re.compile(r"semantic[_ ]scholar|arxiv|openalex|crossref", re.IGNORECASE)
@@ -34,19 +35,22 @@ def _center_edges(center_id: str, center_ids: set[str], satellites: list[dict]) 
             if key in seen:
                 continue
             seen.add(key)
-            for relation in item.get("relations", []):
-                style = {"cites": ("cites", "引用", True),
-                         "bibliographic_coupling": ("bibliographic_coupling", "共同参考文献", False),
-                         "co_citation": ("co_citation", "共被引", False),
-                         "similar": ("similar", "主题相似", False),
-                         "keyword": ("keyword", "关键词关联", False)}.get(relation)
-                if not style:
-                    continue
-                edge_type, label, directed = style
-                edges.append({"source": center_id, "target": other, "type": edge_type, "label": label,
-                              "directed": directed, "category": group["category"],
-                              "strength": item.get(SCORE_FIELDS[group["category"]])})
-                break
+            category = group["category"]
+            directions = {e.get("type") for e in item.get("evidence", [])}
+            if category == "citation" and directions & {"in", "out"}:
+                for direction in ("out", "in"):
+                    if direction not in directions:
+                        continue
+                    source, target = (center_id, other) if direction == "out" else (other, center_id)
+                    edges.append({"source": source, "target": target, "type": "cites", "label": "引用",
+                                  "directed": True, "category": category, "strength": item.get("citation_score")})
+            else:
+                kind, label = {"citation": ("citation", "引用关联"),
+                               "semantic": ("similar", "主题相似"),
+                               "keyword": ("keyword", "关键词关联")}[category]
+                edges.append({"source": center_id, "target": other, "type": kind, "label": label,
+                              "directed": False, "category": category,
+                              "strength": item.get(SCORE_FIELDS[category])})
     return edges
 
 
@@ -58,10 +62,16 @@ async def relate(ids: list[str], refresh: bool = False) -> dict:
     for raw in ids:
         try:
             seed = await recommend.load_seed(raw)
-            payload = await recommend.bundle(raw, refresh, seed=seed)
         except Exception as exc:
             _warn(warnings, f"论文 {raw} 关系计算失败：{exc}")
             continue
+        try:
+            payload = await recommend.bundle(raw, refresh, seed=seed)
+        except Exception:
+            logger.exception("relate discovery did not finish for %s", raw)
+            # The user selected a known paper; failed discovery must not make its large node disappear.
+            payload = {"recommendations": {"groups": [{"key": key, "status": "unavailable",
+                         "matched_count": 0, "items": []} for key in CATEGORIES], "warnings": []}}
         seed_id = recommend.canonical_id(seed)
         if any(center["id"] == seed_id for center in centers):
             continue
@@ -71,7 +81,8 @@ async def relate(ids: list[str], refresh: bool = False) -> dict:
                 logger.info("relate candidate warning for %s: %s", raw, warning)
             else:
                 _warn(warnings, warning)
-        centers.append({"id": seed_id, "local_id": getattr(seed, "local_id", None) or raw,
+        centers.append({"id": seed_id, "aliases": sorted(identity_keys(seed) | {seed.id, raw}),
+                        "local_id": getattr(seed, "local_id", None) or raw,
                         "title": seed.title, "year": seed.year, "authors": list(seed.authors),
                         "venue": seed.venue, "citation_count": seed.citation_count,
                         "color_index": index, "similarities": {}})
@@ -86,6 +97,11 @@ async def relate(ids: list[str], refresh: bool = False) -> dict:
                           for key in CATEGORIES)
 
     center_ids = {center["id"] for center in centers}
+    aliases = {alias: center["id"] for center in centers for alias in [center["id"], *center["aliases"]]}
+    for group in satellites:
+        # A discovered paper promoted to a center is still the same paper across provider IDs.
+        group["items"] = [{**item, "id": next((aliases[key] for key in [item["id"], *item.get("aliases", [])]
+                                               if key in aliases), item["id"])} for item in group["items"]]
     counts: dict[str, list[str]] = {}
     for group in satellites:
         for item in group["items"]:
@@ -98,8 +114,14 @@ async def relate(ids: list[str], refresh: bool = False) -> dict:
                 for paper_id, owners in counts.items() if len(owners) > 1]
 
     center_edges = []
+    edge_keys = set()
     for center in centers:
-        center_edges.extend(_center_edges(center["id"], center_ids, satellites))
+        for edge in _center_edges(center["id"], center_ids, satellites):
+            ends = (edge["source"], edge["target"]) if edge["directed"] else tuple(sorted((edge["source"], edge["target"])))
+            key = (*ends, edge["category"], edge["type"])
+            if key not in edge_keys:
+                edge_keys.add(key)
+                center_edges.append(edge)
 
     if len(centers) > 1:
         texts = [relation_score.embed_input(seed.title, seed.abstract) for seed in seeds]

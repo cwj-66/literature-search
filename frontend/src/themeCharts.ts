@@ -11,6 +11,23 @@ export const QUADRANT_META: Record<ThemeQuadrant, { label: string; color: string
 
 export const VIZ_PALETTE = [tokens.vizBlue, tokens.vizTeal, tokens.vizAmber, tokens.vizRose, tokens.vizViolet, tokens.vizGreen];
 
+const TOOLTIP = {
+  backgroundColor: "#ffffff",
+  borderColor: tokens.line,
+  borderWidth: 1,
+  padding: [10, 12],
+  textStyle: { color: tokens.text, fontSize: 12, fontFamily: tokens.fonts.ui },
+  extraCssText: `border-radius:${tokens.radius.md}px;box-shadow:${tokens.shadow.md};line-height:1.7;max-width:320px;white-space:normal;`,
+};
+const BASE = {
+  textStyle: { fontFamily: tokens.fonts.ui, color: tokens.text },
+  animationDuration: 700,
+  animationEasing: "cubicOut" as const,
+  animationDurationUpdate: 420,
+  animationEasingUpdate: "cubicOut" as const,
+};
+const AXIS_NAME = { color: tokens.muted, fontSize: 11 };
+
 export function median(values: number[]): number {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -35,14 +52,15 @@ export function quadrantOption(themes: KnowledgeTheme[]): EChartsOption {
   const maxSize = Math.max(1, ...themes.map(t => t.size));
   const byName = new Map(themes.map(t => [t.name, t]));
   const area = (x1: number, y1: number, x2: number, y2: number, meta: (typeof QUADRANT_META)[ThemeQuadrant]) => {
-    const corner = { name: meta.label, xAxis: x1, yAxis: y1, itemStyle: { color: meta.color, opacity: 0.06 }, label: { show: true, position: "insideRight" as const, color: meta.color, fontSize: 12, formatter: `${meta.label}\n${meta.hint}` } };
+    const corner = { name: meta.label, xAxis: x1, yAxis: y1, itemStyle: { color: meta.color, opacity: 0.045 }, label: { show: true, position: "insideTopRight" as const, distance: 10, color: meta.color, fontSize: 12, fontWeight: 600 as const, lineHeight: 17, formatter: `${meta.label}\n{hint|${meta.hint}}`, rich: { hint: { color: tokens.muted, fontSize: 11, fontWeight: 400 as const } } } };
     const opposite = { xAxis: x2, yAxis: y2 };
     return [corner, opposite] as [typeof corner, typeof opposite];
   };
   return {
-    animationDuration: 400,
+    ...BASE,
     grid: { left: 64, right: 28, top: 32, bottom: 52 },
     tooltip: {
+      ...TOOLTIP,
       trigger: "item",
       formatter: params => {
         const name = (params as { name?: string }).name ?? "";
@@ -58,17 +76,20 @@ export function quadrantOption(themes: KnowledgeTheme[]): EChartsOption {
         return lines.join("<br/>");
       },
     },
-    xAxis: { name: "中心度 centrality", nameLocation: "middle", nameGap: 30, min: 0, max: maxX, splitLine: { lineStyle: { color: tokens.line } }, axisLabel: { color: tokens.faint } },
-    yAxis: { name: "密集度 density", nameGap: 42, min: 0, max: maxY, splitLine: { lineStyle: { color: tokens.line } }, axisLabel: { color: tokens.faint } },
+    xAxis: { name: "中心度 centrality", nameLocation: "middle", nameGap: 30, nameTextStyle: AXIS_NAME, min: 0, max: maxX, splitLine: { lineStyle: { color: tokens.line, type: [2, 4] } }, axisLine: { lineStyle: { color: tokens.lineStrong } }, axisTick: { show: false }, axisLabel: { color: tokens.faint, fontSize: 11 } },
+    yAxis: { name: "密集度 density", nameGap: 42, nameTextStyle: AXIS_NAME, min: 0, max: maxY, splitLine: { lineStyle: { color: tokens.line, type: [2, 4] } }, axisLine: { show: true, lineStyle: { color: tokens.lineStrong } }, axisTick: { show: false }, axisLabel: { color: tokens.faint, fontSize: 11 } },
     series: [{
       type: "scatter",
       data: themes.map(theme => ({
         name: theme.name,
         value: [theme.centrality, theme.density],
         symbolSize: 12 + 30 * Math.sqrt(theme.size / maxSize),
-        itemStyle: { color: theme.quadrant ? QUADRANT_META[theme.quadrant].color : tokens.placeholder, opacity: 0.85, borderColor: "#ffffff", borderWidth: 1 },
+        itemStyle: { color: theme.quadrant ? QUADRANT_META[theme.quadrant].color : tokens.placeholder, opacity: 0.82, borderColor: "#ffffff", borderWidth: 1.5 },
       })),
-      emphasis: { scale: 1.15 },
+      label: { show: true, position: "right", distance: 6, color: tokens.text, fontSize: 11, formatter: "{b}" },
+      labelLayout: { hideOverlap: true },
+      emphasis: { scale: 1.12, focus: "self", label: { color: tokens.ink, fontWeight: 600 } },
+      animationDelay: (index: number) => index * 30,
       markLine: {
         silent: true, symbol: "none",
         lineStyle: { color: tokens.lineStrong, type: "dashed" },
@@ -95,19 +116,21 @@ export function themeRiverOption(themes: KnowledgeTheme[], years: number[]): ECh
   const ranked = [...themes].sort((a, b) => themeTotal(b) - themeTotal(a)).slice(0, RIVER_MAX_THEMES);
   const data = ranked.flatMap(theme => years.map(year => [String(year), themeYearCount(theme, year), theme.name] as [string, number, string]));
   return {
-    animationDuration: 400,
+    ...BASE,
     color: VIZ_PALETTE,
-    tooltip: { trigger: "axis", axisPointer: { type: "line", lineStyle: { color: tokens.lineStrong } } },
-    legend: { type: "scroll", bottom: 0, textStyle: { color: tokens.muted, fontSize: 11 }, pageTextStyle: { color: tokens.muted } },
+    tooltip: { ...TOOLTIP, trigger: "axis", axisPointer: { type: "line", lineStyle: { color: tokens.ink, opacity: .35 } } },
+    legend: { type: "scroll", bottom: 0, icon: "roundRect", itemWidth: 12, itemHeight: 8, itemGap: 14, textStyle: { color: tokens.muted, fontSize: 11 }, pageTextStyle: { color: tokens.muted } },
     singleAxis: {
       type: "time", top: 24, bottom: 52, left: 44, right: 24,
-      axisLabel: { color: tokens.faint, formatter: "{yyyy}" },
-      axisLine: { lineStyle: { color: tokens.line } },
-      splitLine: { show: false },
+      axisLabel: { color: tokens.faint, formatter: "{yyyy}", fontSize: 11 },
+      axisLine: { lineStyle: { color: tokens.lineStrong } },
+      axisTick: { lineStyle: { color: tokens.lineStrong } },
+      splitLine: { show: true, lineStyle: { color: tokens.line, type: [2, 4] } },
     },
     series: [{
       type: "themeRiver",
-      emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(16,24,40,.18)" } },
+      itemStyle: { opacity: .88 },
+      emphasis: { focus: "series", itemStyle: { opacity: 1 } },
       label: { show: false },
       data,
     }],
@@ -131,8 +154,9 @@ export function sankeyOption(links: ThemeEvolutionLink[]): EChartsOption {
   const stripPeriod = (id: string) => id.slice(id.indexOf("|") + 1);
   const sankeyLinks = links.map(link => ({ source: nodeAt(link.from_period, link.from_label), target: nodeAt(link.to_period, link.to_label), value: Math.max(link.weight, 0.01) }));
   return {
-    animationDuration: 400,
+    ...BASE,
     tooltip: {
+      ...TOOLTIP,
       trigger: "item",
       formatter: params => {
         const item = params as { dataType?: string; name?: string; data?: { source?: string; target?: string; value?: number } };
@@ -145,9 +169,10 @@ export function sankeyOption(links: ThemeEvolutionLink[]): EChartsOption {
     series: [{
       type: "sankey",
       left: 24, right: 120, top: 16, bottom: 16,
-      nodeWidth: 14, nodeGap: 10, draggable: false,
+      nodeWidth: 10, nodeGap: 12, draggable: false,
+      itemStyle: { borderWidth: 0, borderRadius: 2 },
       label: { color: tokens.text, fontSize: 12, formatter: (params: { name?: string }) => stripPeriod(params.name ?? "") },
-      lineStyle: { color: "gradient", curveness: 0.5, opacity: 0.35 },
+      lineStyle: { color: "gradient", curveness: 0.5, opacity: 0.28 },
       emphasis: { focus: "adjacency" },
       data: nodes,
       links: sankeyLinks,

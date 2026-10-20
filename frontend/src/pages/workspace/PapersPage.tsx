@@ -127,7 +127,6 @@ export default function PapersPage() {
         <article><span className="lib-ico is-violet" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="7" rx="6" ry="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M6 7v5c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4V7M6 12v5c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4v-5" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg></span><strong>建立索引</strong><span>对论文内容建立语义索引，支持高效检索与定位。</span></article>
         <article><span className="lib-ico is-green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 7.2A5.2 5.2 0 0 1 11.2 2h1.6A5.2 5.2 0 0 1 18 7.2v3.2A4.2 4.2 0 0 1 13.8 14.6H12l-3.2 2.2v-2.4A5 5 0 0 1 6 10.4Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg></span><strong>支持 AI 问答</strong><span>基于论文内容进行问答，快速获取关键信息。</span></article>
       </div>
-      <p className="lib-foot">支持从搜索结果加入论文，也支持上传自己的 PDF 文件。</p>
     </section> : <>
       {analyzeError ? <Alert type="error" showIcon message={analyzeError} /> : null}
       {report ? <AnalyzeResult result={report} /> : null}

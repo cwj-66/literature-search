@@ -231,6 +231,7 @@ export interface RecommendationReason {
 
 export interface RecommendationItem {
   id: string;
+  aliases?: string[];
   title: string;
   year: number | null;
   authors?: string[];
@@ -329,6 +330,7 @@ export interface PaperNetwork {
 
 export interface RelateCenter {
   id: string;
+  aliases?: string[];
   local_id: string | null;
   title: string;
   year: number | null;

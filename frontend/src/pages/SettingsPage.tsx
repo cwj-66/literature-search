@@ -48,13 +48,12 @@ export default function SettingsPage() {
     <main className="settings-main">
       {section === "about" ? <section>
         <h1 className="page-title">说明</h1>
-        <p className="page-sub">模型连接和密钥只保存在当前浏览器，还不会发给后端，也不会进入检索或分析。换浏览器或清除站点数据后需要重新填写。</p>
+        <p className="page-sub">模型连接和密钥只保存在当前浏览器，不会发送到后端，也不参与检索与分析。更换浏览器或清除站点数据后需要重新填写。</p>
       </section> : <>
         <h1 className="page-title">模型提供商</h1>
-        <p className="page-sub">为工作区里的提问和比较准备模型连接。可以先只配一个可用模型。</p>
         <section className="provider-card" aria-label="已连接的提供商">
           <h2>已连接的提供商</h2>
-          {!list.length && !creating ? <p className="empty-hint">还没有提供商。添加一个连接后，才能在提问时选择经济模型或强能力模型。</p> : null}
+          {!list.length && !creating ? <p className="empty-hint">还没有提供商，添加连接后才能在提问时选择模型。</p> : null}
           {list.map(item => {
             const shown = open === item.id;
             return <article key={item.id} className="provider-row">

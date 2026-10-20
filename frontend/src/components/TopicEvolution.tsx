@@ -25,7 +25,7 @@ export function TopicEvolution({ references, onExploreTheme }: {
   const quadrants = (Object.keys(QUADRANT_META) as ThemeQuadrant[]).filter(q => themes.some(t => t.quadrant === q));
 
   return <section className="kg-evolution" aria-label="主题变化">
-    <div className="kg-section-heading"><div><h2>研究热点与主题演化</h2><p>基于当前样本的关键词共现归纳主题。战略图和演进图只在样本足够时绘制。</p></div></div>
+    <div className="kg-section-heading"><div><h2>研究热点与主题演化</h2><p>基于当前样本的关键词共现归纳主题。</p></div></div>
     <div className="kg-entity-toggles" role="group" aria-label="主题统计范围">
       <Button size="small" type={scope === "workspace" ? "primary" : "default"} onClick={() => setScope("workspace")}>工作区样本</Button>
       <Button size="small" type={scope === "expanded" ? "primary" : "default"} onClick={() => setScope("expanded")}>扩展文献样本</Button>

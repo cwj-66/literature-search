@@ -15,14 +15,15 @@ export interface EntityNode {
 export interface EntityEdge { source: string; target: string; relation: string; provenance?: string; generated_at?: string; result_id?: string; analysis_basis?: string; source_url?: string | null }
 export interface EntityGraph { nodes: EntityNode[]; edges: EntityEdge[]; total_papers: number; scope: string; missing_references?: string[] }
 export const RELATIONS: Record<string, { label: string; color: string; dash?: number[] }> = {
-  authored_by: { label: "作者署名", color: "#8b78a3" },
-  has_keyword: { label: "主题关联 · 关键词", color: "#468e82", dash: [5, 4] },
-  published_in: { label: "发表渠道", color: "#b29467", dash: [2, 4] },
-  cites: { label: "引用 → 被引用", color: "#4169a7" },
-  similar: { label: "主题相似 · 推荐缓存", color: "#7048e8", dash: [6, 5] },
+  authored_by: { label: "作者署名", color: "#9a8fb8" },
+  has_keyword: { label: "关键词关联", color: "#7aa98a", dash: [4, 4] },
+  published_in: { label: "发表渠道", color: "#bea06f", dash: [1.5, 4] },
+  cites: { label: "引用 → 被引用", color: "#2f5db8" },
+  similar: { label: "主题相似", color: "#0f7c74", dash: [6, 5] },
 };
 export const KIND_LABEL: Record<EntityKind, string> = { paper: "论文", author: "作者", keyword: "关键词", venue: "期刊／会议" };
-export const KIND_COLOR: Record<EntityKind, string> = { paper: "#2a53b0", author: "#85599f", keyword: "#23806f", venue: "#a8701c" };
+export const KIND_COLOR: Record<EntityKind, string> = { paper: "#24479e", author: "#6a4bb0", keyword: "#2f8650", venue: "#94570b" };
+export const KIND_TINT: Record<EntityKind, string> = { paper: "#ffffff", author: "#f1edf8", keyword: "#ebf5ee", venue: "#f8f1e6" };
 
 // Public paper identities are real. Topic assignments are curated for this
 // prototype and must not be presented as automatic extraction or a field census.

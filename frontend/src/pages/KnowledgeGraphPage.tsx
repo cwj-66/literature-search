@@ -20,7 +20,7 @@ export default function KnowledgeGraphPage() {
   useEffect(() => { document.title = "知识图谱 - 文献研读"; }, []);
   return <main className="page page-wide kg-page">
     <Link to={from} className="back-link">← 返回研究</Link>
-    <header className="page-head"><div><h1 className="page-title">知识图谱</h1><p className="muted">{inProject ? `工作区「${project!.name}」` : "本地文献库"} · 基于真实论文与已保存的分析结果</p></div></header>
+    <header className="page-head"><div><h1 className="page-title">知识图谱</h1><p className="muted">{inProject ? `工作区「${project!.name}」` : "本地文献库"}</p></div></header>
     {error ? <Alert type="error" showIcon message={error} action={<Button onClick={refresh}>重试</Button>} /> : null}
     {!data && !error ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
     {data ? <>{!inProject && data.total_papers > data.nodes.filter(n => n.kind === "paper").length ? <p className="kg-inline-notice">文献库共 {data.total_papers} 篇，此处统计最近 2000 篇。进入具体工作区可按其论文范围探索。</p> : null}<KnowledgeExplorer data={data} scope={inProject ? `workspace-${project!.id}` : "library"} workspaceId={inProject ? project!.id : undefined} references={references} onFill={async ids => { const result = await fillGraphCitations(ids); refresh(); return result; }} onFillSimilar={async ids => { const result = await fillGraphSimilar(ids); refresh(); return result; }} paperKey={node => project ? workspaceNodeKey(project, node) : undefined} paperHref={node => {

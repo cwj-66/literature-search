@@ -20,7 +20,7 @@ export default function GraphPage() {
   const count = Object.keys(project.papers).length;
   const snapshots = data?.nodes.filter(n => n.kind === "paper" && n.provenance === "workspace_metadata").length ?? 0;
   return <main className="ws-page kg-page">
-    <header className="ws-page-head"><div><h1>知识图谱</h1><p>把当前工作区的论文联系起来，沿主题、作者和引用继续探索。</p></div></header>
+    <header className="ws-page-head"><div><h1>知识图谱</h1></div></header>
     {!count ? <GraphEmpty workspaceId={id} /> : <>
       {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={refresh}>重试</Button>} /> : null}
       {!raw && !error ? <Skeleton active paragraph={{ rows: 8 }} /> : null}

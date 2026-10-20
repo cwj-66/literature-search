@@ -65,7 +65,7 @@ export default function LibraryPage() {
     {data && data.papers.length ? <section className="library-surface" aria-label="文献列表" aria-busy={loading}>
       <div className="library-tools">
         <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选本页文献" placeholder="筛选本页标题、作者或年份" />
-        <span className="small-print">{needle ? `匹配 ${visible.length} / ${data.papers.length} 篇` : `本页 ${data.papers.length} 篇`}<span className="library-tools-tip"> · 勾选后可提问或对比</span></span>
+        <span className="small-print">{needle ? `匹配 ${visible.length} / ${data.papers.length} 篇` : `本页 ${data.papers.length} 篇`}</span>
       </div>
       <div className="list-toolbar">
         <Checkbox disabled={!pageItems.length} checked={pageItems.length > 0 && pickedOnPage === pageItems.length} indeterminate={pickedOnPage > 0 && pickedOnPage < pageItems.length}

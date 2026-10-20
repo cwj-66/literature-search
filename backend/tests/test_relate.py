@@ -51,7 +51,7 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
     def use_payloads(self, mapping):
         recommend.bundle.side_effect = lambda raw, refresh, seed=None: mapping[raw]
 
-    async def test_five_per_category(self):
+    async def test_top_one_per_category_without_changing_candidate_ranking(self):
         groups = {key: [item(f"c1-{key}-{n}", relations=[key], categories=[key], strength=60 - n) for n in range(1, 8)] for key in CATEGORIES}
         self.use_payloads({"local-1": payload(groups)})
         result = await relate.relate(["local-1"])
@@ -59,9 +59,10 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["centers"][0]["id"], "arxiv:1")
         self.assertEqual(result["centers"][0]["color_index"], 0)
         for group in result["satellites"]:
-            self.assertLessEqual(len(group["items"]), 5)
+            self.assertEqual(len(group["items"]), 1)
+            self.assertEqual(group["items"][0]["id"], f"c1-{group['category']}-1")
         total = sum(len(group["items"]) for group in result["satellites"])
-        self.assertEqual(total, 15)
+        self.assertEqual(total, 3)
 
     async def test_cross_category_item_kept_in_each_category(self):
         shared = item("multi", relations=["cites", "similar"], categories=["citation", "semantic"])
@@ -111,6 +112,7 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
     async def test_center_as_candidate_draws_center_edge(self):
         groups = {key: [item(f"a-{key}-1", categories=[key]), item(f"a-{key}-2", categories=[key])] for key in CATEGORIES}
         groups["citation"] = [item("arxiv:2", relations=["cites"], categories=["citation"], strength=90), item("a-cit-2", categories=["citation"])]
+        groups["citation"][0]["evidence"] = [{"type": "out", "via": "arxiv:2", "source": "semantic_scholar"}]
         self.use_payloads({"local-1": payload(groups), "local-2": payload({key: [item(f"b-{key}-1", categories=[key])] for key in CATEGORIES})})
         result = await relate.relate(["local-1", "local-2"])
         edges = [e for e in result["center_edges"] if e["source"] == "arxiv:1" and e["target"] == "arxiv:2"]
@@ -118,6 +120,42 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(edges[0]["type"], "cites")
         self.assertTrue(edges[0]["directed"])
         self.assertEqual(edges[0]["category"], "citation")
+
+    async def test_shared_child_does_not_connect_centers(self):
+        self.use_payloads({"local-1": payload({"semantic": [item("shared", categories=["semantic"])]}),
+                           "local-2": payload({"keyword": [item("shared", categories=["keyword"])]})})
+        result = await relate.relate(["local-1", "local-2"])
+        self.assertEqual(result["center_edges"], [])
+        self.assertEqual(result["overlaps"], [{"paper_id": "shared", "center_ids": ["arxiv:1", "arxiv:2"]}])
+
+    async def test_discovery_failure_keeps_selected_center(self):
+        recommend.bundle.side_effect = TimeoutError("upstream timed out")
+        with self.assertLogs("app.services.retrieval.relate", level="ERROR"):
+            result = await relate.relate(["local-1"])
+        self.assertEqual([c["id"] for c in result["centers"]], ["arxiv:1"])
+        self.assertEqual([g["status"] for g in result["satellites"]], ["unavailable"] * 3)
+
+    async def test_incoming_citation_points_from_other_center(self):
+        candidate = item("arxiv:2", relations=["cites"], categories=["citation"])
+        candidate["evidence"] = [{"type": "in", "via": "arxiv:2", "source": "semantic_scholar"}]
+        self.use_payloads({"local-1": payload({"citation": [candidate]}), "local-2": payload({})})
+        result = await relate.relate(["local-1", "local-2"])
+        self.assertEqual([(e["source"], e["target"]) for e in result["center_edges"]], [("arxiv:2", "arxiv:1")])
+
+    async def test_promoted_paper_matches_its_provider_alias(self):
+        self.seeds["local-2"].semantic_scholar_id = "provider-beta"
+        self.use_payloads({"local-1": payload({"semantic": [item("s2:provider-beta", categories=["semantic"])]}),
+                           "local-2": payload({})})
+        result = await relate.relate(["local-1", "local-2"])
+        self.assertEqual(result["satellites"][1]["items"][0]["id"], "arxiv:2")
+        self.assertEqual(len(result["center_edges"]), 1)
+
+    async def test_relation_category_does_not_invent_citation_arrow(self):
+        self.use_payloads({"local-1": payload({"semantic": [item("arxiv:2", relations=["cites", "similar"], categories=["semantic"])]}),
+                           "local-2": payload({})})
+        result = await relate.relate(["local-1", "local-2"])
+        self.assertEqual(result["center_edges"][0]["type"], "similar")
+        self.assertFalse(result["center_edges"][0]["directed"])
 
     async def test_partial_failure_keeps_successful_centers(self):
         groups = {key: [item(f"a-{key}-1", categories=[key]), item(f"a-{key}-2", categories=[key])] for key in CATEGORIES}

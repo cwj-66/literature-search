@@ -42,7 +42,6 @@ export function SkimPanel({ result, value, onChange }: { result: AnalysisResult;
   const count = (tone: Tone) => result.claims?.filter(c => c.status === "supported" && TONE_OF[c.kind] === tone).length ?? 0;
   return <section className="skim-panel" aria-label="速读高亮">
     <div className="skim-head"><h2>速读高亮</h2><Switch checked={value.on} onChange={on => onChange({ ...value, on })} aria-label="启用速读高亮" /></div>
-    <p className="field-help">按类别给分析结论上色，便于快速浏览；每条结论仍可展开原文依据核验。</p>
     <ul className="skim-list">{TONES.map(tone => <li key={tone.key}>
       <Checkbox disabled={!value.on} checked={value.tones.includes(tone.key)}
         onChange={e => onChange({ ...value, tones: e.target.checked ? [...value.tones, tone.key] : value.tones.filter(t => t !== tone.key) })}>

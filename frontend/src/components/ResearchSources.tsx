@@ -55,7 +55,6 @@ export function ResearchSources({ selected, onChange, disabled, currentId }: {
       </div>
       <span className="research-source-badge">{selected.length}</span>
     </div>
-    <p className="research-source-panel-hint">助手按需检索和阅读所选资料。</p>
     <div className="research-source-panel-tools">
       <Button size="small" type="primary" ghost aria-label={selected.length ? "管理研究资料" : "添加研究资料"} icon={<PlusOutlined />} disabled={disabled} onClick={() => setOpen(true)}>{selected.length ? "管理研究资料" : "添加研究资料"}</Button>
       {papers.length ? <button type="button" className="research-source-collapse" aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? "展开列表" : "收起列表"}</button> : null}

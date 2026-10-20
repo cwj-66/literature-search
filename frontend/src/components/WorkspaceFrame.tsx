@@ -53,7 +53,6 @@ export function WorkspaceFrame({ project, section, children }: { project: Projec
     </header>
     <div className="ws-body">
       <nav className="ws-nav" aria-label="研究资料">
-        <p className="ws-nav-label">研究资料</p>
         {NAV.map(item => <Link key={item.section} to={item.href(project.id)} aria-current={section === item.section ? "page" : undefined}><Glyph>{item.icon}</Glyph>{item.label}</Link>)}
       </nav>
       <div id="main" tabIndex={-1} className="ws-main">{children}</div>

@@ -202,7 +202,6 @@ export default function SearchPage() {
       <div className="search-hero">
         <div className="search-hero-copy">
           <h1>检索论文</h1>
-          <p className="search-hero-lead">查找相关研究，收藏值得阅读的论文，带着证据继续探索。</p>
           <div className="source-pills" role="group" aria-label="数据源">
             <button type="button" className={homeSource === "arxiv" ? "source-pill is-on" : "source-pill"} aria-pressed={homeSource === "arxiv"} onClick={() => setHomeSource("arxiv")}>
               <ArxivMark />arXiv
@@ -216,7 +215,6 @@ export default function SearchPage() {
             <input ref={heroInput} value={draft} maxLength={300} aria-label="论文关键词" placeholder="输入研究问题、关键词或论文标题，例如：降低 RAG 回答幻觉的方法" onChange={event => setDraft(event.target.value)} />
             <button type="submit">搜索</button>
           </form>
-          <p className="search-hero-note">支持中英文关键词、论文标题和研究问题搜索</p>
           <div className="search-topics">
             <span>推荐主题</span>
             <div className="sample-list" aria-label="推荐主题">{SAMPLES.map(word => <button type="button" className="sample-button" key={word} onClick={() => startSearch(word)}>{word}</button>)}</div>

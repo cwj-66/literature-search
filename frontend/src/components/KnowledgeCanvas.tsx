@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "antd";
 import { ZoomInOutlined, ZoomOutOutlined } from "@ant-design/icons";
-import { KIND_COLOR, KIND_LABEL, type EntityGraph, type EntityNode } from "../graphData";
+import { KIND_COLOR, KIND_LABEL, RELATIONS, type EntityGraph, type EntityNode } from "../graphData";
 
 const savedViews = new Map<string, { x: number; y: number; zoom: number }>();
 
@@ -44,7 +44,6 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
   const height = Math.max(660, ...[...positions.values()].map(n => n.y + 55));
   return <div className="kg-canvas-shell">
     <div className="kg-canvas-tools">
-      <span>拖动画布平移 · 点击节点查看关系</span>
       <div><Button size="small" icon={<ZoomOutOutlined />} aria-label="缩小图谱" onClick={() => setView(v => ({ ...v, zoom: Math.max(.4, v.zoom - .2) }))} />
         <Button size="small" icon={<ZoomInOutlined />} aria-label="放大图谱" onClick={() => setView(v => ({ ...v, zoom: Math.min(2.5, v.zoom + .2) }))} />
         <Button size="small" onClick={() => setView({ x: 0, y: 0, zoom: 1 })}>复位</Button></div>
@@ -65,7 +64,7 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
           const active = edge.source === selected || edge.target === selected;
           if (edge.relation === "cites" || edge.relation === "similar") {
             const cites = edge.relation === "cites";
-            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={cites ? "#e8590c" : "#7048e8"} strokeWidth={2.2} strokeDasharray={cites ? undefined : "6 5"} />;
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={cites ? RELATIONS.cites.color : RELATIONS.similar.color} strokeWidth={1.8} strokeDasharray={cites ? undefined : "6 5"} />;
           }
           return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={active ? KIND_COLOR[b.kind] : "#dfe2ea"} strokeWidth={active ? 2.2 : 1} opacity={selected && !active ? .13 : .8} />;
         })}
@@ -75,7 +74,7 @@ export function KnowledgeCanvas({ data, selected, onSelect, scope = "local" }: {
           onClick={() => { if (!drag.current?.moved) onSelect(node.id === selected ? "" : node.id); }}
           onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.id === selected ? "" : node.id); } }}>
           <title>{node.label}</title>
-          <circle r={node.kind === "paper" ? 22 : 14} fill={node.external ? "#fff" : KIND_COLOR[node.kind]} stroke={selected === node.id ? "#191f2b" : node.external ? KIND_COLOR.paper : "white"} strokeWidth={selected === node.id ? 4 : 3} strokeDasharray={node.external ? "4 3" : undefined} />
+          <circle r={node.kind === "paper" ? 22 : 14} fill={node.external ? "#fff" : KIND_COLOR[node.kind]} stroke={selected === node.id ? "#13203a" : node.external ? KIND_COLOR.paper : "white"} strokeWidth={selected === node.id ? 4 : 3} strokeDasharray={node.external ? "4 3" : undefined} />
           <text y="4" textAnchor="middle" fill={node.external ? KIND_COLOR.paper : "white"} fontSize="11">{node.kind === "paper" ? node.year ?? "?" : KIND_LABEL[node.kind].slice(0, 1)}</text>
           <text y={node.kind === "paper" ? 40 : 32} textAnchor="middle" fill="#2c3340" fontSize="13" stroke="#fff" strokeWidth="4" paintOrder="stroke">{node.label.length > 19 ? node.label.slice(0, 18) + "…" : node.label}</text>
         </g>)}

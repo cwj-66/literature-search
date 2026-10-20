@@ -8,10 +8,7 @@
   display: flex;
   align-items: stretch;
   min-height: 100vh;
-  background:
-    radial-gradient(1200px 520px at 88% -10%, rgba(99, 102, 241, .07), transparent 62%),
-    radial-gradient(900px 460px at 4% 0%, rgba(14, 147, 132, .045), transparent 58%),
-    var(--canvas);
+  background: var(--canvas);
 }
 
 .app-main {
@@ -20,7 +17,7 @@
   outline: none;
 }
 
-.route-view { animation: fade-rise var(--dur-3) var(--ease-out) backwards; }
+.route-view { animation: sheet-in var(--dur-3) var(--ease-out) backwards; }
 
 .skip-link {
   position: fixed;
@@ -68,58 +65,54 @@
   width: var(--side-w);
   height: 100vh;
   flex: none;
-  padding: 20px 14px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  border-right: 1px solid var(--line);
-  backdrop-filter: blur(12px);
+  padding: 22px 14px;
+  background: transparent;
 }
 
 .shell-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px 18px;
+  padding: 2px 8px 26px;
   color: var(--ink);
-  font-size: var(--fs-md);
-  font-weight: 600;
-  letter-spacing: -.015em;
+  font-family: var(--font-read);
+  font-size: 17px;
+  font-weight: 700;
 }
 .shell-brand:hover { color: var(--ink); text-decoration: none; }
-.shell-brand svg { width: 24px; height: 24px; flex: none; color: var(--accent); }
+.shell-brand svg {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: #fff;
+}
 
 .shell-nav { display: flex; flex-direction: column; gap: 2px; }
 .shell-nav a {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   height: 38px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: var(--radius-md);
-  color: var(--text);
+  color: var(--muted);
   font-size: var(--fs-ui);
   font-weight: 500;
-  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
-.shell-nav a:hover { color: var(--ink); background: var(--subtle); text-decoration: none; }
+.shell-nav a:hover { color: var(--ink); background: rgba(255, 255, 255, .55); text-decoration: none; }
 .shell-nav a[aria-current="page"] {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
   font-weight: 600;
 }
-.shell-nav a[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: -14px;
-  top: 50%;
-  width: 3px;
-  height: 18px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent);
-  transform: translateY(-50%);
-  animation: fade-in var(--dur-2) var(--ease-out) both;
-}
-.shell-nav .anticon { font-size: 17px; }
+.shell-nav a[aria-current="page"] .anticon { color: var(--accent); }
+.shell-nav .anticon { font-size: 16px; transition: color var(--dur-1) var(--ease-out); }
 .shell-nav .anticon svg { display: block; }
 
 .shell-foot {
@@ -148,13 +141,14 @@
   margin-bottom: var(--s5);
 }
 .page-title {
+  font-family: var(--font-read);
   font-size: var(--fs-h1);
-  font-weight: 650;
-  letter-spacing: -.028em;
-  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  line-height: 1.25;
 }
 .page-sub {
-  margin-top: 6px;
+  margin-top: 8px;
   max-width: 76ch;
   color: var(--muted);
   font-size: var(--fs-sm);
@@ -177,7 +171,6 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-xs);
 }
 
 .muted { color: var(--muted); }
@@ -459,6 +452,7 @@
     gap: var(--s2);
     overflow-x: auto;
     padding: 8px 12px;
+    background: var(--canvas);
     border-right: 0;
     border-bottom: 1px solid var(--line);
     box-shadow: var(--shadow-xs);
@@ -466,6 +460,7 @@
   }
   .shell-side::-webkit-scrollbar { display: none; }
   .shell-brand { padding: 0 10px 0 2px; }
+  .shell-brand svg { width: 28px; height: 28px; }
   .shell-brand span { display: none; }
   .shell-nav { flex: 0 1 auto; flex-direction: row; gap: 2px; min-width: 0; overflow-x: auto; }
   .shell-nav::-webkit-scrollbar { display: none; }

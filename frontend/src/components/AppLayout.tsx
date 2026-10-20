@@ -89,7 +89,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <nav className="shell-nav" aria-label="主要导航">
             {navigation.map(item => <Link key={item.key} to={item.href} aria-current={active === item.key ? "page" : undefined}>{item.icon}{item.label}</Link>)}
           </nav>
-          <p className="shell-foot">面向文献检索、精读与调研的工作台</p>
         </aside>
         <div id="main" tabIndex={-1} className="app-main"><div className="route-view" key={location.pathname}>{children}</div></div>
       </>}
