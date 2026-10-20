@@ -360,35 +360,20 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.search.assert_not_awaited()
         self.assertEqual(result["workflow_action"], "synthesize")
 
-    async def _workspace_operation(self, approved):
+
+
+
+
+    async def test_removed_workspace_tool_cannot_write_or_request_confirmation(self):
         second, _ = library.save_paper(public_paper(2), public_paper(2).id)
-        third, _ = library.save_paper(public_paper(3), public_paper(3).id)
         self.model.side_effect = [json.dumps({"tool_calls": [{"name": "add_papers_to_workspace",
-            "args": {"paper_ids": [second.id, third.id]}}]}), json.dumps({"answer": "已记录实际操作结果。"})]
-        paused = await agent.run("将论文加入工作区", mode="react", auto_approve=True,
-                                 task_id="operation", context=self.context)
-        self.assertEqual(paused["status"], "waiting")
-        self.assertEqual(paused["interrupt"]["type"], "confirm_workspace")
-        self.assertEqual(len(workspaces.list_papers("w")["papers"]), 1)
-        result = await agent.resume_task("operation", {"approved_ids": approved})
+            "args": {"paper_ids": [second.id]}}]}), json.dumps({"answer": "该聊天工具已移除。"})]
+        result = await agent.run("将论文加入工作区", mode="react", auto_approve=True,
+                                 task_id="removed-operation", context=self.context)
         self.assertEqual(result["status"], "done")
-        return result
-
-    async def test_workspace_write_uses_only_confirmed_subset(self):
-        await self._workspace_operation([public_paper(2).id, "not-requested"])
-        members = {row["paper"]["id"] for row in workspaces.list_papers("w")["papers"]}
-        self.assertEqual(members, {self.local.id, public_paper(2).id})
-
-    async def test_workspace_rejection_writes_nothing(self):
-        result = await self._workspace_operation([])
+        self.assertFalse(result.get("interrupt"))
         self.assertEqual(len(workspaces.list_papers("w")["papers"]), 1)
-        self.assertTrue(any(op["status"] == "denied" for op in result["operations"]))
-
-    async def test_repeated_operation_resume_is_rejected_without_duplicate_write(self):
-        await self._workspace_operation([public_paper(2).id])
-        with self.assertRaises(agent.TaskConflict):
-            await agent.resume_task("operation", {"approved_ids": [public_paper(2).id]})
-        self.assertEqual(len(workspaces.list_papers("w")["papers"]), 2)
+        self.assertFalse(result.get("operations"))
 
     async def test_research_api_and_event_replay_expose_new_stages(self):
         from app.main import app

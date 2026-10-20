@@ -35,7 +35,7 @@ class AnalyzePapersNodeTests(unittest.IsolatedAsyncioTestCase):
     async def test_analyze_top_candidates_and_marks_stage(self):
         state = {**initial_state("goal"), "papers": [paper(i) for i in range(1, 8)], "result_limit": 3,
                  "post_actions": ["analyze"]}
-        with patch("app.agents.tooling._tool_analyze_paper", new=AsyncMock(return_value=("ok", {"llm_calls": 1}))) as analyze:
+        with patch("app.agents.tooling._analyze_workflow_papers", new=AsyncMock(return_value=("ok", {"llm_calls": 1}))) as analyze:
             updates = await workflow.analyze_papers_node(state)
         self.assertEqual(analyze.await_args[0][1]["paper_ids"], ["arxiv:1", "arxiv:2", "arxiv:3"])
         self.assertEqual(updates["workflow_stage"], "analyze")
@@ -49,13 +49,12 @@ class AnalyzePapersNodeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SaveToWorkspaceNodeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_save_calls_add_tool_via_catalog(self):
+    async def test_save_uses_internal_workflow_service(self):
         state = {**initial_state("goal"), "papers": [paper(1), paper(2)], "result_limit": 5,
                  "workspace_id": "ws:1", "post_actions": ["save_to_workspace"]}
-        with patch("app.agents.tooling._tool_catalog", new=AsyncMock(return_value=("saved", {}))) as catalog:
+        with patch("app.agents.tooling._tool_save_papers_to_workspace", new=AsyncMock(return_value=("saved", {}))) as catalog:
             updates = await workflow.save_to_workspace_node(state)
-        self.assertEqual(catalog.await_args[0][1], "add_papers_to_workspace")
-        self.assertEqual(set(catalog.await_args[0][2]["paper_ids"]), {"arxiv:1", "arxiv:2"})
+        self.assertEqual(set(catalog.await_args[0][1]["paper_ids"]), {"arxiv:1", "arxiv:2"})
         self.assertEqual(updates["workflow_stage"], "save")
 
     async def test_save_requires_workspace(self):

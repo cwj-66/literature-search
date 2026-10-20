@@ -308,16 +308,6 @@ class AgentToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["coverage"]["next_action"], "read_next")  # 规则回退：未读且未深读
         self.assertEqual(second["llm_calls"], 1)  # 失败尝试也计入调用预算
 
-    async def test_retrieve_tool_binds_evidence_ids(self):
-        chunk = {"text": "Retrieval reduces hallucination with citations.", "chunk_id": "c1", "section": "intro", "paragraph_ids": ["p1"]}
-        with patch("app.services.retrieval.hybrid.retrieve", new=AsyncMock(return_value=[chunk])):
-            content, updates = await agent._tool_retrieve_paper_evidence(
-                {**agent.initial_state("goal"), "papers": [paper(1, abstract="Retrieval reduces hallucination in generation tasks.").model_dump()]},
-                {"paper_id": "arxiv:1", "aspect": "hallucination"},
-            )
-        self.assertEqual(updates["evidence_papers"].get("E0001"), "arxiv:1")
-        self.assertIn("E0001", updates["evidence_ids"])
-        self.assertIn("E0001", content)
 
     async def test_analyze_tool_binds_report_evidence(self):
         report = {
@@ -328,7 +318,7 @@ class AgentToolTests(unittest.IsolatedAsyncioTestCase):
             }],
         }
         with patch("app.tools.analyze_paper.analyze_paper", new=AsyncMock(return_value=report)):
-            content, updates = await agent._tool_analyze_paper(
+            content, updates = await agent._analyze_workflow_papers(
                 {**agent.initial_state("goal"), "papers": [paper(1, abstract="Retrieval reduces hallucination in generation tasks.").model_dump()]},
                 {"paper_ids": ["arxiv:1"]},
             )
@@ -506,27 +496,19 @@ class AgentReActLoopTests(unittest.IsolatedAsyncioTestCase):
         state = {
             **agent.initial_state("goal"),
             "papers": [paper(1).model_dump()],
-            "messages": [
-                {"role": "assistant", "content": "{}", "tool_calls": [
-                    {"id": "call_1_0", "name": "search_papers", "args": {"query": "q1"}, "type": "tool_call"},
-                    {"id": "call_1_1", "name": "retrieve_paper_evidence", "args": {"paper_id": "arxiv:1"}, "type": "tool_call"},
-                ]},
-            ],
+            "messages": [{"role": "assistant", "content": "{}", "tool_calls": [
+                {"id": "call_1_0", "name": "search_papers", "args": {"query": "q1"}, "type": "tool_call"},
+                {"id": "call_1_1", "name": "search_papers", "args": {"query": "q2"}, "type": "tool_call"},
+            ]}],
         }
-        chunk = {"text": "Retrieval reduces hallucination with citations.", "chunk_id": "c1", "section": "s", "paragraph_ids": ["p1"]}
-        with patch("app.services.retrieval.search.search_papers", new=AsyncMock(return_value=found(3))), \
-             patch("app.services.retrieval.hybrid.retrieve", new=AsyncMock(return_value=[chunk])):
+        with patch("app.services.retrieval.search.search_papers", new=AsyncMock(return_value=found(3))) as search:
             result = await agent.tool_node(state)
-        tool_msgs = [m for m in result["messages"]]
-        self.assertEqual(len(tool_msgs), 2)
-        self.assertEqual(tool_msgs[0]["tool_call_id"], "call_1_0")
-        self.assertEqual(tool_msgs[1]["tool_call_id"], "call_1_1")
-        self.assertEqual(tool_msgs[0]["name"], "search_papers")
-        self.assertEqual(tool_msgs[1]["name"], "retrieve_paper_evidence")
+        self.assertEqual([call.args[0] for call in search.await_args_list], ["q1", "q2"])
+        self.assertEqual([m["tool_call_id"] for m in result["messages"]], ["call_1_0", "call_1_1"])
+        self.assertTrue(all(m["name"] == "search_papers" for m in result["messages"]))
         self.assertEqual(len(result["papers"]), 3)
-        self.assertIn("E0001", result["evidence_ids"])
-        tool_events = [e for e in result["events"] if e["step"] in ("search", "tool")]
-        self.assertEqual(len(tool_events), 2)
+        self.assertEqual(result["api_calls"], 2)
+        self.assertEqual(len([e for e in result["events"] if e["step"] == "search"]), 2)
 
     async def test_no_tool_calls_routes_to_judge(self):
         state = {

@@ -16,6 +16,7 @@ from app.schemas import PaperOut, ResearchStart
 from app.services.papers import documents, library, processing, upload, workspaces
 from app.tools import BACKGROUND_TOOLS, TOOLS, research, index_paper as index_tool
 from app.tools.research_scope import ToolContext, resolve
+from app.tools import paper_evidence
 
 
 async def embed(texts):
@@ -43,9 +44,9 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     def test_catalog_has_exact_chat_and_background_sets(self):
-        self.assertEqual(len(TOOLS), 16)
+        self.assertEqual(len(TOOLS), 9)
         self.assertEqual({t["name"] for t in BACKGROUND_TOOLS}, {"acquire_paper_fulltext", "parse_paper", "index_paper"})
-        self.assertEqual({t["module"] for t in TOOLS}, {"discovery", "workspace", "analysis", "knowledge"})
+        self.assertEqual({t["module"] for t in TOOLS}, {"discovery", "knowledge"})
         self.assertTrue(set(research.CATALOG) <= set(agent.TOOL_REGISTRY))
         self.assertTrue(all(t["parameters"]["type"] == "object" for t in TOOLS))
         for tool in BACKGROUND_TOOLS:
@@ -61,23 +62,13 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
             resolve(ToolContext(workspace_id="one", scope="current", current_paper_id=self.b.id))
         self.assertEqual(resolve(ToolContext(scope="selected", selected_paper_ids=[self.a.id]))[0].id, self.a.id)
 
-    async def test_list_and_cached_analysis_do_not_call_model(self):
-        with patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=AssertionError("no model"))):
-            result = await research.execute("list_workspace_papers", {}, self.ctx)
-            self.assertEqual(len(result["papers"]), 1)
-            self.assertEqual(result["papers"][0]["analysis"]["status"], "missing")
-            result = await research.execute("get_paper_analysis", {"paper_id": self.a.id}, self.ctx)
-            self.assertEqual(result["status"], "missing")
-            with self.assertRaises(ValueError):
-                await research.execute("get_paper_analysis", {"paper_id": self.b.id}, self.ctx)
 
     async def test_conversation_grant_crosses_workspaces_without_reading_content(self):
         ctx = ToolContext(workspace_id="one", accessible_paper_ids=[self.a.id, self.b.local_id])
         with patch("app.services.papers.documents.get_text", side_effect=AssertionError("no fulltext read")), \
              patch("app.infrastructure.llm.complete", new=AsyncMock(side_effect=AssertionError("no model"))):
             self.assertEqual({p.local_id for p in resolve(ctx)}, {self.a.local_id, self.b.local_id})
-            listing = await research.execute("list_workspace_papers", {}, ctx)
-            self.assertEqual(len(listing["papers"]), 2)
+            self.assertEqual(len(resolve(ctx)), 2)
             self.assertEqual(resolve(ctx, [self.b.id])[0].local_id, self.b.local_id)
         self.assertEqual(len(workspaces.list_papers("one")["papers"]), 1)
 
@@ -87,11 +78,11 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 resolve(ctx, [self.b.id])
             with self.assertRaises(ValueError):
-                await research.execute("get_paper_analysis", {"paper_id": self.b.id}, ctx)
+                await research.execute("query_knowledge_graph", {"paper_ids": [self.b.id]}, ctx)
             with self.assertRaises(ValueError):
-                await research.execute("retrieve_paper_evidence", {"query": "secret", "paper_ids": [self.b.id]}, ctx)
-            listing = await research.execute("list_workspace_papers", {"workspace_id": "two"}, ctx)
-            self.assertEqual(listing["papers"], [])
+                await research.execute("analyze_research_trends", {"paper_ids": [self.b.id]}, ctx)
+            graph = await research.execute("query_knowledge_graph", {}, ctx)
+            self.assertEqual(graph["total_papers"], len(ids))
         self.assertEqual(resolve(ToolContext(workspace_id="one", accessible_paper_ids=[])), [])
 
     async def test_cross_workspace_vector_retrieval_and_revocation(self):
@@ -99,13 +90,13 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
             await index_tool.index_paper(self.a.local_id, text="RAG retrieval evidence Alpha")
             await index_tool.index_paper(self.b.local_id, text="PDF cleaning retrieval Beta")
             both = ToolContext(workspace_id="one", accessible_paper_ids=[self.a.id, self.b.id])
-            result = await research.execute("retrieve_paper_evidence", {"query": "retrieval"}, both)
+            result = await paper_evidence.retrieve(resolve(both), "retrieval", 8)
             self.assertEqual({e["paper_id"] for e in result["evidence"]}, {self.a.id, self.b.id})
             narrowed = ToolContext(workspace_id="one", accessible_paper_ids=[self.a.id])
-            result = await research.execute("retrieve_paper_evidence", {"query": "retrieval"}, narrowed)
+            result = await paper_evidence.retrieve(resolve(narrowed), "retrieval", 8)
             self.assertTrue(all(e["paper_id"] == self.a.id for e in result["evidence"]))
             with self.assertRaises(ValueError):
-                await research.execute("read_paper_context", {"chunk_id": f"C0001:{self.b.local_id}"}, narrowed)
+                paper_evidence.context(resolve(narrowed), f"C0001:{self.b.local_id}", 1)
 
     async def test_task_api_preserves_explicit_grant_and_history(self):
         runner = AsyncMock(return_value={"task_id": "access-test", "status": "done"})
@@ -132,25 +123,25 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.infrastructure.embeddings.embed_siliconflow", new=embed):
             await index_tool.index_paper(self.a.local_id, text=source)
             await index_tool.index_paper(self.b.local_id, text="Beta SECRET other workspace.")
-            result = await research.execute("retrieve_paper_evidence", {"query": "retrieval"}, self.ctx)
+            result = await paper_evidence.retrieve(resolve(self.ctx), "retrieval", 8)
         self.assertTrue(result["evidence"])
         self.assertTrue(all(item["paper_id"] == self.a.id for item in result["evidence"]))
         self.assertEqual(result["evidence"][0]["page_number"], 3)
         self.assertEqual(result["evidence"][0]["section"], "Methods")
-        context = await research.execute("read_paper_context", {"chunk_id": result["evidence"][0]["chunk_id"]}, self.ctx)
+        context = paper_evidence.context(resolve(self.ctx), result["evidence"][0]["chunk_id"], 1)
         self.assertTrue(context["blocks"])
         with self.assertRaises(ValueError):
-            await research.execute("read_paper_context", {"chunk_id": f"C0001:{self.b.local_id}"}, self.ctx)
+            paper_evidence.context(resolve(self.ctx), f"C0001:{self.b.local_id}", 1)
 
     async def test_retrieval_does_not_reindex_and_degrades_without_embedding(self):
-        empty = await research.execute("retrieve_paper_evidence", {"query": "retrieval"}, self.ctx)
+        empty = await paper_evidence.retrieve(resolve(self.ctx), "retrieval", 8)
         self.assertEqual(empty["status"], "not_indexed")
         with patch("app.infrastructure.embeddings.embed_siliconflow", new=embed):
             await index_tool.index_paper(self.a.local_id, text="retrieval supports evidence")
         from app.infrastructure.embeddings import EmbeddingError
         with patch("app.infrastructure.embeddings.embed_siliconflow", new=AsyncMock(side_effect=EmbeddingError("missing key"))), \
              patch("app.tools.index_paper.index_paper", new=AsyncMock(side_effect=AssertionError("no indexing"))):
-            result = await research.execute("retrieve_paper_evidence", {"query": "retrieval"}, self.ctx)
+            result = await paper_evidence.retrieve(resolve(self.ctx), "retrieval", 8)
         self.assertEqual(result["status"], "partial")
         self.assertTrue(result["evidence"])
         self.assertIsNone(result["evidence"][0]["page_number"])
@@ -158,20 +149,11 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
     async def test_remove_preserves_shared_paper_and_documents(self):
         workspaces.add("two", self.a.local_id)
         documents.save(self.a.local_id, self.a.id, "source", "a.pdf")
-        await research.execute("remove_paper_from_workspace", {"paper_id": self.a.id}, self.ctx)
+        workspaces.remove("one", [self.a.id])
         self.assertEqual(workspaces.list_papers("one")["papers"], [])
         self.assertEqual(len(workspaces.list_papers("two")["papers"]), 2)
         self.assertEqual(documents.get_text(self.a.id), "source")
 
-    async def test_add_queues_once_and_cannot_change_chat_workspace(self):
-        result = await research.execute("add_papers_to_workspace", {"paper_ids": [self.b.id]}, self.ctx)
-        self.assertEqual(result["results"][0]["processing"]["status"], "pending")
-        stamp = processing.status(self.b.local_id)["updated_at"]
-        again = await research.execute("add_papers_to_workspace", {"paper_ids": [self.b.id]}, self.ctx)
-        self.assertEqual(again["already_exists"], 1)
-        self.assertEqual(processing.status(self.b.local_id)["updated_at"], stamp)
-        with self.assertRaises(ValueError):
-            await research.execute("add_papers_to_workspace", {"workspace_id": "two", "paper_ids": [self.b.id]}, self.ctx)
 
     async def test_citation_unavailable_is_not_no_citations(self):
         with patch("app.services.retrieval.search.fetch_s2_links", new=AsyncMock(side_effect=research.search.SourceFailure("429"))), \
@@ -188,14 +170,6 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stats["year_distribution"], [{"year": 2024, "count": 1}])
         self.assertTrue(any("不能代表" in warning for warning in stats["warnings"]))
 
-    async def test_agent_evidence_binds_actual_paper_and_restores_scope(self):
-        with patch("app.infrastructure.embeddings.embed_siliconflow", new=embed):
-            await index_tool.index_paper(self.a.local_id, text="Alpha retrieval supports original evidence.")
-            state = agent.initial_state("question", context=self.ctx.model_dump())
-            content, updates = await agent._run_business_tool(state, "retrieve_paper_evidence", {"query": "retrieval"})
-        self.assertEqual(set(updates["evidence_papers"].values()), {self.a.id})
-        self.assertEqual(json.loads(content)["evidence"][0]["evidence_id"], "E0001")
-        self.assertEqual(agent.public_state(state)["workspace_id"], "one")
 
     async def test_processing_reuses_saved_source_and_index(self):
         documents.save(self.a.local_id, self.a.id, "saved source", "a.pdf")
@@ -209,12 +183,12 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
     async def test_api_catalog_context_and_invalid_arguments(self):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             catalog = (await client.get("/api/tools")).json()
-            self.assertEqual(len(catalog["chat_tools"]), 16)
-            response = await client.post("/api/research/tools/list_workspace_papers", json={"context": self.ctx.model_dump()})
+            self.assertEqual(len(catalog["chat_tools"]), 9)
+            response = await client.post("/api/research/tools/query_knowledge_graph", json={"context": self.ctx.model_dump()})
             self.assertEqual(response.status_code, 200, response.text)
-            bad = await client.post("/api/tools/retrieve_paper_evidence", json={"arguments": {"query": " "}})
+            bad = await client.post("/api/tools/query_knowledge_graph", json={"arguments": {"paper_ids": []}})
             self.assertEqual(bad.status_code, 422)
-            escape = await client.post("/api/tools/get_paper_analysis", json={"arguments": {"paper_id": self.b.id}, "context": self.ctx.model_dump()})
+            escape = await client.post("/api/tools/query_knowledge_graph", json={"arguments": {"paper_ids": [self.b.id]}, "context": self.ctx.model_dump()})
             self.assertEqual(escape.status_code, 400)
             hidden = await client.post("/api/research/tools/index_paper", json={})
             self.assertEqual(hidden.status_code, 404)
@@ -229,31 +203,45 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(documents.get_structure(saved.local_id)["blocks"][1]["page_number"], 2)
         self.assertEqual(documents.get_text(saved.local_id), parsed["text"])
 
-    async def test_new_chat_tool_hitl_resume_executes_only_approved_ids(self):
-        from langgraph.checkpoint.memory import MemorySaver
-        from langgraph.graph import StateGraph, START, END
-        from langgraph.types import Command
-        builder = StateGraph(agent.AgentState)
-        builder.add_node("tools", agent.tool_node)
-        builder.add_edge(START, "tools")
-        builder.add_edge("tools", END)
-        graph = builder.compile(checkpointer=MemorySaver())
-        state = agent.initial_state("添加论文", context=self.ctx.model_dump())
-        state["messages"] = [{"role": "assistant", "content": "", "tool_calls": [
-            {"id": "add1", "name": "add_papers_to_workspace", "args": {"paper_ids": [self.b.id]}, "type": "tool_call"}]}]
-        config = {"configurable": {"thread_id": "tools-hitl"}}
-        first = await graph.ainvoke(state, config)
-        self.assertTrue(first.get("__interrupt__"))
-        self.assertEqual(len(workspaces.list_papers("one")["papers"]), 1)
-        final = await graph.ainvoke(Command(resume={"approved_ids": [self.b.id, "unrequested"]}), config)
-        self.assertEqual(len(workspaces.list_papers("one")["papers"]), 2)
-        self.assertEqual(processing.status(self.b.local_id)["status"], "pending")
-        self.assertTrue(any(getattr(message, "name", None) == "add_papers_to_workspace" for message in final["messages"]))
 
     async def test_metadata_and_sample_statistics_are_not_original_paper_evidence(self):
-        state = agent.initial_state("列出工作区论文", context=self.ctx.model_dump())
-        content, updates = await agent._run_business_tool(state, "list_workspace_papers", {})
+        state = agent.initial_state("查询论文详情", context=self.ctx.model_dump())
+        content, updates = await agent._run_business_tool(state, "get_paper_details", {"paper_id": self.a.id})
         records = json.loads(content)["record_evidence"]
         self.assertEqual(records[0]["material"], "metadata")
         self.assertTrue(all(source["material"] == "metadata" for source in updates["evidence_sources"].values()))
-        self.assertEqual(updates["evidence_sources"]["E0001"]["tool"], "list_workspace_papers")
+        self.assertEqual(updates["evidence_sources"]["E0001"]["tool"], "get_paper_details")
+
+    async def test_removed_tools_are_unavailable_in_catalog_agent_and_http(self):
+        removed = {"list_workspace_papers", "add_papers_to_workspace", "remove_paper_from_workspace",
+                   "analyze_paper", "get_paper_analysis", "retrieve_paper_evidence", "read_paper_context"}
+        state = agent.initial_state("goal", context=self.ctx.model_dump())
+        from app.agents.tooling import allowed_tools
+        self.assertFalse(removed & allowed_tools(state))
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            for name in removed:
+                with self.subTest(tool=name):
+                    self.assertNotIn(name, research.CATALOG)
+                    self.assertNotIn(name, agent.TOOL_REGISTRY)
+                    with self.assertRaisesRegex(ValueError, "未知"):
+                        await research.execute(name, {}, self.ctx)
+                    content, updates = await agent._run_business_tool(state, name, {})
+                    self.assertIn("error", json.loads(content))
+                    self.assertEqual(updates, {})
+                    for prefix in ("/api/tools/", "/api/research/tools/"):
+                        response = await client.post(prefix + name, json={"arguments": {}, "context": self.ctx.model_dump()})
+                        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(len(workspaces.list_papers("one")["papers"]), 1)
+        self.assertIsNone(processing.status(self.b.local_id))
+
+    async def test_page_add_endpoint_still_queues_once(self):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            payload = {"workspace_id": "one", "paper_ids": [self.b.id]}
+            first = await client.post("/api/workspaces/papers/add", json=payload)
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(first.json()["results"][0]["processing"]["status"], "pending")
+            stamp = processing.status(self.b.local_id)["updated_at"]
+            again = await client.post("/api/workspaces/papers/add", json=payload)
+            self.assertEqual(again.status_code, 200, again.text)
+            self.assertEqual(again.json()["already_exists"], 1)
+            self.assertEqual(processing.status(self.b.local_id)["updated_at"], stamp)

@@ -1,4 +1,4 @@
-"""analyze_paper：agent 与用户共用的论文分析工具。
+"""页面与内部工作流共用的论文分析服务。
 
 有需要分析论文时调用。默认提取五项：研究内容、技术方案、创新点与主要贡献、实验结果、局限性。
 每项返回结构化内容、原文证据（章节；有页码时带页码）、未找到的信息，以及处理状态。
@@ -33,18 +33,6 @@ class AnalyzePaperRequest(BaseModel):
     fields: list[str] | None = None
     depth: Literal["standard", "deep"] = "standard"
     workspace_id: str | None = Field(None, max_length=80)
-
-
-TOOL = {
-    "name": "analyze_paper",
-    "description": "有需要分析论文时使用。提取结构化结论，并附上原文证据、章节或页码，以及未找到的信息。",
-    "parameters": {
-        "paper_ids": "要分析的论文 ID，可以是一篇或多篇",
-        "fields": "要提取的字段，默认五项：" + "、".join(item["label"] for item in DEFAULT_FIELDS),
-        "depth": "分析深度：standard 为标准分析，deep 为深度分析",
-        "workspace_id": "所属工作区。提供后只使用文献库中的论文，用于限制数据范围",
-    },
-}
 
 
 def normalize_fields(fields: list[str] | None) -> list[str]:

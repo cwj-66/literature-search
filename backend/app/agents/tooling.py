@@ -25,7 +25,7 @@ from app.agents.state import (
 )
 from app.infrastructure import llm
 from app.schemas import PaperOut
-from app.services.analysis import attribution, evidence_analysis as ea, fulltext
+from app.services.analysis import evidence_analysis as ea, fulltext
 from app.services.papers import library, workspaces
 from app.services.retrieval import hybrid, search
 import app.tools.analyze_paper as analyze_tool
@@ -39,22 +39,15 @@ ASSESS_TOOL = {
 }
 ALL_TOOLS = (*research_tools.CHAT_TOOLS, ASSESS_TOOL)
 DOMAIN_TOOLS = {domain: {tool["name"] for tool in ALL_TOOLS if tool["module"] == domain} for domain in DOMAINS}
-# Tools a domain needs to satisfy its own preconditions (e.g. a recommendation seed must be in the library).
-DOMAIN_DEPENDENCIES = {
-    "discovery": {"list_workspace_papers", "add_papers_to_workspace"},
-    "workspace": {"search_papers", "get_paper_details"},
-    "analysis": {"search_papers", "get_paper_details", "list_workspace_papers", "add_papers_to_workspace"},
-    "knowledge": {"list_workspace_papers", "get_paper_analysis"},
-}
+# Remaining tools resolve their own paper and sample inputs; no workspace/analysis tool dependencies.
+DOMAIN_DEPENDENCIES = {domain: set() for domain in DOMAINS}
 LEGACY_TOOLS = {"save_papers_to_workspace", "request_deep_analysis"}
-OPERATION_TOOLS = {"search_papers", "get_paper_details", "list_workspace_papers",
-                   "add_papers_to_workspace", "remove_paper_from_workspace",
-                   "get_paper_references", "get_paper_citations",
+OPERATION_TOOLS = {"search_papers", "get_paper_details", "get_paper_references", "get_paper_citations",
                    "query_knowledge_graph", "analyze_research_trends"}
-PRIVILEGED_TOOLS = {"add_papers_to_workspace", "remove_paper_from_workspace", "save_papers_to_workspace", "request_deep_analysis"}
-API_TOOLS = {"search_papers", "get_paper_details", "find_related_papers", "get_paper_references", "get_paper_citations", "retrieve_paper_evidence"}
-LLM_TOOLS = {"analyze_paper", "request_deep_analysis", "decompose_question", "rerank_papers"}
-PRODUCER_TOOLS = API_TOOLS | {"list_workspace_papers"}
+PRIVILEGED_TOOLS = LEGACY_TOOLS
+API_TOOLS = {"search_papers", "get_paper_details", "find_related_papers", "get_paper_references", "get_paper_citations"}
+LLM_TOOLS = {"request_deep_analysis", "decompose_question", "rerank_papers"}
+PRODUCER_TOOLS = API_TOOLS
 TOOL_TIMEOUT = float(os.getenv("RESEARCH_TOOL_TIMEOUT", "120"))
 LLM_TOOL_TIMEOUT = float(os.getenv("RESEARCH_LLM_TOOL_TIMEOUT", "600"))
 WAITING_PROCESSING = {"pending", "running"}
@@ -394,21 +387,6 @@ def _report_evidence(state: dict, report: dict, tool: str, texts: dict | None = 
     return items, rejected
 
 
-def _chunk_evidence(rows: list[dict], tool: str) -> list[dict]:
-    items = []
-    for row in rows:
-        quote = row.get("quote") or row.get("text") or ""
-        if not quote:
-            continue
-        items.append({
-            "paper_id": row.get("paper_id"), "quote": quote, "tool": tool,
-            "material": "abstract" if row.get("basis") == "abstract" else "original",
-            "section": row.get("section"), "page_number": row.get("page_number"), "chunk_id": row.get("chunk_id"),
-            "doc_version": f"index:{row['created_at']}" if row.get("created_at") else None, "verified": True,
-        })
-    return items
-
-
 # ---------------------------------------------------------------------------
 # 业务工具
 # ---------------------------------------------------------------------------
@@ -588,60 +566,23 @@ def _has_scope(state: dict) -> bool:
     return bool(state.get("workspace_id") or state.get("current_paper_id") or state.get("selected_paper_ids"))
 
 
-async def _tool_retrieve_paper_evidence(state: dict, args: dict) -> tuple[str, dict]:
-    if _has_scope(state) or args.get("query"):
-        adapted = dict(args)
-        if "paper_id" in adapted:
-            adapted["paper_ids"] = [adapted.pop("paper_id")]
-        adapted["query"] = adapted.pop("aspect", None) or adapted.get("query") or state.get("goal")
-        return await _tool_catalog(state, "retrieve_paper_evidence", adapted)
-    paper_id = str(args.get("paper_id") or "").strip()
-    aspect = str(args.get("aspect") or "").strip() or (state.get("goal") or "")
-    known = {paper.get("id") for paper in state.get("papers") or []}
-    if not paper_id and not known:
-        return json.dumps({"error": "请先指定论文范围"}, ensure_ascii=False), {}
-    if paper_id and paper_id not in known:
-        return json.dumps({"error": f"论文 {paper_id} 不在当前候选中，请先检索"}, ensure_ascii=False), {}
-    try:
-        hits = await hybrid.retrieve(aspect, [paper_id] if paper_id else sorted(known))
-    except Exception as exc:
-        return json.dumps({"error": f"证据检索失败：{str(exc)[:120]}"}, ensure_ascii=False), {}
-    items = []
-    for hit in hits:
-        actual_id = hit.get("paper_id") or paper_id
-        if not actual_id:
-            continue
-        for item in attribution.evidence_from_chunks(actual_id, [hit], start=1):
-            items.append({"paper_id": item.paper_id, "quote": item.quote, "section": item.section,
-                          "tool": "retrieve_paper_evidence", "chunk_id": hit.get("chunk_id"),
-                          "material": "abstract" if hit.get("basis") == "abstract" else "original"})
-    evidence_updates, added = add_evidence(state, items)
-    new_evidence = [{"evidence_id": item["evidence_id"], "quote": item["quote"][:250], "section": item.get("section"),
-                     "material": item["material"]} for item in added]
-    content = json.dumps({"count": len(new_evidence), "evidence": new_evidence[:10],
-                          "total_in_pool": len(evidence_updates["evidence_pool"])}, ensure_ascii=False)
-    return content, {
-        **evidence_updates,
-        "events_extra": [{"step": "tool", "name": "retrieve_paper_evidence", "summary": f"{paper_id or 'workspace'} 取回证据 {len(new_evidence)} 条"}],
-        "past_extra": [["retrieve", paper_id or "workspace", len(new_evidence)]],
-    }
-
-
 def _evidence_brief(items: list[dict], limit: int = 10) -> list[dict]:
     return [{"evidence_id": item["evidence_id"], "quote": item["quote"][:200], "section": item.get("section"),
              "material": item.get("material")} for item in items[:limit]]
 
 
-async def _tool_analyze_paper(state: dict, args: dict) -> tuple[str, dict]:
+async def _analyze_workflow_papers(state: dict, args: dict) -> tuple[str, dict]:
     if args.get("depth") == "deep" and not _has_scope(state):
         return await _tool_request_deep_analysis(state, {"paper_ids": args.get("paper_ids")})
-    if _has_scope(state):
-        return await _tool_catalog(state, "analyze_paper", args)
     ids = []
     for raw in args.get("paper_ids") or []:
         pid = str(raw).strip()
         if pid and pid not in ids:
             ids.append(pid)
+    if _has_scope(state) or state.get("accessible_paper_ids") is not None:
+        context = ToolContext(**{key: state[key] for key in ToolContext.model_fields if key in state})
+        from app.tools.research_scope import resolve
+        ids = [paper.local_id for paper in await asyncio.to_thread(resolve, context, ids or None)]
     ids = ids[:MAX_TOOL_PAPERS]
     if not ids:
         return json.dumps({"error": "请提供至少一篇论文"}, ensure_ascii=False), {}
@@ -649,6 +590,7 @@ async def _tool_analyze_paper(state: dict, args: dict) -> tuple[str, dict]:
         return json.dumps({"error": "模型调用次数用尽，本调用未执行"}, ensure_ascii=False), {
             "events_extra": [{"step": "tool", "name": "analyze_paper", "summary": "LLM 预算不足，调用被拦截"}],
         }
+    ids = ids[:remaining_budget(state)["llm_calls_left"]]
     try:
         report, cache_hit = await store.cached_call(
             "analyze", {"ids": ids, "depth": "standard"},
@@ -827,11 +769,6 @@ def _metadata_records(name: str, report: dict) -> list[dict]:
     if name == "get_paper_details" and report.get("paper"):
         paper = report["paper"]
         return [{"paper_id": paper.get("id"), "record": {key: paper.get(key) for key in ("id", "title", "authors", "year", "doi", "url")}}]
-    if name == "list_workspace_papers":
-        return [{"paper_id": row["paper"]["id"], "record": {"paper_id": row["paper"]["id"], "title": row["paper"]["title"],
-                                                            "index": row.get("index"), "analysis": row.get("analysis"),
-                                                            "processing": row.get("processing")}}
-                for row in report.get("papers", [])]
     if name in {"get_paper_references", "get_paper_citations"} and report.get("status") == "completed":
         return [{"paper_id": paper["id"], "record": {"relation": name, "seed": report.get("paper_id"), "paper_id": paper["id"], "title": paper["title"]}}
                 for paper in report.get("papers", [])]
@@ -846,90 +783,12 @@ def _metadata_records(name: str, report: dict) -> list[dict]:
 
 async def _tool_catalog(state: dict, name: str, args: dict) -> tuple[str, dict]:
     context = ToolContext(**{key: state[key] for key in ToolContext.model_fields if key in state})
-    args = dict(args)
-    if name == "analyze_paper":
-        llm_left = remaining_budget(state)["llm_calls_left"]
-        if llm_left <= 0:
-            return json.dumps({"tool": name, "status": "blocked", "message": "模型调用次数用尽，本调用未执行"}, ensure_ascii=False), {
-                "operations": _operation(state, name, "budget_blocked"),
-                "events_extra": [{"step": "tool", "name": name, "summary": "LLM 预算不足，调用被拦截"}],
-                "past_extra": [[name, "blocked"]],
-            }
-        # 逐篇约消耗一次模型额度：按剩余额度截断范围，不足的留给后续轮次或缺口说明。
-        if args.get("paper_ids"):
-            args["paper_ids"] = list(args["paper_ids"])[:llm_left]
-    privileged = name in {"add_papers_to_workspace", "remove_paper_from_workspace"} or (name == "analyze_paper" and args.get("depth") == "deep")
-    updates: dict = {}
-    if privileged:
-        if name == "analyze_paper" and args.get("depth") == "deep" and remaining_budget(state)["deep_reads_left"] <= 0:
-            return json.dumps({"tool": name, "status": "blocked", "message": "深读篇数用尽，本调用未执行"}, ensure_ascii=False), {
-                "operations": _operation(state, name, "budget_blocked"),
-                "events_extra": [{"step": "tool", "name": name, "summary": "深读预算不足，调用被拦截"}],
-                "past_extra": [[name, "blocked"]],
-            }
-        ids = [ref for ref in (args.get("paper_ids") or [args.get("paper_id")]) if ref]
-        approved, decision = _confirm("confirm_analysis" if name == "analyze_paper" else "confirm_workspace", ids, tool=name,
-                                      workspace_id=context.workspace_id or args.get("workspace_id"), hint="确认本次操作及论文范围")
-        if not approved:
-            return json.dumps({"tool": name, "status": "denied", "message": "用户未批准操作"}, ensure_ascii=False), {
-                "operations": _operation(state, name, "denied"),
-                "events_extra": [{"step": "tool", "name": name, "summary": "用户拒绝操作"}],
-                "past_extra": [[name, "denied"]],
-            }
-        if decision.get("workspace_id") and not (context.workspace_id or args.get("workspace_id")):
-            args["workspace_id"] = decision["workspace_id"]
-        if name == "remove_paper_from_workspace":
-            args["paper_id"] = approved[0]
-        else:
-            args["paper_ids"] = approved
-        if name == "analyze_paper" and args.get("depth") == "deep":
-            approved = approved[:remaining_budget(state)["deep_reads_left"]]
-            args["paper_ids"] = approved
-        report, replayed = await _once(state, name, {"args": args, "workspace_id": context.workspace_id},
-                                       lambda: research_tools.execute(name, args, context))
-        report = dict(report)
-        updates["operations"] = _operation(state, name, report.get("status", "completed"), replayed, paper_ids=approved)
-        if name == "analyze_paper" and args.get("depth") == "deep" and approved:
-            updates["deep_reads"] = state.get("deep_reads", 0) + len(approved)
-    else:
-        report = await research_tools.execute(name, args, context)
-    updates.update({"events_extra": [{"step": "tool", "name": name, "summary": report.get("status", "completed")}],
-                    "past_extra": [[name, report.get("status")]]})
+    report = await research_tools.execute(name, args, context)
+    updates = {"events_extra": [{"step": "tool", "name": name, "summary": report.get("status", "completed")}],
+               "past_extra": [[name, report.get("status")]]}
     acc = {**state}
     if name in API_TOOLS:
         updates["api_calls"] = state.get("api_calls", 0) + 1
-    if name == "analyze_paper":
-        items, rejected = await asyncio.to_thread(_report_evidence, state, report, "analyze_paper")
-        evidence_updates, added = add_evidence(acc, items)
-        acc.update(evidence_updates)
-        updates.update(evidence_updates, llm_calls=state.get("llm_calls", 0) + (report.get("llm_calls") or 0))
-        report["new_evidence"] = _evidence_brief(added)
-        report["unverified_quotes"] = rejected
-    if name in {"retrieve_paper_evidence", "read_paper_context"}:
-        rows = report.get("evidence", report.get("blocks", []))
-        evidence_updates, added = add_evidence(acc, _chunk_evidence(rows, name))
-        acc.update(evidence_updates)
-        updates.update(evidence_updates)
-        by_chunk = {item.get("chunk_id"): item["evidence_id"] for item in added}
-        for row in rows:
-            if row.get("chunk_id") in by_chunk:
-                row["evidence_id"] = by_chunk[row["chunk_id"]]
-        updates.update(_processing_updates(acc, report.get("processing") or []))
-    if name == "get_paper_analysis" and report.get("result"):
-        verifier = QuoteVerifier(state)
-        items = []
-        for paragraph in report["result"].get("source_paragraphs") or []:
-            text = paragraph.get("text") or ""
-            located = await asyncio.to_thread(verifier.check, report.get("paper_id"), text)
-            if located:
-                items.append({"paper_id": report.get("paper_id"), "quote": text, "section": paragraph.get("section"),
-                              "tool": name, **located})
-        evidence_updates, added = add_evidence(acc, items)
-        acc.update(evidence_updates)
-        updates.update(evidence_updates)
-        report["original_evidence"] = _evidence_brief(added, limit=20)
-    if name in {"add_papers_to_workspace", "remove_paper_from_workspace"}:
-        updates.update(_processing_updates(acc, _entries_from_results(report.get("results") or [])))
     records = _metadata_records(name, report)
     if records:
         material = "sample_statistics" if name == "analyze_research_trends" else "metadata"
@@ -963,8 +822,6 @@ TOOL_REGISTRY = {
     "search_papers": _tool_search_papers,
     "decompose_question": _tool_decompose_question,
     "rerank_papers": _tool_rerank_papers,
-    "retrieve_paper_evidence": _tool_retrieve_paper_evidence,
-    "analyze_paper": _tool_analyze_paper,
     "assess_coverage": _tool_assess_coverage,
     "save_papers_to_workspace": _tool_save_papers_to_workspace,
     "request_deep_analysis": _tool_request_deep_analysis,
@@ -979,8 +836,7 @@ async def _run_business_tool(state: dict, name: str, args: dict) -> tuple[str, d
 
 
 def _is_privileged(call: dict) -> bool:
-    args = call.get("args") or {}
-    return call.get("name") in PRIVILEGED_TOOLS or (call.get("name") == "analyze_paper" and args.get("depth") == "deep")
+    return call.get("name") in PRIVILEGED_TOOLS
 
 
 # ---------------------------------------------------------------------------

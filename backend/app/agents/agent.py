@@ -46,8 +46,8 @@ from app.agents.store import (
 )
 from app.agents.tooling import (
     ASSESS_TOOL, PRIVILEGED_TOOLS, TOOL_REGISTRY, _clean_query, _downgrade_action, _is_privileged, _rule_assess,
-    _run_business_tool, _tool_analyze_paper, _tool_assess_coverage, _tool_catalog, _tool_request_deep_analysis,
-    _tool_retrieve_paper_evidence, _tool_save_papers_to_workspace, _tool_search_papers, assessment_updates,
+    _run_business_tool, _analyze_workflow_papers, _tool_assess_coverage, _tool_catalog, _tool_request_deep_analysis,
+    _tool_save_papers_to_workspace, _tool_search_papers, assessment_updates,
     catalog_for, domain_prompt, limited, route, run_coverage_assessment, tool_node,
 )
 from app.infrastructure import llm

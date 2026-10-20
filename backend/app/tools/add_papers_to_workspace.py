@@ -14,25 +14,6 @@ class AddPapersToWorkspaceRequest(workspaces.PaperReferences):
     workspace_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
 
 
-TOOL = {
-    "name": "add_papers_to_workspace",
-    "description": "将指定论文批量加入已有工作区。优先使用 search_papers 返回的论文 ID 或本地论文 ID；未入库论文会先获取元数据并入库。重复加入返回 already_exists，不自动分析或向量化。工作区必须已注册，不创建新工作区。",
-    "parameters": {
-        "workspace_id": "目标工作区 ID，必填，必须使用应用提供的真实 ID",
-        "paper_ids": "论文 ID 数组，1～50 项，支持本地 ID、arXiv ID、DOI、Semantic Scholar ID 或支持的论文链接",
-    },
-}
-
-# 可供后续模型 Function Calling 绑定使用；沿用 TOOL 说明供现有注册表读取。
-FUNCTION_TOOL = {
-    "type": "function",
-    "function": {
-        "name": TOOL["name"], "description": TOOL["description"],
-        "parameters": AddPapersToWorkspaceRequest.model_json_schema(),
-    },
-}
-
-
 async def add_papers_to_workspace(workspace_id: str, paper_ids: list[str]) -> dict:
     request = AddPapersToWorkspaceRequest(workspace_id=workspace_id, paper_ids=paper_ids)
     await asyncio.to_thread(workspaces.require, request.workspace_id)

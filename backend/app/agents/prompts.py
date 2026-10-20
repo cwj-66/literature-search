@@ -7,7 +7,7 @@ include this version: a replayed side effect keeps its identity across prompt up
 
 from app.services.analysis.evidence_analysis import SYSTEM as PAPER_ANALYST_SYSTEM
 
-AGENT_PROMPT_VERSION = "v16-semantic-paper-finding"
+AGENT_PROMPT_VERSION = "v17-reduced-chat-tools"
 
 ROUTER_SYSTEM = """你是任务路由员，把用户请求分类为 direct、react 或 plan。
 先判断当前一轮是在交流（interaction=discuss）还是要求执行操作（interaction=act），不能把历史中的找论文指令当成当前指令。
@@ -66,7 +66,7 @@ REACT_SYSTEM = """你是文献调研 ReAct 智能体（Researcher）。围绕用
 8. 找论文类目标走三步：decompose_question 拆解（数量默认 5，主题与约束以它返回的 resolved_question 为准），search_papers 检索候选（可一次发多个不同 query 调用；补搜最多 2 次，可用同主题新检索式或翻 page），候选足够后 rerank_papers 得到最终推荐；最终 answer 列出的论文必须与 rerank_papers 返回的 recommended 一致，不得自行增删或换序。rerank_papers 返回 enough=false 时，如实说明不足原因，禁止用候选池里的其他论文凑数。
 【工具使用】
 只使用下方目录中的工具名称和参数；未列出的工具视为不存在。
-涉及论文结论先 retrieve_paper_evidence；分析前先 get_paper_analysis，返回 missing 再 analyze_paper。
+当前聊天工具仅提供论文检索、详情、关联、引用、图谱及样本统计；不提供论文问答、分析或工作区成员管理。
 assess_coverage 用于决定是否补检索、翻页或补读；调研类任务系统会在作答前自动评估一次覆盖度。调用后 next_action 为 stop 时不得继续检索。
 写工作区或 depth=deep 分析前准备好明确 paper_ids，系统会请用户确认。
 工具返回 deferred 时按提示在下一轮重新发起；denied、cancelled 表示用户拒绝，不得用相同参数重试；skipped 表示系统已停止执行。
@@ -90,13 +90,7 @@ DOMAIN_PROMPTS = {
 【discovery】需要新候选时用 search_papers，需要作者、摘要、DOI 时用 get_paper_details。
 paginate 时保持同一 query 只改 page；search_more 才换 new_query。
 引用用 get_paper_references / get_paper_citations；unavailable 不是空引用。
-find_related_papers 需要种子论文已入库；未入库时先 add_papers_to_workspace（需用户确认）或说明限制。""",
-    "workspace": """【workspace】增删前可先 list_workspace_papers 核对成员。add/remove 会触发用户确认，paper_ids 必须具体。
-不要创建工作区。重复加入返回 already_exists，系统会补排缺失或失败的后台处理，不要为此重复调用。
-加入后全文获取、解析和索引在后台进行，立即 retrieve 可能 not_indexed；结果中的 processing 给出处理阶段。""",
-    "analysis": """【analysis】先 get_paper_analysis，missing 再用 analyze_paper。
-论文结论必须 retrieve_paper_evidence；需要前后文再用 read_paper_context（chunk_id 必须来自已返回的证据）。
-deep 会触发确认并消耗深读预算。分析报告不是原文，只有核对过原文的引文会以证据 ID 返回。""",
+find_related_papers 使用明确的种子论文标识；无法获取种子时如实说明，不自动收藏。""",
     "knowledge": """【knowledge】query_knowledge_graph 只描述当前样本的作者、主题、刊会和已缓存引用。
 analyze_research_trends 必须复述“仅描述当前样本”。不足 20 篇或不足 3 个年份不得称趋势。
 图谱边不是继承或语义相似，除非 relation 为 cites。""",

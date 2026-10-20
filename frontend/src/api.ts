@@ -179,7 +179,7 @@ export const removeWorkspacePapers = (workspaceId: string, paperIds: string[]) =
 export const deleteWorkspace = (workspaceId: string) => postJson(`/api/workspaces/${encodeURIComponent(workspaceId)}/delete`, {});
 
 export function analyzePapers(body: { paper_ids: string[]; fields?: string[]; depth?: "standard" | "deep"; workspace_id?: string }, signal?: AbortSignal) {
-  return postJson<AnalyzePaperResult>("/api/tools/analyze_paper", body, signal);
+  return postJson<AnalyzePaperResult>("/api/papers/analyze-batch", body, signal);
 }
 
 export function fillGraphCitations(paperIds: string[], signal?: AbortSignal) {
@@ -220,7 +220,7 @@ export async function prepareWorkspace(workspaceId: string, name: string, paperI
   await postJson("/api/workspaces/register", { workspace_id: workspaceId, name }, signal);
   if (paperIds.length) {
     for (let offset = 0; offset < paperIds.length; offset += 50) {
-      const result = await postJson<{ failed: number; results: { status: string; message?: string }[] }>("/api/tools/add_papers_to_workspace", {
+      const result = await postJson<{ failed: number; results: { status: string; message?: string }[] }>("/api/workspaces/papers/add", {
         workspace_id: workspaceId, paper_ids: paperIds.slice(offset, offset + 50),
       }, signal);
       if (result.failed) throw new Error(result.results.find(item => item.status === "failed")?.message || "工作区同步失败");

@@ -113,7 +113,7 @@ class PersistenceTests(unittest.IsolatedAsyncioTestCase):
         model = AsyncMock(return_value=fields)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             with patch("app.tools.analyze_paper.llm.analyze", new=model):
-                response = await client.post("/api/tools/analyze_paper", json={"paper_ids": [self.paper.local_id], "fields": ["research_content"], "workspace_id": "demo"})
+                response = await client.post("/api/papers/analyze-batch", json={"paper_ids": [self.paper.local_id], "fields": ["research_content"], "workspace_id": "demo"})
                 self.assertEqual(response.status_code, 200)
                 self.assertNotEqual(response.json()["status"], "failed")
                 for identifier in (self.paper.local_id, self.paper.id):
@@ -122,7 +122,7 @@ class PersistenceTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(detail.json()["task"]["status"], "success")
                     self.assertEqual(detail.json()["result"]["main_content"], fields.main_content)
                     self.assertEqual(detail.json()["result"]["claims"], fields.model_dump()["claims"])
-                second = await client.post("/api/tools/analyze_paper", json={"paper_ids": [self.paper.local_id], "workspace_id": "demo"})
+                second = await client.post("/api/papers/analyze-batch", json={"paper_ids": [self.paper.local_id], "workspace_id": "demo"})
                 self.assertEqual(second.json()["llm_calls"], 0)
         self.assertEqual(model.await_count, 1)
 

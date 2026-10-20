@@ -576,7 +576,7 @@ async def analyze_papers_node(state):
                       events=[{"step": "analyze", "reason": "无候选可分析，跳过"}])
     try:
         _, updates = await asyncio.wait_for(
-            tooling._tool_analyze_paper(state, {"paper_ids": targets[:MAX_TOOL_PAPERS]}), timeout=CALL_TIMEOUT)
+            tooling._analyze_workflow_papers(state, {"paper_ids": targets[:MAX_TOOL_PAPERS]}), timeout=CALL_TIMEOUT)
         acc, past = _merge(state, updates)
     except Exception as exc:
         from langgraph.errors import GraphInterrupt
@@ -604,7 +604,7 @@ async def save_to_workspace_node(state):
                       events=[{"step": "save", "reason": "无候选可保存，跳过"}])
     try:
         _, updates = await asyncio.wait_for(
-            tooling._tool_catalog(state, "add_papers_to_workspace", {"paper_ids": targets, "workspace_id": workspace_id}),
+            tooling._tool_save_papers_to_workspace(state, {"paper_ids": targets}),
             timeout=CALL_TIMEOUT)
         acc, past = _merge(state, updates)
     except Exception as exc:

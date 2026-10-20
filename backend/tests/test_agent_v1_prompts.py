@@ -13,7 +13,7 @@ class AgentV1PromptTests(unittest.TestCase):
         self.assertIn("recommended 一致", REACT_SYSTEM)
         self.assertIn("decompose_question", DOMAIN_PROMPTS["discovery"])
         self.assertIn("rerank_papers", DOMAIN_PROMPTS["discovery"])
-        self.assertTrue(AGENT_PROMPT_VERSION.startswith("v16"), AGENT_PROMPT_VERSION)
+        self.assertTrue(AGENT_PROMPT_VERSION.startswith("v17"), AGENT_PROMPT_VERSION)
 
     def test_catalog_descriptions_mention_flow(self):
         self.assertIn("不调用论文 API", research.CATALOG["decompose_question"]["description"])

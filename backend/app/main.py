@@ -378,8 +378,8 @@ async def compare_papers(payload: CompareRequest):
         raise HTTPException(status_code=503, detail="本地分析库暂不可用，请稍后重试") from None
 
 
-@app.post("/api/tools/analyze_paper")
-async def analyze_paper_tool(payload: analyze_tool.AnalyzePaperRequest):
+@app.post("/api/papers/analyze-batch")
+async def analyze_papers_batch(payload: analyze_tool.AnalyzePaperRequest):
     try:
         return await analyze_tool.analyze_paper(payload.paper_ids, payload.fields, payload.depth, payload.workspace_id)
     except ValueError as exc:
@@ -404,10 +404,16 @@ async def _workspace_call(fn, *args):
         raise HTTPException(status_code=503, detail="工作区存储暂不可用，请稍后重试") from None
 
 
-@app.post("/api/tools/add_papers_to_workspace")
-async def add_papers_to_workspace_tool(payload: workspace_tool.AddPapersToWorkspaceRequest):
+@app.post("/api/workspaces/papers/add")
+async def add_workspace_papers(payload: workspace_tool.AddPapersToWorkspaceRequest):
     try:
-        return await research_tools.execute("add_papers_to_workspace", payload.model_dump())
+        result = await workspace_tool.add_papers_to_workspace(payload.workspace_id, payload.paper_ids)
+        for item in result["results"]:
+            if item["status"] in ("added", "already_exists"):
+                item["processing"] = await asyncio.to_thread(processing.ensure_queued, item["local_id"], True)
+        stages = [item["processing"]["status"] for item in result["results"] if item.get("processing")]
+        result["processing_summary"] = {stage: stages.count(stage) for stage in set(stages)}
+        return result
     except workspaces.WorkspaceNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
     except (sqlite3.Error, OSError):
