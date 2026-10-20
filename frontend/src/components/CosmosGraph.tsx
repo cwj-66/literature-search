@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Graph, NodeEvent, type IElementEvent } from "@antv/g6";
 import { AimOutlined, CloseOutlined, MinusOutlined, PlusOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import { EDGE_COLOR, PLANET_COLORS, SATELLITE_COLOR, edgeDash, graphBounds, planetPositions, satelliteOrbit } from "../cosmosLayout";
+import { EDGE_COLOR, PLANET_COLORS, SATELLITE_COLOR, edgeDash, planetPositions, satelliteOrbit } from "../cosmosLayout";
 import type { RecommendationItem, RelateCenter, RelateResponse } from "../types";
 import { paperLocation, workspacePaperPath } from "../workspace";
 import "../styles/cosmos.css";
@@ -50,7 +50,6 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
 
     const sims = data.centers.map((center) => data.centers.map((other) => center.similarities[other.id] ?? null));
     const positions = planetPositions(sims);
-    const bounds = graphBounds(positions);
     const colorOf = new Map(data.centers.map((center) => [center.id, PLANET_COLORS[center.color_index] ?? PLANET_COLORS[0]]));
     const centerIndex = new Map(data.centers.map((center, index) => [center.id, index]));
 
@@ -60,7 +59,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
       y: positions[index].y,
       data: { kind: "planet", center, color: colorOf.get(center.id), label: shortTitle(center.title) },
     }));
-    const satelliteIds = new Set<string>();
+    const satelliteIds = new Set<string>(data.centers.map((center) => center.id));
     const orbitSlots = new Map<string, number>();
     const edges: SatelliteEdge[] = [];
     for (const group of data.satellites) {
@@ -115,7 +114,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
         container,
         padding: 48,
         data: {
-          nodes,
+          nodes: nodes.map(({ x, y, ...node }) => ({ ...node, style: { x, y } })),
           edges: edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, data: edge })),
         },
         node: {
@@ -157,14 +156,6 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
             active: { stroke: (datum) => String(datum.data?.sourceColor ?? EDGE_COLOR), strokeOpacity: 0.95, lineWidth: 2 },
             inactive: { opacity: 0.05 },
           },
-        },
-        layout: {
-          type: "grid",
-          rows: 1,
-          sortBy: null,
-          begin: [bounds.minX, bounds.minY],
-          width: Math.max(1, bounds.maxX - bounds.minX),
-          height: Math.max(1, bounds.maxY - bounds.minY),
         },
         behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
       });
