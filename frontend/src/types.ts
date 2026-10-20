@@ -324,3 +324,40 @@ export interface PaperNetwork {
   nodes: { id: string; title: string; year: number | null; center: boolean }[];
   edges: { source: string; target: string; type: string; label: string; directed: boolean; category?: string; strength?: number }[];
 }
+
+export interface RelateCenter {
+  id: string;
+  local_id: string | null;
+  title: string;
+  year: number | null;
+  authors: string[];
+  venue?: string | null;
+  citation_count?: number | null;
+  color_index: number;
+  similarities: Record<string, number | null>;
+}
+
+export interface RelateSatelliteGroup {
+  center_id: string;
+  category: string;
+  items: RecommendationItem[];
+}
+
+export interface RelateCenterEdge {
+  source: string;
+  target: string;
+  type: string;
+  label: string;
+  directed: boolean;
+  category: string;
+  strength?: number | null;
+}
+
+export interface RelateResponse {
+  centers: RelateCenter[];
+  satellites: RelateSatelliteGroup[];
+  center_edges: RelateCenterEdge[];
+  overlaps: { paper_id: string; center_ids: string[] }[];
+  warnings: string[];
+  computed_at: string;
+}
