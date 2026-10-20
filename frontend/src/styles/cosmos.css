@@ -251,3 +251,33 @@
   background: #2563EB;
   color: #FFFFFF;
 }
+
+/* 论文关系页整页暗色主题（仅本页，类挂在 cosmos-page 上） */
+.cosmos-page .relations-heading h1 { color: #E2E8F0; }
+.cosmos-page .relations-heading h1 > span { color: #94A3B8; }
+.cosmos-page .relations-heading p { color: #94A3B8; }
+.cosmos-page .relations-eyebrow { color: #7DD3FC; }
+.cosmos-page .relations-eyebrow span { color: #64748B; }
+.cosmos-page .relations-heading > .ant-btn { border-color: rgba(100, 116, 139, 0.45); color: #CBD5E1; background: transparent; }
+.cosmos-page .relations-heading > .ant-btn:hover { border-color: #7DD3FC; color: #FFFFFF; }
+.cosmos-page .seed-picker { background: rgba(15, 23, 42, 0.6); border-color: rgba(100, 116, 139, 0.3); }
+.cosmos-page .seed-picker-head strong { color: #E2E8F0; }
+.cosmos-page .seed-picker-head span { color: #64748B; }
+.cosmos-page .seed-picker-head .ant-input-affix-wrapper { background: rgba(30, 41, 59, 0.7); border-color: rgba(100, 116, 139, 0.35); }
+.cosmos-page .seed-picker-head .ant-input { background: transparent; color: #E2E8F0; }
+.cosmos-page .seed-picker-head .ant-input::placeholder { color: #64748B; }
+.cosmos-page .seed-picker-head .anticon-search { color: #64748B; }
+.cosmos-page .seed-card { background: rgba(30, 41, 59, 0.55); border-color: rgba(100, 116, 139, 0.32); }
+.cosmos-page .seed-card:hover { border-color: #64748B; }
+.cosmos-page .seed-card.is-selected { background: rgba(30, 41, 59, 0.95); box-shadow: none; }
+.cosmos-page .seed-card-meta { color: #64748B; }
+.cosmos-page .seed-card.is-selected .seed-card-meta { color: #94A3B8; }
+.cosmos-page .seed-card strong { color: #CBD5E1; }
+.cosmos-page .seed-card.is-selected strong { color: #FFFFFF; }
+.cosmos-page .seed-card-author { color: #64748B; }
+.cosmos-page .seed-scroll { background: rgba(15, 23, 42, 0.8); border-color: rgba(100, 116, 139, 0.35); color: #94A3B8; }
+.cosmos-page .seed-no-results { color: #64748B; }
+.cosmos-page .relations-loading h2 { color: #E2E8F0; }
+.cosmos-page .relations-loading p { color: #64748B; }
+.cosmos-page .ant-alert { background: rgba(30, 41, 59, 0.85); border-color: rgba(100, 116, 139, 0.35); }
+.cosmos-page .ant-alert-message { color: #E2E8F0; }

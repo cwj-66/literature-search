@@ -1,4 +1,4 @@
-import type { AnalysisState, AnalyzePaperResult, CompareTable, KnowledgeThemesResponse, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask, Conversation, ConversationSummary, ConversationMessage } from "./types";
+import type { AnalysisState, AnalyzePaperResult, CompareTable, KnowledgeThemesResponse, Paper, SearchResponse, ImportResult, LibraryResponse, Recommendations, PaperNetwork, QAResponse, ResearchTask, Conversation, ConversationSummary, ConversationMessage, RelateResponse } from "./types";
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) { super(message); }
@@ -140,6 +140,17 @@ export async function fetchRecommendations(id: string, refresh: boolean, signal?
 export async function fetchNetwork(id: string, refresh: boolean, signal?: AbortSignal): Promise<PaperNetwork> {
   const query = refresh ? "?refresh=true" : "";
   const response = await fetch(`/api/papers/${encodeURIComponent(id)}/network${query}`, { signal });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export async function fetchRelate(ids: string[], refresh: boolean, signal?: AbortSignal): Promise<RelateResponse> {
+  const response = await fetch("/api/papers/relate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, refresh }),
+    signal,
+  });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }
