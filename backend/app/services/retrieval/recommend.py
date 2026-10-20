@@ -353,8 +353,8 @@ async def compute(seed, weights: dict[str, float]) -> dict:
     return await similarity.compute(seed, weights)
 
 
-async def bundle(raw: str, refresh: bool) -> dict:
-    seed = await load_seed(raw)
+async def bundle(raw: str, refresh: bool, seed=None) -> dict:
+    seed = seed or await load_seed(raw)
     weights = relation_score.load_weights()
     key = await asyncio.to_thread(cache_key, seed.local_id, weights, embeddings.siliconflow_model())
     async with lock_for(seed.local_id):
