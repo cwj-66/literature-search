@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import httpx
+
 from app.infrastructure import embeddings
 from app.schemas import LocalPaperOut, PaperOut
 from app.services.analysis.analysis import ResolveError
@@ -117,3 +119,24 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(chosen), 6)
         self.assertTrue(all(item_id in chosen for item_id in (f"chosen-{key}" for key in CATEGORIES)))
         self.assertTrue(all(f"extra-{n}" in chosen for n in range(3)))
+
+
+class RelateApiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_endpoint_rejects_six_ids(self):
+        from app.main import app
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/papers/relate", json={"ids": ["a", "b", "c", "d", "e", "f"]})
+        self.assertEqual(response.status_code, 422)
+
+    async def test_endpoint_returns_relate_payload(self):
+        from app.main import app
+        fixed = {"centers": [{"id": "arxiv:1", "local_id": "local-1", "title": "T", "year": 2024,
+                              "authors": [], "venue": None, "citation_count": None, "color_index": 0, "similarities": {}}],
+                 "satellites": [], "center_edges": [], "overlaps": [], "warnings": ["w"],
+                 "computed_at": "2024-01-01T00:00:00+00:00"}
+        with patch.object(relate, "relate", new=AsyncMock(return_value=fixed)) as mocked:
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/api/papers/relate", json={"ids": ["local-1"]})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["centers"][0]["id"], "arxiv:1")
+        mocked.assert_awaited_once_with(["local-1"], False)
