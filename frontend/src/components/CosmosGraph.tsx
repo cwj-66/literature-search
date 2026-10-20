@@ -120,6 +120,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
         node: {
           type: "circle",
           style: {
+            opacity: 1,
             size: (datum) => (datum.data?.kind === "planet" ? 56 : 22),
             fill: (datum) => (datum.data?.kind === "planet" ? String(datum.data.color) : SATELLITE_COLOR),
             stroke: (datum) => (datum.data?.kind === "planet" ? String(datum.data.color) : "#475569"),
@@ -146,6 +147,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
         edge: {
           type: "line",
           style: {
+            opacity: 1,
             stroke: EDGE_COLOR,
             strokeOpacity: (datum) => 0.35 + Math.min(0.5, (Number(datum.data?.strength) || 0) * 0.5),
             lineWidth: (datum) => 1 + 1.5 * Math.min(1, Number(datum.data?.strength) || 0.3),
@@ -169,7 +171,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
       if (!alive) return;
       requestAnimationFrame(() => {
         if (!alive) return;
-        void graph.fitView().catch(() => undefined);
+        void graph.fitView({}, false).catch(() => undefined);
       });
     };
 
@@ -201,7 +203,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
     const resize = new ResizeObserver(() => {
       if (alive && rendered && container.clientWidth > 0) {
         graph.resize(container.clientWidth, container.clientHeight);
-        void graph.fitView().catch(() => undefined);
+        void graph.fitView({}, false).catch(() => undefined);
       }
     });
     resize.observe(container);
@@ -243,7 +245,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
       <div className="cosmos-toolbar" aria-label="图谱控制">
         <button aria-label="放大" onClick={() => void graphRef.current?.zoomBy(1.2).catch(() => undefined)}><PlusOutlined /></button>
         <button aria-label="缩小" onClick={() => void graphRef.current?.zoomBy(0.8).catch(() => undefined)}><MinusOutlined /></button>
-        <button aria-label="适配视图" onClick={() => void graphRef.current?.fitView().catch(() => undefined)}><AimOutlined /></button>
+        <button aria-label="适配视图" onClick={() => void graphRef.current?.fitView({}, false).catch(() => undefined)}><AimOutlined /></button>
       </div>
       <div className="cosmos-legend" aria-label="图例">
         <div className="cosmos-legend-title">关系类型</div>
