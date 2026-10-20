@@ -18,6 +18,7 @@ from app.tools import research
 
 
 CHAT = {"decompose_question", "search_papers", "rerank_papers", "assess_coverage"}
+LIVE_CHAT = {"search_papers", "get_paper_detail", "submit_papers"}
 RELATIONS = {"get_paper_details", "find_related_papers", "get_paper_references", "get_paper_citations"}
 KNOWLEDGE = {"query_knowledge_graph", "analyze_research_trends"}
 LEGACY = {"save_papers_to_workspace", "request_deep_analysis"}
@@ -91,7 +92,7 @@ class ToolModuleBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_module_endpoints_keep_data_and_scope_checks(self):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            self.assertEqual({t["name"] for t in (await client.get("/api/tools")).json()["chat_tools"]}, CHAT)
+            self.assertEqual({t["name"] for t in (await client.get("/api/tools")).json()["chat_tools"]}, LIVE_CHAT)
             for prefix, names in (("/api/paper-relations/tools", RELATIONS), ("/api/knowledge-graph/tools", KNOWLEDGE)):
                 self.assertEqual({t["name"] for t in (await client.get(prefix)).json()["tools"]}, names)
             detail = await client.post("/api/paper-relations/tools/get_paper_details", json={
@@ -110,9 +111,8 @@ class ToolModuleBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_router_cannot_enable_old_graph_or_write_workflows(self):
         old_decision = {"mode": "plan", "research_intent": "mixed", "domains": ["knowledge"],
                         "post_actions": ["analyze", "save_to_workspace"]}
-        failed_plan = {"status": "failed", "llm_calls": 1, "error": "Stopped before search"}
         with patch.object(agent, "_llm_route", new=AsyncMock(return_value=old_decision)), \
-             patch("app.agents.finding.decompose_question", new=AsyncMock(return_value=failed_plan)), \
+             patch("app.infrastructure.llm.complete_with_tools", new=AsyncMock(return_value={"role":"assistant", "content":"Stopped before search"})), \
              patch("app.agents.workflow.prepare_node", new=AsyncMock(side_effect=AssertionError("old workflow"))), \
              patch("app.agents.workflow.analyze_papers_node", new=AsyncMock(side_effect=AssertionError("analysis"))), \
              patch("app.agents.workflow.save_to_workspace_node", new=AsyncMock(side_effect=AssertionError("write"))):

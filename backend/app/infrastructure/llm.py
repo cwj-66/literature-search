@@ -202,7 +202,8 @@ def ground(fields: AnalysisFields, paper: PaperOut, prepared: PreparedText) -> A
     return AnalysisFields.model_validate(data)
 
 
-async def complete(messages: list[dict]) -> str:
+async def _chat_completion(messages: list[dict], tools: list[dict] | None = None) -> dict:
+    """Share credentials, retries, concurrency and metering across JSON and tools."""
     key = os.getenv("DASHSCOPE_API_KEY", "").strip()
     if not key:
         raise AnalysisError("未配置大模型密钥，无法分析")
@@ -211,9 +212,12 @@ async def complete(messages: list[dict]) -> str:
         "model": model_name(),
         "temperature": 0.1,
         "max_tokens": 8192,
-        "response_format": {"type": "json_object"},
         "messages": messages,
     }
+    if tools is None:
+        payload["response_format"] = {"type": "json_object"}
+    else:
+        payload.update(tools=tools, tool_choice="auto", parallel_tool_calls=False)
     # DashScope counts hidden reasoning against max_tokens. These bounded JSON
     # tasks need that budget for the structured answer, not a thinking trace.
     if urlparse(base).hostname in {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"}:
@@ -260,10 +264,49 @@ async def complete(messages: list[dict]) -> str:
         log.warning("model output truncated: model=%s completion_tokens=%s content_chars=%s",
                     model_name(), usage.get("completion_tokens"), len(content) if isinstance(content, str) else 0)
         raise OutputLimitError("模型输出达到长度上限，未生成完整结果，请重试或使用标准分析")
+    return choice["message"]
+
+
+async def complete(messages: list[dict]) -> str:
+    message = await _chat_completion(messages)
+    content = message.get("content")
     if not isinstance(content, str) or not content.strip():
-        log.warning("model returned no answer: model=%s finish_reason=%s", model_name(), choice.get("finish_reason"))
+        log.warning("model returned no answer: model=%s", model_name())
         raise AnalysisError("模型未返回有效分析内容，请重试")
     return content
+
+
+async def complete_with_tools(messages: list[dict], tools: list[dict]) -> dict:
+    """Return a native assistant/tool-call message; never parse calls from prose.
+
+    Keep function arguments as JSON strings. The runner reports argument errors
+    to the model as tool results, rather than failing the whole conversation.
+    """
+    message = await _chat_completion(messages, tools)
+    calls = message.get("tool_calls") or []
+    if not isinstance(calls, list):
+        raise AnalysisError("模型返回的工具调用格式不合法")
+    normalized = []
+    seen = set()
+    for call in calls:
+        if not isinstance(call, dict) or not isinstance(call.get("function"), dict):
+            raise AnalysisError("模型返回的工具调用格式不合法")
+        call_id = call.get("id")
+        function = call["function"]
+        if not isinstance(call_id, str) or not call_id or call_id in seen or not isinstance(function.get("name"), str):
+            raise AnalysisError("模型返回的工具调用标识不合法")
+        seen.add(call_id)
+        normalized.append({"id": call_id, "type": "function", "function": {
+            "name": function["name"], "arguments": (json.dumps(function["arguments"], ensure_ascii=False)
+                if isinstance(function.get("arguments"), dict) else function.get("arguments", "{}")),
+        }})
+    content = message.get("content")
+    result = {"role": "assistant", "content": content if isinstance(content, str) else ""}
+    if normalized:
+        result["tool_calls"] = normalized
+    elif not result["content"].strip():
+        raise AnalysisError("模型未返回回答或工具调用")
+    return result
 
 
 def _tracing_enabled() -> bool:
@@ -279,6 +322,7 @@ except ImportError:
 if _traceable is not None and _tracing_enabled():
     # LangSmith 追踪默认关闭；仅当环境变量显式启用时为 LLM 调用记录 span
     complete = _traceable(run_type="llm", name="llm.complete")(complete)
+    complete_with_tools = _traceable(run_type="llm", name="llm.complete_with_tools")(complete_with_tools)
 
 
 async def repair(messages: list[dict], raw: str, exc: Exception) -> AnalysisFields:

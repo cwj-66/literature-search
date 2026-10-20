@@ -1,4 +1,8 @@
-"""The chat agent's complete allowlist: planning, search, ranking and coverage."""
+"""Legacy workflow tool catalog; the live finder uses finding_tools instead.
+
+Retained for the separate old plan/react graph and standalone compatibility
+endpoints. It is not the live conversation's tool sequence or tool allowlist.
+"""
 from pydantic import BaseModel, ConfigDict
 from app.tools.decompose_question import DecomposeQuestionRequest, decompose_question
 from app.tools.rerank_papers import RerankPapersRequest, rerank_papers

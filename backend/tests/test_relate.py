@@ -23,8 +23,10 @@ def item(item_id: str, *, relations=(), categories=(), strength: int = 50) -> di
             "semantic_score": 0.8, "keyword_score": 0.7, "citation_score": 1.0, "reasons": []}
 
 
-def payload(group_items: dict[str, list[dict]], fused: list[dict] | None = None, warnings=None) -> dict:
-    groups = [{"key": key, "items": group_items.get(key, [])} for key in CATEGORIES]
+def payload(group_items: dict[str, list[dict]], fused: list[dict] | None = None, warnings=None, status=None) -> dict:
+    groups = [{"key": key, "label": key, "status": (status or {}).get(key, "completed"),
+               "recall_count": len(group_items.get(key, [])), "matched_count": len(group_items.get(key, [])),
+               "items": group_items.get(key, [])} for key in CATEGORIES]
     fused = fused if fused is not None else [i for key in CATEGORIES for i in group_items.get(key, [])]
     return {"recommendations": {"groups": groups, "items": fused, "warnings": warnings or []}, "network": {}}
 
@@ -49,17 +51,47 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
     def use_payloads(self, mapping):
         recommend.bundle.side_effect = lambda raw, refresh, seed=None: mapping[raw]
 
-    async def test_two_per_category(self):
-        groups = {key: [item(f"c1-{key}-{n}", relations=[key], categories=[key], strength=60 - n) for n in range(1, 4)] for key in CATEGORIES}
+    async def test_five_per_category(self):
+        groups = {key: [item(f"c1-{key}-{n}", relations=[key], categories=[key], strength=60 - n) for n in range(1, 8)] for key in CATEGORIES}
         self.use_payloads({"local-1": payload(groups)})
         result = await relate.relate(["local-1"])
         self.assertEqual(len(result["centers"]), 1)
         self.assertEqual(result["centers"][0]["id"], "arxiv:1")
         self.assertEqual(result["centers"][0]["color_index"], 0)
         for group in result["satellites"]:
-            self.assertLessEqual(len(group["items"]), 2)
+            self.assertLessEqual(len(group["items"]), 5)
         total = sum(len(group["items"]) for group in result["satellites"])
-        self.assertEqual(total, 6)
+        self.assertEqual(total, 15)
+
+    async def test_cross_category_item_kept_in_each_category(self):
+        shared = item("multi", relations=["cites", "similar"], categories=["citation", "semantic"])
+        groups = {"citation": [shared], "semantic": [shared], "keyword": []}
+        self.use_payloads({"local-1": payload(groups)})
+        result = await relate.relate(["local-1"])
+        by_category = {group["category"]: group for group in result["satellites"]}
+        self.assertIn("multi", [i["id"] for i in by_category["citation"]["items"]])
+        self.assertIn("multi", [i["id"] for i in by_category["semantic"]["items"]])
+
+    async def test_satellite_groups_carry_status_and_include_empty(self):
+        groups = {"citation": [item("c1", categories=["citation"])], "semantic": [], "keyword": []}
+        self.use_payloads({"local-1": payload(groups, status={"citation": "partial", "semantic": "unavailable"})})
+        result = await relate.relate(["local-1"])
+        by_category = {group["category"]: group for group in result["satellites"]}
+        self.assertEqual(set(by_category), set(CATEGORIES))
+        self.assertEqual(by_category["citation"]["status"], "partial")
+        self.assertEqual(by_category["citation"]["matched_count"], 1)
+        self.assertEqual(by_category["semantic"]["status"], "unavailable")
+        self.assertEqual(by_category["semantic"]["items"], [])
+
+    async def test_source_named_warnings_not_forwarded(self):
+        groups = {key: [] for key in CATEGORIES}
+        warnings = ["主题相似 · semantic_scholar 暂不可用，本次候选可能不全",
+                    "检索规划模型暂不可用，已使用标题摘要中的原文词项检索"]
+        self.use_payloads({"local-1": payload(groups, warnings=warnings)})
+        with self.assertLogs("app.services.retrieval.relate", level="INFO"):
+            result = await relate.relate(["local-1"])
+        self.assertTrue(any("检索规划模型" in warning for warning in result["warnings"]))
+        self.assertFalse(any("semantic_scholar" in warning.lower() for warning in result["warnings"]))
 
     async def test_overlap_two_centers(self):
         first = {"citation": [item("shared", relations=["cites"], categories=["citation"]), item("a-only", relations=["cites"], categories=["citation"])]}
@@ -110,15 +142,13 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(center["similarities"], {})
         self.assertTrue(any("均布" in warning for warning in result["warnings"]))
 
-    async def test_backfill_to_six_from_fused_items(self):
+    async def test_no_backfill_from_fused_items(self):
         groups = {key: [item(f"chosen-{key}", categories=[key])] for key in CATEGORIES}
         fused = [item(f"extra-{n}", categories=["semantic"], strength=100 - n) for n in range(4)] + [item(f"chosen-{key}", categories=[key]) for key in CATEGORIES]
         self.use_payloads({"local-1": payload(groups, fused=fused)})
         result = await relate.relate(["local-1"])
         chosen = {i["id"] for group in result["satellites"] for i in group["items"]}
-        self.assertEqual(len(chosen), 6)
-        self.assertTrue(all(item_id in chosen for item_id in (f"chosen-{key}" for key in CATEGORIES)))
-        self.assertTrue(all(f"extra-{n}" in chosen for n in range(3)))
+        self.assertEqual(chosen, {f"chosen-{key}" for key in CATEGORIES})
 
 
 class RelateApiTests(unittest.IsolatedAsyncioTestCase):

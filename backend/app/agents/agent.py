@@ -1,4 +1,11 @@
-"""LangGraph assistant: deterministic evidence workflow plus explicit operations.
+"""LangGraph assistant with a native single-researcher paper-finding loop.
+
+Live conversation: router -> direct answer, or finding_agent <-> finding_tools
+-> finish. Tool observations drive the next model decision; there is no
+mandatory decomposition/reranking pipeline on that path.
+
+The older evidence/operation graph below remains for compatibility. Its tool
+catalog and regular-expression helpers are not the live finder's policy.
 
 Module boundaries:
   prompts.py  role system prompts + AGENT_PROMPT_VERSION
@@ -8,7 +15,7 @@ Module boundaries:
   workflow.py discovery, per-paper reading, verified quotes, gap retrieval, synthesis
   agent.py    routing, review, task runtime (background / resume / continue / SSE)
 
-Graph:
+Legacy evidence graph:
   router → clarify / direct / plan or simple research
   research → prepare → optional search → read → quotes → assess
              ↑                           ↑             ├ expand → search
@@ -1004,6 +1011,11 @@ def _partial_answer(state: dict, reason: str) -> str | None:
 
 
 def finish_node(state: dict) -> dict:
+    if (state.get("search_plan") or {}).get("pipeline") == "finding-tools-v1":
+        # Native submissions are authoritative. Do not run legacy selection,
+        # ranking, or generic partial-answer fallbacks after this loop ends.
+        reason = state.get("stop_reason") or "研究员结束检索"
+        return {"stop_reason": reason, "events": with_event(state, {"step": "stop", "reason": reason})}
     # Metadata selection does not need model budget after the final ranking call.
     selection = {}
     if state.get("output_mode") == "bibliography" and state.get("recommended_ids") is None:
@@ -1067,9 +1079,8 @@ def build(checkpointer=None):
         return run_node
 
     graph.add_node("router", router_node)
-    graph.add_node("plan_finding", finding.plan_node)
-    graph.add_node("search_finding", finding.search_node)
-    graph.add_node("select_finding", finding.select_node)
+    graph.add_node("finding_agent", finding.agent_node)
+    graph.add_node("finding_tools", finding.tools_node)
     graph.add_node("clarify", clarify_node)
     graph.add_node("gate_direct", gate_node)
     graph.add_node("direct_answer", direct_answer_node)
@@ -1100,10 +1111,9 @@ def build(checkpointer=None):
     graph.add_node("gate_done", gate_node)
     graph.add_node("finish", finish_node)
     graph.add_edge(START, "router")
-    graph.add_conditional_edges("router", route_route, {"direct": "gate_direct", "plan": "plan", "react": "react", "clarify": "clarify", "finish": "finish", "finding": "plan_finding"})
-    graph.add_conditional_edges("plan_finding", finding.plan_route, {"search": "search_finding", "finish": "finish"})
-    graph.add_edge("search_finding", "select_finding")
-    graph.add_conditional_edges("select_finding", finding.select_route, {"search": "search_finding", "finish": "finish"})
+    graph.add_conditional_edges("router", route_route, {"direct": "gate_direct", "plan": "plan", "react": "react", "clarify": "clarify", "finish": "finish", "finding": "finding_agent"})
+    graph.add_conditional_edges("finding_agent", finding.agent_route, {"tools": "finding_tools", "finish": "finish"})
+    graph.add_conditional_edges("finding_tools", finding.tools_route, {"agent": "finding_agent", "finish": "finish"})
     graph.add_conditional_edges("clarify", clarify_route, {"router": "router", "finish": "finish"})
     graph.add_conditional_edges("gate_direct", gate_route, {"finish": "finish", "continue": "direct_answer"})
     graph.add_edge("direct_answer", "gate_done")
@@ -1220,11 +1230,11 @@ def _compact_update(update: dict) -> dict:
     for key, value in (update or {}).items():
         if key == "papers" and isinstance(value, list):
             compact[key] = [str(paper.get("id")) for paper in value][:20]
-        elif key == "messages" and isinstance(value, list):
+        elif key in ("messages", "finding_messages", "finding_pending") and isinstance(value, list):
             compact[key] = {"count": len(value), "last_role": msg_role(value[-1]) if value else None}
         elif key in ("events", "past_steps") and isinstance(value, list):
             compact[key] = value[-3:]
-        elif key in ("evidence_pool", "evidence_items", "evidence_sources", "evidence_papers", "workflow_calls") and isinstance(value, dict):
+        elif key in ("evidence_pool", "evidence_items", "evidence_sources", "evidence_papers", "workflow_calls", "finding_search_cache", "finding_details", "finding_aliases") and isinstance(value, dict):
             compact[key] = {"count": len(value)}
         elif key == "workflow_rows":
             compact[key] = {"count": len(value)}
@@ -1415,9 +1425,18 @@ async def continue_task(task_id: str, background: bool = False) -> dict | None:
     if current.get("status") not in ("done", "failed"):
         raise TaskConflict("任务尚未结束，请使用 resume 继续")
     context = {key: current.get(key) for key in ToolContext.model_fields if current.get(key) is not None}
+    if current.get("output_mode") == "bibliography":
+        prior = {"goal": current.get("goal"), "queries": current.get("queries") or [],
+                 "recommended_ids": current.get("paper_ids") or [],
+                 "recommendation_reasons": current.get("recommendation_reasons") or {},
+                 "source_errors": current.get("source_errors") or {}, "answer": current.get("answer")}
+        context["conversation_history"] = ((context.get("conversation_history") or "") +
+            "\n用户已明确要求继续搜索。上轮记录仅供参考，请采用新的互补检索表达，不要原样重复：\n" +
+            json.dumps(prior, ensure_ascii=False))[-16000:]
     mode = current.get("mode") if current.get("mode") in ("react", "plan") else "auto"
     kwargs = {"year_from": current.get("year_from"), "year_to": current.get("year_to"),
-              "auto_approve": bool(current.get("auto_approve")), "mode": mode, "context": context, "parent_task_id": task_id}
+              "auto_approve": bool(current.get("auto_approve")), "mode": mode, "context": context, "parent_task_id": task_id,
+              "budget": current.get("budget")}
     if background:
         return await start_background(current.get("goal") or "", **kwargs)
     return await run(current.get("goal") or "", **kwargs)

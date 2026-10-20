@@ -117,6 +117,23 @@ class AgentState(TypedDict, total=False):
     result_limit: int | None
     output_mode: str
     search_plan: dict
+    # Plain JSON channels: do not use the legacy add_messages reducer for the
+    # provider-native history (function arguments and call IDs must stay intact).
+    finding_started_at: float | None
+    finding_turns: int
+    finding_messages: list[dict]
+    finding_pending: list[dict]
+    finding_search_cache: dict
+    finding_query_counts: dict
+    finding_details: dict
+    finding_detail_count: int
+    finding_arg_errors: dict
+    finding_source_failures: dict
+    finding_notices: list[str]
+    finding_aliases: dict
+    finding_submitted: bool
+    finding_done: bool
+    finding_all_failed: bool
     recommended_ids: list[str] | None
     recommendation_reasons: dict
     sort_order: str | None
@@ -442,6 +459,21 @@ def initial_state(goal: str, year_from: int | None = None, year_to: int | None =
         "result_limit": None,
         "output_mode": "research",
         "search_plan": {},
+        "finding_started_at": None,
+        "finding_turns": 0,
+        "finding_messages": [],
+        "finding_pending": [],
+        "finding_search_cache": {},
+        "finding_query_counts": {},
+        "finding_details": {},
+        "finding_detail_count": 0,
+        "finding_arg_errors": {},
+        "finding_source_failures": {},
+        "finding_notices": [],
+        "finding_aliases": {},
+        "finding_submitted": False,
+        "finding_done": False,
+        "finding_all_failed": True,
         "recommended_ids": None,
         "recommendation_reasons": {},
         "sort_order": None,
@@ -490,6 +522,8 @@ def public_state(state: dict) -> dict:
         "candidate_count": len(state.get("papers") or []),
         "source_errors": state.get("source_errors") or {},
         "source_retry_after": state.get("source_retry_after") or {},
+        "source_status": list((state.get("finding_source_failures") or {}).values()),
+        "source_warnings": state.get("finding_notices") or [],
         "result_limit": state.get("result_limit"),
         "output_mode": state.get("output_mode"),
         "recommendation_reasons": state.get("recommendation_reasons") or {},

@@ -35,7 +35,12 @@ export function researchHistory(turn: ResearchTurn) {
     status: task?.status, goal: task?.goal ?? turn.question, queries: task?.queries,
     requested: task?.result_limit, recommended: papers.length,
     candidate_count: task?.candidate_count ?? turn.total, searches: task?.search_count,
-    source_errors: task?.source_errors, stop_reason: task?.stop_reason,
+    source_errors: task?.source_errors, source_status: task?.source_status,
+    source_warnings: task?.source_warnings, stop_reason: task?.stop_reason,
   }) : "";
-  return `用户：${turn.question}\n助手：${task?.answer ?? ""}${activity}${papers.length ? "\n本轮最终推荐（后续‘这些论文’指此集合）：\n" + papers.map(p => `${p.id}：${p.title}`).join("\n") : ""}`;
+  return `用户：${turn.question}\n助手：${task?.answer ?? ""}${papers.length ? "\n本轮最终推荐（后续‘这些论文’指此集合；摘要仅为题录证据，不是全文）：\n" + papers.map(p => JSON.stringify({
+    id: p.id, title: p.title, year: p.year, url: p.url,
+    reason: task?.recommendation_reasons?.[p.id] ?? "历史记录未保存推荐理由",
+    abstract: p.abstract?.slice(0, 1200),
+  })).join("\n") : ""}${activity}`;
 }

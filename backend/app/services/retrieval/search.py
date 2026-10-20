@@ -48,10 +48,17 @@ SOURCE_LABELS = {"arxiv": "arXiv", "semantic_scholar": "Semantic Scholar"}
 
 
 class SourceFailure(Exception):
-    def __init__(self, message: str, retry_after: int = 0):
+    def __init__(self, message: str, retry_after: int = 0, *, code: str = "upstream", http_status: int | None = None):
         super().__init__(message)
         self.message = message
         self.retry_after = retry_after
+        self.code = code
+        self.http_status = http_status
+
+    def detail(self, source: str, paper_count: int = 0) -> dict:
+        return {"source": source, "status": self.code, "http_status": self.http_status,
+                "retryable": False, "message": self.message,
+                "retry_after_seconds": self.retry_after, "paper_count": paper_count}
 
 
 class SourceResult:
@@ -65,6 +72,8 @@ class SourceResult:
         self.retry_after = 0
         self.total_limited = False
         self.windowed = False
+        self.failure = None
+        self.omitted_unknown_year = 0
 
 
 def clean(text: str | None) -> str | None:
@@ -351,7 +360,7 @@ def retry_after_seconds(response: httpx.Response) -> float | None:
             return None
 
 
-def record_cache(response: httpx.Response, stale: bool = False, retry_after: int = 0):
+def record_cache(response: httpx.Response, stale: bool = False, retry_after: int = 0, failure: SourceFailure | None = None):
     state = _CACHE_STATUS.get()
     if state is not None:
         stamp = response.extensions.get("paper_cached_at")
@@ -359,6 +368,8 @@ def record_cache(response: httpx.Response, stale: bool = False, retry_after: int
             state["cached_at"] = min(stamp, state.get("cached_at", stamp))
         state["stale"] = state.get("stale", False) or stale
         state["retry_after"] = max(retry_after, state.get("retry_after", 0))
+        if failure:
+            state["failure"] = failure.detail("")
     return response
 
 
@@ -368,7 +379,7 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
     scope = quota_scope(label, headers)
     async with _GATES.setdefault(label, asyncio.Lock()):
         if label == "Semantic Scholar" and not semantic_enabled():
-            raise SourceFailure("Semantic Scholar 已由管理员停用，请使用 arXiv")
+            raise SourceFailure("Semantic Scholar 已由管理员停用，请使用 arXiv", code="disabled")
         cached = _CACHE.get(cache_key)
         if cached and cached[0] > time.monotonic():
             _CACHE.move_to_end(cache_key)
@@ -389,8 +400,8 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
         if remaining > 0:
             retry = math.ceil(remaining)
             if stale is not None:
-                return record_cache(stale, True, retry)
-            raise SourceFailure(f"{label} 上游限流，约 {retry} 秒后可重试", retry)
+                return record_cache(stale, True, retry, SourceFailure(f"{label} 上游限流", retry, code="rate_limited", http_status=429))
+            raise SourceFailure(f"{label} 上游限流，约 {retry} 秒后可重试", retry, code="rate_limited", http_status=429)
         await asyncio.sleep(max(0, _NEXT.get(label, 0) - time.monotonic()))
         interval = {"Semantic Scholar": 1.1, "arXiv": 3.1, "OpenAlex": 0.5}.get(label, 3.1)
         attempt = 0
@@ -423,9 +434,9 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
                             key: value for key, value in upstream.headers.items()
                             if key.lower() not in ("content-encoding", "content-length")
                         }, content=bytes(body))
-            except httpx.HTTPError:
+            except httpx.HTTPError as exc:
                 if stale is not None:
-                    return record_cache(stale, True)
+                    return record_cache(stale, True, failure=SourceFailure(f"{label} 请求失败", code="timeout" if isinstance(exc, httpx.TimeoutException) else "network"))
                 raise
             finally:
                 # Space requests from completion, including long/failed responses.
@@ -457,14 +468,15 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
             await cache_operation(provider_cache.set_retry_at, scope, time.time() + delay)
             logger.warning("%s upstream HTTP 429; retry_after=%s; server=%s", label, retry, response.headers.get("server", "unknown"))
             if stale is not None:
-                return record_cache(stale, True, retry)
-            raise SourceFailure(f"{label} 上游返回 429（限流），约 {retry} 秒后可重试", retry)
+                return record_cache(stale, True, retry, SourceFailure(f"{label} 上游返回 429（限流）", retry, code="rate_limited", http_status=429))
+            raise SourceFailure(f"{label} 上游返回 429（限流），约 {retry} 秒后可重试", retry, code="rate_limited", http_status=429)
         if response.status_code == 404 and allow_not_found:
             return response
         if response.status_code >= 400:
             if response.status_code >= 500 and stale is not None:
-                return record_cache(stale, True)
-            raise SourceFailure(f"{label} 返回错误（{response.status_code}）")
+                return record_cache(stale, True, failure=SourceFailure(f"{label} 返回错误（{response.status_code}）", code="upstream", http_status=response.status_code))
+            code = "unauthorized" if response.status_code in (401, 403) else "bad_request" if response.status_code < 500 else "upstream"
+            raise SourceFailure(f"{label} 返回错误（{response.status_code}）", code=code, http_status=response.status_code)
         # Only persist parseable provider payloads, never HTML error shells.
         try:
             if accept is not None:
@@ -756,6 +768,10 @@ async def run_source(name: str, fetcher) -> SourceResult:
         result.total_limited = bool(state.get("total_limited"))
         result.windowed = bool(state.get("windowed"))
         result.retry_after = state.get("retry_after", 0)
+        result.omitted_unknown_year = len(state.get("unknown_year_ids", set()))
+        if state.get("failure"):
+            result.failure = {**state["failure"], "source": name}
+            result.error = result.failure["message"]
         if state.get("stale"):
             result.cached_at = datetime.fromtimestamp(state["cached_at"], timezone.utc).isoformat()
             result.warning = f"{label} 上游暂不可用，正在展示历史缓存（非最新结果）" + ("；" + state["note"] if state.get("note") else "")
@@ -765,13 +781,18 @@ async def run_source(name: str, fetcher) -> SourceResult:
         logger.warning("%s search failed: %s", name, exc.message)
         result = SourceResult(name, [], 0, exc.message)
         result.retry_after = exc.retry_after
+        result.failure = exc.detail(name)
         return result
     except httpx.TimeoutException:
         logger.warning("%s search timed out", name)
-        return SourceResult(name, [], 0, f"{label} 请求超时")
+        result = SourceResult(name, [], 0, f"{label} 请求超时")
+        result.failure = SourceFailure(result.error, code="timeout").detail(name)
+        return result
     except httpx.HTTPError:
         logger.warning("%s search network error", name)
-        return SourceResult(name, [], 0, f"{label} 网络请求失败")
+        result = SourceResult(name, [], 0, f"{label} 网络请求失败")
+        result.failure = SourceFailure(result.error, code="network").detail(name)
+        return result
     except Exception:
         logger.exception("%s search failed", name)
         return SourceResult(name, [], 0, f"{label} 查询失败")
@@ -782,6 +803,10 @@ async def run_source(name: str, fetcher) -> SourceResult:
 def year_matches(paper: PaperOut, year_from: int | None, year_to: int | None) -> bool:
     if year_from is None and year_to is None:
         return True
+    if paper.year is None:
+        state = _CACHE_STATUS.get()
+        if state is not None:
+            state.setdefault("unknown_year_ids", set()).add(paper.id)
     return paper.year is not None and (year_from is None or paper.year >= year_from) and (year_to is None or paper.year <= year_to)
 
 
@@ -907,6 +932,10 @@ def remember_arxiv_substitute(papers, via, failure):
         state["note"] = f"arXiv API 暂不可用，以下来自{via}；总数仅为本批匹配记录，相关性为本地排序"
         state["total_limited"] = True
         state["retry_after"] = getattr(failure, "retry_after", 0) or 0
+        if isinstance(failure, SourceFailure):
+            state["failure"] = failure.detail("arxiv")
+        elif isinstance(failure, httpx.HTTPError):
+            state["failure"] = SourceFailure("arXiv 原接口请求失败", code="timeout" if isinstance(failure, httpx.TimeoutException) else "network").detail("arxiv")
     return papers, len(papers)
 
 
@@ -1023,11 +1052,6 @@ def search_snapshot(query, page, page_size, sort, year_from, year_to, results, p
     offset = (page - 1) * page_size
     # Completion order must not change final ranking or metadata precedence.
     results = sorted(results, key=lambda item: 0 if item.name == "arxiv" else 1)
-    if any(item.papers for item in results):
-        for item in results:
-            if item.name == "arxiv" and item.error and item.retry_after and not item.papers:
-                item.warning = item.warning or "arXiv 正在限流，本次结果来自其他来源，请稍后再试"
-                item.error = None
     def eligible(group):
         return [paper for paper in group if year_matches(paper, year_from, year_to)]
 
@@ -1056,14 +1080,20 @@ def search_snapshot(query, page, page_size, sort, year_from, year_to, results, p
         "source_warnings": {item.name: item.warning for item in results if item.warning},
         "source_cached_at": {item.name: item.cached_at for item in results if item.cached_at},
         "source_retry_after": {item.name: item.retry_after for item in results if item.retry_after},
+        "source_status": [{**(item.failure or {
+            "source": item.name, "status": "failed" if item.error else "completed",
+            "http_status": None, "retryable": False, "message": item.error or item.warning or "",
+            "retry_after_seconds": item.retry_after,
+        }), "paper_count": len(eligible(item.papers)), "notice": item.warning} for item in results],
+        "omitted_unknown_year": sum(item.omitted_unknown_year for item in results),
         "pending_sources": list(pending),
         "total_is_limited": bool(totals) and all(item.total_limited for item in results if not item.error),
     }
 
 
-async def fetch_paper(paper_id: str) -> PaperOut | None:
+async def fetch_paper(paper_id: str, *, refresh: bool = False) -> PaperOut | None:
     cached = _PAPERS.get(paper_id)
-    if cached and cached[0] > time.monotonic():
+    if not refresh and cached and cached[0] > time.monotonic():
         return ccf.annotate(cached[1])
     timeout = httpx.Timeout(25.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:

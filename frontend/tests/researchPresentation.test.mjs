@@ -48,3 +48,15 @@ test('follow-up history distinguishes a partial source failure from no matching 
   assert.match(history, /semantic_scholar.*timeout/);
   assert.match(history, /text embedding/);
 });
+
+test('follow-up discussion receives the saved reason and actual abstract', () => {
+  const turn = { question: 'find image generation papers', task: { search_count: 1, queries: ['retrieved patches'],
+    recommended: [{id:'arxiv:synthetic',title:'Synthetic',abstract:'Retrieves patches during autoregressive generation.',year:2024,url:'https://example.test/paper'}],
+    recommendation_reasons: {'arxiv:synthetic':'摘要明确描述自回归生成中的patch检索'},
+    source_status:[{source:'semantic_scholar',status:'rate_limited',http_status:429}], source_warnings:['OpenAlex fallback'] } };
+  const history = researchHistory(turn);
+  assert.match(history, /自回归生成中的patch检索/);
+  assert.match(history, /Retrieves patches during autoregressive/);
+  assert.match(history, /"http_status":429/);
+  assert.match(history, /OpenAlex fallback/);
+});

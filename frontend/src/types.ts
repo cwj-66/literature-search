@@ -98,6 +98,8 @@ export interface ResearchTask {
   candidate_count?: number;
   recommendation_reasons?: Record<string, string>;
   source_errors?: Record<string, string>;
+  source_status?: { source: string; status: string; http_status?: number | null; message?: string; retry_after_seconds?: number }[];
+  source_warnings?: string[];
   search_count?: number;
   workflow_stage?: string;
   research_intent?: "auto" | "discover" | "read" | "mixed";
@@ -340,6 +342,8 @@ export interface RelateCenter {
 export interface RelateSatelliteGroup {
   center_id: string;
   category: string;
+  status: string;
+  matched_count: number;
   items: RecommendationItem[];
 }
 

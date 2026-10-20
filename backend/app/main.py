@@ -35,7 +35,7 @@ from app.services.papers import workspaces
 from app.services.papers import conversations
 from app.conversation_api import router as conversation_router
 from app.services.papers import processing
-from app.tools import research as research_tools, BACKGROUND_TOOLS
+from app.tools import research as research_tools, finding_tools, BACKGROUND_TOOLS, CHAT_TOOLS
 from app.tools.research_scope import ToolContext
 from pydantic import BaseModel, Field, ValidationError
 
@@ -505,16 +505,23 @@ class ToolInvocation(BaseModel):
 
 @app.get("/api/tools")
 async def tool_catalog():
-    return {"chat_tools": research_tools.CHAT_TOOLS,
+    return {"chat_tools": CHAT_TOOLS,
             "background_capabilities": [{"name": tool["name"], "description": tool["description"]} for tool in BACKGROUND_TOOLS]}
 
 
 @app.post("/api/research/tools/{tool_name}")
 @app.post("/api/tools/{tool_name}")
 async def invoke_research_tool(tool_name: str, payload: ToolInvocation):
+    if tool_name in ("get_paper_detail", "submit_papers"):
+        # These are stateful actions of the running researcher, not stateless
+        # public endpoints accepting arbitrary IDs supplied by a caller.
+        raise HTTPException(status_code=409, detail="该工具仅在运行中的论文搜索任务内使用，候选必须来自本轮真实搜索。请通过研究助手发起任务。")
     if tool_name not in research_tools.CATALOG:
         raise HTTPException(status_code=404, detail="未知聊天研究工具")
     try:
+        if tool_name == "search_papers":
+            args = finding_tools.SearchArgs.model_validate(payload.arguments)
+            return await finding_tools.search_candidates(args)
         return await research_tools.execute(tool_name, payload.arguments, payload.context)
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None

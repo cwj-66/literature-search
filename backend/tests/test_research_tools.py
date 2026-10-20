@@ -46,7 +46,7 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
 
     def test_catalog_has_exact_chat_and_background_sets(self):
-        self.assertEqual(len(TOOLS), 4)
+        self.assertEqual({t["name"] for t in TOOLS}, {"search_papers", "get_paper_detail", "submit_papers"})
         self.assertEqual({t["name"] for t in BACKGROUND_TOOLS}, {"acquire_paper_fulltext", "parse_paper", "index_paper"})
         self.assertEqual({t["module"] for t in TOOLS}, {"discovery"})
         self.assertTrue(set(research.CATALOG) <= set(agent.TOOL_REGISTRY))
@@ -185,7 +185,7 @@ class ResearchToolsTests(unittest.IsolatedAsyncioTestCase):
     async def test_api_catalog_context_and_invalid_arguments(self):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             catalog = (await client.get("/api/tools")).json()
-            self.assertEqual(len(catalog["chat_tools"]), 4)
+            self.assertEqual({t["name"] for t in catalog["chat_tools"]}, {"search_papers", "get_paper_detail", "submit_papers"})
             response = await client.post("/api/knowledge-graph/tools/query_knowledge_graph", json={"context": self.ctx.model_dump()})
             self.assertEqual(response.status_code, 200, response.text)
             bad = await client.post("/api/knowledge-graph/tools/query_knowledge_graph", json={"arguments": {"paper_ids": []}})

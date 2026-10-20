@@ -17,7 +17,8 @@ import { useWorkspaceProject } from "./shared";
 
 const WELCOME = ["你好！我是你的 AI 研究助手。", "告诉我研究主题和要求，我可以帮你搜索、筛选学术论文，也可以回答一般问题。论文关系和知识图谱请在对应模块中查看。"];
 const RESEARCH_STEP: Record<string, string> = {
-  route: "理解研究目标", plan: "制定研究计划", prepare: "确认研究资料", search: "寻找相关论文",
+  route: "理解研究目标", plan: "制定研究计划", prepare: "理解论文需求", search: "寻找相关论文",
+  finding: "判断下一步检索方向", detail: "查看候选论文详情",
   select: "筛选推荐论文", read: "阅读论文", quotes: "核对原文依据", assess: "检查资料是否充分", expand: "补充检索",
   synthesize: "整理研究结论", claims: "检查结论依据", judge: "复核回答", revise: "修订回答",
   finalize: "完成复核", stop: "研究结束",

@@ -63,7 +63,9 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(429, headers={"Retry-After": "300"}))) as client:
             stale = await self.fetch(client)
         self.assertEqual(len(stale.papers), 1)
-        self.assertIsNone(stale.error)
+        self.assertIn("429", stale.error)
+        self.assertEqual(stale.failure["status"], "rate_limited")
+        self.assertEqual(stale.failure["http_status"], 429)
         self.assertIn("历史缓存", stale.warning)
         self.assertTrue(stale.cached_at)
         self.assertEqual(stale.retry_after, 300)
@@ -212,7 +214,7 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
             result = await search.search_papers("hallucination", 1, 10, "relevance", "arxiv", None, None)
         self.assertEqual(result["papers"][0].arxiv_id, "2406.11267")
         self.assertIn("OpenAlex", result["source_warnings"]["arxiv"])
-        self.assertEqual(result["source_errors"], {})
+        self.assertIn("429", result["source_errors"]["arxiv"])
 
     async def test_chinese_topic_does_not_spend_an_arxiv_request(self):
         preprint = PaperOut(id="arxiv:2406.11267", arxiv_id="2406.11267", title="Faithful finetuning", sources=["semantic_scholar"])
@@ -229,8 +231,7 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(search, "arxiv_with_index_fallback", new=AsyncMock(side_effect=search.SourceFailure("arXiv 上游返回 429（限流），约 60 秒后可重试", 60))), \
              patch.object(search, "search_semantic_scholar", new=AsyncMock(return_value=([paper], 1))):
             result = await search.search_papers("hallucination", 1, 10, "relevance", "all", None, None)
-        self.assertEqual(result["source_errors"], {})
-        self.assertIn("其他来源", result["source_warnings"]["arxiv"])
+        self.assertIn("429", result["source_errors"]["arxiv"])
         self.assertEqual(result["papers"][0].title, "Kept")
         self.assertNotIn("arxiv", result["source_counts"])
 
