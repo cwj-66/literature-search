@@ -431,7 +431,12 @@ async def request(client: httpx.AsyncClient, url: str, params: dict, headers: di
                 # Space requests from completion, including long/failed responses.
                 _NEXT[label] = time.monotonic() + interval
             if response.status_code != 429:
-                break
+                if not (label == "Semantic Scholar" and 500 <= response.status_code < 600 and attempt <= 2):
+                    break
+                wait = float(2 ** attempt)
+                logger.warning("%s upstream HTTP %s; retrying in %.0fs", label, response.status_code, wait)
+                await asyncio.sleep(max(0, wait))
+                continue
             header_delay = retry_after_seconds(response)
             short = header_delay is None or (math.isfinite(header_delay) and header_delay <= SHORT_RETRY_LIMIT)
             if not short or attempt >= SHORT_ATTEMPTS:

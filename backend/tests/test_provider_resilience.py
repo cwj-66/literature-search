@@ -249,6 +249,50 @@ class ProviderResilienceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(paper.doi)
         self.assertEqual(paper.sources, ["openalex"])
 
+    async def test_s2_500_retries_then_success(self):
+        calls = 0
+
+        def handler(request):
+            nonlocal calls
+            calls += 1
+            if calls <= 2:
+                return httpx.Response(500)
+            return httpx.Response(200, json=PAYLOAD)
+
+        with patch.object(search.asyncio, "sleep", new=AsyncMock()):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                papers, _ = await search.search_semantic_scholar(client, "deep learning", 0, 10, None, None)
+        self.assertEqual(calls, 3)
+        self.assertEqual(len(papers), 1)
+
+    async def test_s2_500_exhausts_and_raises(self):
+        calls = 0
+
+        def handler(request):
+            nonlocal calls
+            calls += 1
+            return httpx.Response(500)
+
+        with patch.object(search.asyncio, "sleep", new=AsyncMock()):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                with self.assertRaises(search.SourceFailure) as caught:
+                    await search.search_semantic_scholar(client, "deep learning", 0, 10, None, None)
+        self.assertEqual(calls, 3)
+        self.assertIn("500", str(caught.exception))
+
+    async def test_arxiv_500_is_not_retried(self):
+        calls = 0
+
+        def handler(request):
+            nonlocal calls
+            calls += 1
+            return httpx.Response(500)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with self.assertRaises(search.SourceFailure):
+                await search.request(client, "https://export.arxiv.org/api/query", {"search_query": "all:x"}, {"User-Agent": "test"}, "arXiv")
+        self.assertEqual(calls, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
