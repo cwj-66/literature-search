@@ -7,6 +7,19 @@ from app.tools.rerank_papers import rerank_papers
 from finding_fixtures import CANDIDATES,PLAN,selection,dumps
 
 class RerankPapersTests(unittest.IsolatedAsyncioTestCase):
+    async def test_future_issue_year_is_not_rewritten_or_used_as_online_publication_proof(self):
+        from datetime import datetime, timedelta, timezone
+        today = datetime.now(timezone(timedelta(hours=8))).date()
+        candidate = {**CANDIDATES[0], "year": today.year + 1}
+        with patch.object(llm, 'complete', new=AsyncMock(return_value=dumps(selection(1, (0,))))) as complete:
+            result = await rerank_papers('找近期论文', [candidate], 1)
+        messages = complete.call_args.args[0]
+        payload = json.loads(messages[1]['content'])
+        self.assertEqual(payload['today'], today.isoformat())
+        self.assertEqual(payload['candidates'][0]['year'], today.year + 1)
+        self.assertIn('预排刊期', messages[0]['content'])
+        self.assertEqual(result['recommended'][0]['year'], today.year + 1)
+
     async def test_semantically_related_title_without_literal_terms_is_accepted(self):
         with patch.object(llm,'complete',new=AsyncMock(return_value=dumps(selection()))) as complete:
             result=await rerank_papers(PLAN['resolved_question'],CANDIDATES,3,groups=[['text embedding']])

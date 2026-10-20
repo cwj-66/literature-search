@@ -8,6 +8,19 @@ from app.infrastructure import llm
 
 
 class ModelResponseTests(unittest.IsolatedAsyncioTestCase):
+    async def test_requested_model_is_sent_to_provider(self):
+        with patch.dict(os.environ, {"LLM_MODEL": "qwen3.7-flash-2026-07-15"}):
+            _, payload = await self.request({"choices": [{"message": {"content": "{}"}}]})
+        self.assertEqual(payload["model"], "qwen3.7-flash-2026-07-15")
+
+    def test_model_switch_does_not_reuse_previous_model_cache(self):
+        from app.agents.store import cache_key
+        with patch.dict(os.environ, {"LLM_MODEL": "previous-model"}):
+            old = cache_key("router", {"goal": "same question"})
+        with patch.dict(os.environ, {"LLM_MODEL": "qwen3.7-flash-2026-07-15"}):
+            new = cache_key("router", {"goal": "same question"})
+        self.assertNotEqual(old, new)
+
     async def request(self, data, base="https://dashscope.aliyuncs.com/compatible-mode/v1"):
         client = AsyncMock()
         client.__aenter__.return_value = client

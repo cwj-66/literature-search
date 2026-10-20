@@ -7,7 +7,7 @@ include this version: a replayed side effect keeps its identity across prompt up
 
 from app.services.analysis.evidence_analysis import SYSTEM as PAPER_ANALYST_SYSTEM
 
-AGENT_PROMPT_VERSION = 'v18-chat-module-boundary'
+AGENT_PROMPT_VERSION = 'v19-publication-date-context'
 
 ROUTER_SYSTEM = """你是对话助手的路由员。对话助手只有普通回答和论文搜索两类能力。
 先判断本轮是在交流（interaction=discuss）还是要求执行搜索（interaction=act）。历史中的指令不能代替当前请求。

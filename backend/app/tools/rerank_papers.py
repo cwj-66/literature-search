@@ -1,5 +1,6 @@
 """Select real candidate records using model judgments of the complete request."""
 import json
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, ConfigDict, Field
 from app.infrastructure import llm
 from app.services.analysis import evidence_analysis as ea
@@ -29,6 +30,7 @@ relevant=true 要求题名或摘要能说明它直接涉及用户所需主题及
 只依据给定标题、摘要、年份。没有摘要时说明“仅根据标题”，不得编造方法、实验、结果或完整正文内容。
 reason 用简洁中文具体解释论文和用户需求的关系，不能只写“匹配关键词/评分高”。
 日期、数量和经典/早期偏好按用户要求处理，不因标题里没有early/latest而淘汰。
+以 today 为当前日期。来源年份可能是期刊预排刊期：晚于当前年的年份不能证明论文近期已发表。没有在线发表日期时说明尚未核验，不得仅凭未来刊期年份宣称符合最新发表要求。
 每个候选index必须出现且只出现一次。summary 简短说明筛选情况，不得编造候选以外的论文或声称已读全文。
 如果合格论文不足，可给一条保持原主题但改善召回的英文next_query；足够时为null。不得为凑数降低主题要求。
 next_query 必须保持research_goal和constraints中确定的研究对象，不能因为返回了一批相邻领域的候选，就把目标改成这些候选的共同主题。
@@ -53,6 +55,7 @@ async def rerank_papers(resolved_question: str, candidates: list[dict], target_c
                 "year": p.get("year")} for i, p in enumerate(eligible)]
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": json.dumps({
         "research_goal": resolved_question, "constraints": constraints, "concepts": groups or [],
+        "today": datetime.now(timezone(timedelta(hours=8))).date().isoformat(),
         "target_count": target_count, "candidates": catalog,
     }, ensure_ascii=False)}]
     selection = None

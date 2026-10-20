@@ -230,7 +230,8 @@ def ensure_cache(db) -> None:
 
 
 def cache_key(kind: str, payload: dict) -> str:
-    material = {"v": AGENT_PROMPT_VERSION, "kind": kind, **payload}
+    from app.infrastructure.llm import model_name
+    material = {"v": AGENT_PROMPT_VERSION, "kind": kind, **payload, "model": model_name()}
     text = json.dumps(material, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 

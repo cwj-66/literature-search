@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Graph, NodeEvent, type IElementEvent } from "@antv/g6";
 import { AimOutlined, CloseOutlined, MinusOutlined, PlusOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import { EDGE_COLOR, PLANET_COLORS, SATELLITE_COLOR, edgeDash, planetPositions } from "../cosmosLayout";
+import { EDGE_COLOR, PLANET_COLORS, SATELLITE_COLOR, edgeDash, graphBounds, planetPositions, satelliteOrbit } from "../cosmosLayout";
 import type { RecommendationItem, RelateCenter, RelateResponse } from "../types";
 import { paperLocation, workspacePaperPath } from "../workspace";
 import "../styles/cosmos.css";
@@ -50,22 +50,34 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
 
     const sims = data.centers.map((center) => data.centers.map((other) => center.similarities[other.id] ?? null));
     const positions = planetPositions(sims);
+    const bounds = graphBounds(positions);
     const colorOf = new Map(data.centers.map((center) => [center.id, PLANET_COLORS[center.color_index] ?? PLANET_COLORS[0]]));
+    const centerIndex = new Map(data.centers.map((center, index) => [center.id, index]));
 
-    const nodes: { id: string; fx?: number; fy?: number; data: Record<string, unknown> }[] = data.centers.map((center, index) => ({
+    const nodes: { id: string; x?: number; y?: number; data: Record<string, unknown> }[] = data.centers.map((center, index) => ({
       id: center.id,
-      fx: positions[index].x,
-      fy: positions[index].y,
+      x: positions[index].x,
+      y: positions[index].y,
       data: { kind: "planet", center, color: colorOf.get(center.id), label: shortTitle(center.title) },
     }));
     const satelliteIds = new Set<string>();
+    const orbitSlots = new Map<string, number>();
     const edges: SatelliteEdge[] = [];
     for (const group of data.satellites) {
       const sourceColor = colorOf.get(group.center_id) ?? EDGE_COLOR;
       for (const item of group.items) {
         if (!satelliteIds.has(item.id)) {
           satelliteIds.add(item.id);
-          nodes.push({ id: item.id, data: { kind: "satellite", item, label: shortTitle(item.title) } });
+          const ci = centerIndex.get(group.center_id) ?? 0;
+          const slot = orbitSlots.get(group.center_id) ?? 0;
+          orbitSlots.set(group.center_id, slot + 1);
+          const point = satelliteOrbit(positions[ci], ci, slot);
+          nodes.push({
+            id: item.id,
+            x: point.x,
+            y: point.y,
+            data: { kind: "satellite", item, label: shortTitle(item.title) },
+          });
         }
         const type = edgeTypeOf(item, group.category);
         edges.push({
@@ -101,7 +113,6 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
     try {
       graph = new Graph({
         container,
-        autoFit: "view",
         padding: 48,
         data: {
           nodes,
@@ -147,7 +158,14 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
             inactive: { opacity: 0.05 },
           },
         },
-        layout: { type: "force", preventOverlap: true, nodeSize: 110, linkDistance: 180 },
+        layout: {
+          type: "grid",
+          rows: 1,
+          sortBy: null,
+          begin: [bounds.minX, bounds.minY],
+          width: Math.max(1, bounds.maxX - bounds.minX),
+          height: Math.max(1, bounds.maxY - bounds.minY),
+        },
         behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
       });
     } catch {
@@ -155,6 +173,14 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
       return;
     }
     graphRef.current = graph;
+
+    const frame = () => {
+      if (!alive) return;
+      requestAnimationFrame(() => {
+        if (!alive) return;
+        void graph.fitView().catch(() => undefined);
+      });
+    };
 
     const highlight = (nodeId: string | null) => {
       const nodeState: Record<string, string[]> = {};
@@ -175,6 +201,7 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
       settled = true;
       if (!alive) { graph.destroy(); return; }
       rendered = true;
+      frame();
     }).catch(() => {
       settled = true;
       if (!alive) { graph.destroy(); return; }
@@ -219,6 +246,9 @@ export function CosmosGraph({ data, workspaceId, from }: { data: RelateResponse;
     <section className="cosmos-graph-wrap" aria-label="论文关系宇宙图谱">
       <div ref={ref} className="cosmos-graph-canvas" hidden={failed} />
       {failed ? <p className="cosmos-fallback">关系图渲染失败，请刷新重试。</p> : null}
+      {!data.satellites.some((group) => group.items.length) ? (
+        <div className="cosmos-empty"><p>本次暂未找到相关文献，可点击「更新关系」重试。</p></div>
+      ) : null}
       <div className="cosmos-toolbar" aria-label="图谱控制">
         <button aria-label="放大" onClick={() => void graphRef.current?.zoomBy(1.2).catch(() => undefined)}><PlusOutlined /></button>
         <button aria-label="缩小" onClick={() => void graphRef.current?.zoomBy(0.8).catch(() => undefined)}><MinusOutlined /></button>

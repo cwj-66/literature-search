@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../src/cosmosLayout.ts', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } });
-const { PLANET_COLORS, COSMOS_BG, SATELLITE_COLOR, EDGE_COLOR, MAX_CENTERS, toggleSelection, parseSeeds, similarityDistance, planetPositions, edgeDash } =
+const { PLANET_COLORS, COSMOS_BG, SATELLITE_COLOR, EDGE_COLOR, MAX_CENTERS, toggleSelection, parseSeeds, similarityDistance, planetPositions, edgeDash, satelliteOrbit, graphBounds } =
   await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 
 test('palette matches the spec values exactly', () => {
@@ -60,4 +60,25 @@ test('edgeDash styles encode the three relation categories', () => {
   assert.deepEqual(edgeDash('semantic'), [5, 4]);
   assert.deepEqual(edgeDash('keyword'), [2, 4]);
   assert.deepEqual(edgeDash('mystery'), []);
+});
+
+test('satelliteOrbit rings satellites around their planet deterministically', () => {
+  const a = satelliteOrbit({ x: 100, y: 50 }, 0, 0);
+  const b = satelliteOrbit({ x: 100, y: 50 }, 0, 0);
+  assert.deepEqual(a, b);
+  assert.ok(Math.abs(Math.hypot(a.x - 100, a.y - 50) - 195) < 1e-9, 'first ring radius 195');
+  const outer = satelliteOrbit({ x: 0, y: 0 }, 0, 7);
+  assert.ok(Math.abs(Math.hypot(outer.x, outer.y) - 275) < 1e-9, 'second ring radius 275');
+  const other = satelliteOrbit({ x: 100, y: 50 }, 1, 0);
+  assert.notDeepEqual(other, a, 'different planet index shifts the angle');
+});
+
+test('graphBounds pads every planet orbit so fitView sees the whole system', () => {
+  const one = graphBounds([{ x: 0, y: 0 }]);
+  assert.equal(one.minX, -225);
+  assert.equal(one.maxX, 225);
+  const two = graphBounds([{ x: 0, y: 0 }, { x: 260, y: 0 }]);
+  assert.equal(two.minX, -225);
+  assert.equal(two.maxX, 485);
+  assert.equal(two.maxY - two.minY, 450);
 });

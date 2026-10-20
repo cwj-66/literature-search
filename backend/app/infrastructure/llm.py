@@ -141,7 +141,7 @@ def _response_error(response: httpx.Response) -> AnalysisError:
 
 
 def model_name() -> str:
-    return os.getenv("LLM_MODEL", "deepseek-v4.1-flash").strip() or "deepseek-v4.1-flash"
+    return os.getenv("LLM_MODEL", "qwen3.7-flash-2026-07-15").strip() or "qwen3.7-flash-2026-07-15"
 
 
 def build_messages(paper: PaperOut, prepared: PreparedText) -> list[dict]:

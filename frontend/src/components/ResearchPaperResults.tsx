@@ -9,9 +9,11 @@ import { paperLocation } from "../workspace";
 export function ResearchPaperResults({ turn, from }: { turn: ResearchTurn; from: string }) {
   const { recommended, candidates, legacy } = researchResults(turn);
   if (!recommended.length && !candidates.length) return null;
+  const hasFutureYear = recommended.some(paper => paper.year != null && paper.year > new Date().getFullYear());
   return <section className="research-results" aria-label="论文检索结果">
     {recommended.length ? <>
       <h3 className="research-results-heading">推荐 {recommended.length} 篇{turn.task?.result_limit && recommended.length < turn.task.result_limit ? `（目标 ${turn.task.result_limit} 篇，本次不足）` : ""}</h3>
+      {hasFutureYear ? <p className="small-print">部分文献的来源年份晚于当前年份，可能对应预排刊期；实际在线发表日期请以出版社页面为准。</p> : null}
       {recommended.map(paper => <article className="assistant-hit" key={paperKey(paper)}>
         <h3><Link to={paperLocation(paperKey(paper), from)}>{paper.title}</Link></h3>
         {turn.task?.recommendation_reasons?.[paper.id] ? <p className="research-match-reason">{turn.task.recommendation_reasons[paper.id]}</p> : null}

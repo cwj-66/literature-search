@@ -64,3 +64,23 @@ export function edgeDash(category: string): number[] {
   if (category === 'keyword') return [2, 4];
   return [];
 }
+
+const ORBIT_RADIUS = 195;
+const ORBIT_RADIUS_STEP = 80;
+
+export function satelliteOrbit(center: { x: number; y: number }, centerIndex: number, slot: number): { x: number; y: number } {
+  const angle = centerIndex * 0.6 + slot * (Math.PI / 3);
+  const radius = ORBIT_RADIUS + Math.floor(slot / 6) * ORBIT_RADIUS_STEP;
+  return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) };
+}
+
+export function graphBounds(planets: { x: number; y: number }[], orbitRadius = ORBIT_RADIUS + 30): { minX: number; minY: number; maxX: number; maxY: number } {
+  const xs = planets.map((point) => point.x);
+  const ys = planets.map((point) => point.y);
+  return {
+    minX: Math.min(...xs) - orbitRadius,
+    minY: Math.min(...ys) - orbitRadius,
+    maxX: Math.max(...xs) + orbitRadius,
+    maxY: Math.max(...ys) + orbitRadius,
+  };
+}

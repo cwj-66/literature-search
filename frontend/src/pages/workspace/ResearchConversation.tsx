@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { prepareWorkspace, researchDecision, startResearch, uploadPaper, workspacePapers, fetchResearchTask, cancelResearchTask } from "../../api";
 import { projects, useProjects } from "../../projects";
@@ -90,6 +90,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
   const [draft, setDraft] = useState("");
   const [turns, setTurns] = useState<Turn[]>(() => chat.turns);
   const logRef = useRef<HTMLDivElement>(null);
+  const followBottom = useRef(true);
   const [greetAt] = useState(() => {
     const key = `ws-ask-greet:${storageId}`;
     const saved = Number(localStorage.getItem(key));
@@ -141,9 +142,9 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
     void poll();
     return () => { alive = false; controller.abort(); window.clearTimeout(timer); };
   }, [activeTask?.id, activeTask?.task?.task_id, id]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = logRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
+    if (node && followBottom.current) node.scrollTop = node.scrollHeight;
   }, [turns]);
 
   async function send(retry?: Turn) {
@@ -153,6 +154,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
     const request = retry?.request ?? { selectedIds: [...selectedIds],
       history: turns.filter(t => t.id !== turnId && t.task?.answer).slice(-6).map(researchHistory).join("\n\n").slice(-16000) };
     const turn: Turn = { id: turnId, question, pending: true, request };
+    followBottom.current = true;
     stopRequested.current = false; setPreparing(true); setDraft(""); setPollError("");
     setTurns(current => retry ? current.map(t => t.id === turnId ? turn : t) : [...current, turn]);
     if (!turns.length && !chat.titleEdited) changeRef.current({ title: question.slice(0, 28) });
@@ -223,7 +225,10 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
     <div className="assistant-body">
       <div className="assistant-main">
         <AssistantArt />
-        <div className="assistant-log" ref={logRef} aria-live="polite">
+        <div className="assistant-log" ref={logRef} aria-live="polite" onScroll={event => {
+          const node = event.currentTarget;
+          followBottom.current = node.scrollHeight - node.clientHeight - node.scrollTop < 64;
+        }}>
           <div className="assistant-thread">
             <AssistantBubble time={greetAt}>{WELCOME.map(line => <p key={line}>{line}</p>)}</AssistantBubble>
             {turns.map(turn => <div className="assistant-pair" key={turn.id}>
