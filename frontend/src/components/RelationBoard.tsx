@@ -110,8 +110,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
     if (!a || !b) return null;
     const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy) || 1;
     const ra = radius(a), rb = radius(b);
-    const bend = (CATEGORY_ORDER.indexOf(edge.category) - 1) * 22;
-    const mx = (a.x + b.x) / 2 - dy / length * bend, my = (a.y + b.y) / 2 + dx / length * bend;
+    const mx = (a.x + b.x) / 2 - dy / length * edge.bend, my = (a.y + b.y) / 2 + dx / length * edge.bend;
     const ta = Math.hypot(mx - a.x, my - a.y) || 1, tb = Math.hypot(mx - b.x, my - b.y) || 1;
     const start = { x: a.x + (mx - a.x) / ta * ra, y: a.y + (my - a.y) / ta * ra };
     const end = { x: b.x + (mx - b.x) / tb * rb, y: b.y + (my - b.y) / tb * rb };
@@ -122,6 +121,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
     const width = (2 + Math.max(0, Math.min(1, edge.strength ?? 0)) * 1.1 + (lit ? 0.6 : 0)) * inv;
     return <g key={edge.id} className={`space-edge${dim ? " is-dim" : ""}${lit ? " is-lit" : ""}`} data-source={edge.source} data-target={edge.target} data-category={edge.category}
       style={{ "--edge-color": meta.color } as CSSProperties}>
+      {lit ? <path className="space-edge-casing" d={d} fill="none" stroke="#fafbfd" strokeWidth={width + 5 * inv} strokeLinecap="round" /> : null}
       <path className="space-edge-line" d={d} style={{ d: `path("${d}")` } as CSSProperties} fill="none" stroke={meta.color} strokeWidth={width}
         strokeDasharray={meta.dash.length ? meta.dash.map(v => v * inv).join(" ") : undefined} strokeLinecap="round"
         />
@@ -192,7 +192,15 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
       <div className="space-world" style={{ width: graph.width, height: graph.height,
         transform: `translate(${camera.x}px, ${camera.y}px) scale(${k})`, "--inv": inv, "--grow": grow } as CSSProperties}>
         <svg className="space-lines" width={graph.width} height={graph.height} aria-label="论文之间的真实关系">
-          {visibleEdges.map(drawEdge)}
+          <defs>{graph.nodes.filter(n => n.center).map(n => <radialGradient key={n.id} id={`space-zone-${n.center!.color_index}`}>
+            <stop offset="0%" stopColor={colorOf(n)} stopOpacity={0.13} /><stop offset="100%" stopColor={colorOf(n)} stopOpacity={0} /></radialGradient>)}</defs>
+          {graph.nodes.filter(n => n.center).map(n => {
+            const own = graph.nodes.filter(s => !s.center && s.owners.length === 1 && s.owners[0] === n.id && visibleIds.has(s.id));
+            const r = Math.max(170, ...own.map(s => Math.hypot(s.x - n.x, s.y - n.y) + 90));
+            return <circle key={n.id} className={`space-zone${focusId && focusId !== n.id && !connected.has(n.id) ? " is-dim" : ""}`} cx={n.x} cy={n.y} r={r} fill={`url(#space-zone-${n.center!.color_index})`} />;
+          })}
+          {visibleEdges.filter(e => !(focusId && (e.source === focusId || e.target === focusId))).map(drawEdge)}
+          {focusId ? visibleEdges.filter(e => e.source === focusId || e.target === focusId).map(drawEdge) : null}
         </svg>
         {graph.nodes.filter(n => visibleIds.has(n.id)).map(node => {
           const color = colorOf(node);

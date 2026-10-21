@@ -163,6 +163,8 @@ def save_success(task_id: str, local_id: str, fields: AnalysisFields, prepared, 
             prepared.source_kind, prepared.source_url, model_name, prompt_version,
             json.dumps(prepared.evidence, ensure_ascii=False), stamp,
         ))
+        from app.services.research_fields import store as field_store
+        field_store.save_assignments(db, local_id, fields.research_fields)
         db.execute("UPDATE analysis_tasks SET status = 'success', error = NULL, finished_at = ? WHERE task_id = ?", (stamp, task_id))
         return True
 

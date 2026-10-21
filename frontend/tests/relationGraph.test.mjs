@@ -49,6 +49,16 @@ test('one node may have three relation types without tripling the paper', () => 
   assert.equal(graph.edges.length, 3);
   assert.deepEqual(graph.nodes.find(n => n.id === 'S').categories, ['citation', 'semantic', 'keyword']);
 });
+test('a lone relation is drawn straight while parallel categories fan apart', () => {
+  const graph = buildSpaceGraph(payload([root('A')], [...['citation', 'semantic', 'keyword'].map(c => group('A', ['S'], c)), group('A', ['T'])]));
+  assert.equal(graph.edges.find(e => e.target === 'T').bend, 0);
+  assert.equal(new Set(graph.edges.filter(e => e.target === 'S').map(e => e.bend)).size, 3);
+});
+test('four roots are ordered on the ring so roots sharing a paper sit next to each other', () => {
+  const graph = buildSpaceGraph(payload(['A', 'B', 'C', 'D'].map(root), [group('A', ['S']), group('C', ['S'])]));
+  const [a, b, c, d] = ['A', 'B', 'C', 'D'].map(id => graph.nodes.find(n => n.id === id));
+  assert.ok(Math.hypot(a.x - c.x, a.y - c.y) < Math.hypot(a.x - b.x, a.y - b.y) + 1 || Math.hypot(a.x - c.x, a.y - c.y) < Math.hypot(a.x - d.x, a.y - d.y) + 1);
+});
 test('citation arrows require direct evidence and reciprocal reports do not become mutual citations', () => {
   const outgoing = { ...paper('B'), evidence: [{ type: 'out' }] };
   const incoming = { ...paper('A'), evidence: [{ type: 'in' }] };

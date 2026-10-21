@@ -42,6 +42,10 @@
 .space-edge.is-dim { opacity:.12; }
 .space-edge-line { transition:stroke-width 160ms; }
 .is-settling .space-edge-line,.is-settling .space-edge-hit { transition:d 600ms cubic-bezier(.22,.7,.2,1); }
+.space-edge-casing { pointer-events:none; }
+.space-zone { pointer-events:none; transition:opacity 180ms; }
+.space-zone.is-dim { opacity:.3; }
+.is-settling .space-zone { transition:cx 600ms cubic-bezier(.22,.7,.2,1),cy 600ms cubic-bezier(.22,.7,.2,1),r 600ms cubic-bezier(.22,.7,.2,1),opacity 180ms; }
 .space-edge-hit { cursor:pointer; }
 .space-edge-trace { opacity:.5; stroke-dasharray:1; animation:space-trace 550ms ease-out forwards; }
 @keyframes space-trace { from { stroke-dashoffset:1; } to { stroke-dashoffset:0; opacity:0; } }
@@ -60,7 +64,7 @@
 .space-node.is-promoted .space-orb { animation:space-promote 500ms cubic-bezier(.2,.8,.2,1) both; }
 @keyframes space-promote { from { opacity:.6; transform:scale(calc(var(--grow) * .4)); } to { opacity:1; transform:scale(var(--grow)); } }
 .space-node-label { position:absolute; left:0; top:calc(var(--d) * var(--grow) / 2 + 7px * var(--inv)); width:var(--label-width); padding:0; border:0; background:none; box-shadow:none; transform:translateX(-50%) scale(var(--inv)); transform-origin:50% 0; text-align:center; pointer-events:none; }
-.space-node-title { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-ui); font-size:12px; font-weight:400; line-height:1.6; color:#68758a; }
+.space-node-title { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-ui); font-size:12px; font-weight:400; line-height:1.6; color:#68758a; text-shadow:0 0 2px #fafbfd,0 0 4px #fafbfd,0 0 6px #fafbfd; }
 .is-center .space-node-title { font-size:13px; font-weight:600; color:#304363; }
 .space-node-meta { display:none; }
 .space-tooltip { position:absolute; z-index:7; width:max-content; max-width:min(350px,calc(100% - 24px)); padding:13px 16px; box-sizing:border-box; border:1px solid #dfe5ef; border-radius:9px; background:#fffffff9; box-shadow:0 8px 28px #20375416; pointer-events:none; animation:space-edge-in 120ms ease-out; }

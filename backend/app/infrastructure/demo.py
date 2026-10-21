@@ -111,7 +111,7 @@ def reserve_request(method, path):
     """Bound expensive tasks; reads, polling and saving conversations remain free."""
     expensive = method == "POST" and (path in {"/api/research/tasks", "/api/papers/upload", "/api/papers/import", "/api/compare", "/api/qa"}
         or path.startswith(("/api/tools/", "/api/research/tools/")) or path.endswith(("/resume", "/continue", "/analyze", "/messages"))
-        or path.startswith("/api/knowledge-graph/") or path == "/api/papers/analyze-batch")
+        or path.endswith("/fields/identify") or path.startswith("/api/knowledge-graph/") or path == "/api/papers/analyze-batch")
     if not expensive:
         return True
     if sum(p.stat().st_size for p in database_path().parent.iterdir() if p.is_file()) > 128 * 1024 * 1024:
@@ -171,7 +171,9 @@ async def workers():
     from app.services.analysis import analysis, analysis_store
     from app.services.papers import processing, conversations
     from app.services.retrieval import relation_precompute
+    from app.services.research_fields import evolution as field_evolution, identify as field_identify
     recovered = set()
+    fields_recovered = set()
 
     async def loop(kind):
         while True:
@@ -199,6 +201,11 @@ async def workers():
                                     await asyncio.to_thread(processing._finish, local_id, result["status"], result.get("message"), result.get("source_url"))
                                 except Exception:
                                     await asyncio.to_thread(processing._finish, local_id, "failed", "论文处理失败，可稍后重试")
+                        elif kind == "fields":
+                            if ident not in fields_recovered:
+                                await asyncio.to_thread(field_identify.recover)
+                                fields_recovered.add(ident)
+                            await asyncio.wait_for(field_identify.run_one(), timeout=300)
                         else:
                             await relation_precompute.run_one()
                     except asyncio.CancelledError:
@@ -220,6 +227,7 @@ async def workers():
                     await agent.close_demo_graph(ident)
                     await asyncio.to_thread(shutil.rmtree, folder)
                     recovered.discard(ident)
+                    fields_recovered.discard(ident)
             await asyncio.sleep(3600)
 
-    await asyncio.gather(loop("analysis"), loop("processing"), loop("relations"), cleanup())
+    await asyncio.gather(loop("analysis"), loop("processing"), loop("relations"), loop("fields"), field_evolution.report_worker(), cleanup())

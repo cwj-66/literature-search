@@ -109,7 +109,8 @@
 .scholar-node.is-author b,.scholar-node.is-venue b { font-size:11px; }
 .scholar-node.is-venue { background:#fff3df; border-color:#ffd493; color:#b56d19; border-radius:13px; }
 .scholar-node.is-venue i { color:#dc8b22; background:transparent; width:23px; height:23px; font-size:19px; }
-.scholar-node.is-muted { opacity:.22; }
+.scholar-node.is-muted { opacity:.36; filter:saturate(.4); box-shadow:none; }
+.scholar-node.is-linked { box-shadow:0 0 0 2px #fff,0 0 0 4px #5b8cff8c,0 6px 16px #2858a326; }
 .scholar-node:hover:not(.is-selected) { opacity:1; box-shadow:0 4px 15px #3d6dea24; }
 .scholar-node.is-paper.is-selected > i { background:#1459ee; color:#fff; }
 .scholar-node.is-keyword.is-selected { border-color:#0c8f62; background:#bff3dc; color:#08543a; box-shadow:inset 0 0 0 2px #fff; }
@@ -120,7 +121,10 @@
 .scholar-node-halo { fill:#1459ee22; stroke:#1459ee; stroke-width:3.5; }
 .scholar-node:focus-visible { outline:3px solid #76a0ff; outline-offset:3px; }
 .scholar-edge { cursor:pointer; transition:opacity .2s; }
-.scholar-edge.is-muted { opacity:.12; }
+.scholar-edge.is-muted { opacity:.13; }
+.scholar-edge-casing { fill:none; stroke:#fff; stroke-width:6; stroke-linecap:round; opacity:.92; }
+.scholar-edge-hit { fill:none; stroke:transparent; stroke-width:12; pointer-events:stroke; }
+.scholar-edge-label { paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round; font-weight:600; pointer-events:none; }
 .scholar-legend { position:absolute; bottom:17px; left:17px; display:flex; flex-wrap:wrap; gap:16px; align-items:center; max-width:calc(100% - 34px); padding:10px 13px; background:#fffffff0; border:1px solid #e8effa; border-radius:9px; box-shadow:0 3px 12px #345e9e0b; pointer-events:none; }
 .scholar-legend > span { display:flex; align-items:center; gap:6px; color:#57709a; font-size:10px; }
 .scholar-legend .is-paper .anticon { color:#3473ff; }.scholar-legend .is-keyword .anticon { color:#29ae7c; }.scholar-legend .is-author .anticon { color:#9668f5; }.scholar-legend .is-venue .anticon { color:#e6a23c; }

@@ -18,6 +18,7 @@ const AssistantPage = lazy(() => import("./pages/workspace/AssistantPage"));
 const WorkspacePapersPage = lazy(() => import("./pages/workspace/PapersPage"));
 const WorkspaceComparePage = lazy(() => import("./pages/workspace/ComparePage"));
 const ContentComparePage = lazy(() => import("./pages/workspace/ContentComparePage"));
+const ResearchFieldsPage = lazy(() => import("./pages/workspace/ResearchFieldsPage"));
 const WorkspaceGraphPage = lazy(() => import("./pages/workspace/GraphPage"));
 const PaperReadPage = lazy(() => import("./pages/workspace/PaperReadPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="/w/:id/library" element={<WorkspacePapersPage />} />
               <Route path="/w/:id/compare" element={<WorkspaceComparePage />} />
               <Route path="/w/:id/compare/table" element={<ContentComparePage />} />
+              <Route path="/w/:id/fields" element={<ResearchFieldsPage />} />
               <Route path="/w/:id/graph" element={<WorkspaceGraphPage />} />
               <Route path="/w/:id/p/:paperKey" element={<PaperReadPage />} />
               <Route path="/search" element={<SearchPage />} />

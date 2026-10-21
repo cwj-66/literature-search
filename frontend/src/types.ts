@@ -153,8 +153,9 @@ export interface AnalysisTask {
   reused: boolean;
 }
 
-export type ClaimKind = "summary" | "paper_type" | "research_problem" | "main_content" | "technical_method" | "method_step" | "innovation" | "evaluation" | "limitation" | "keyword";
+export type ClaimKind = "summary" | "paper_type" | "research_problem" | "main_content" | "technical_method" | "method_step" | "innovation" | "evaluation" | "limitation" | "keyword" | "research_field";
 export interface AnalysisClaim {
+  research_field?: CoreResearchField | null;
   kind: ClaimKind;
   text: string;
   evidence: { paragraph_id: string; quote: string }[];
@@ -166,7 +167,10 @@ export interface AnalysisClaim {
   conditions?: string | null;
 }
 
+export interface CoreResearchField { name: string; canonical_name: string; aliases: string[]; parent?: string | null }
+
 export interface AnalysisResult {
+  research_fields?: CoreResearchField[];
   summary?: string | null;
   paper_type?: string;
   claims?: AnalysisClaim[];

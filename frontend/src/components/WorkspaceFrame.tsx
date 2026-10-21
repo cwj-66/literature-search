@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Dropdown } from "antd";
-import { ArrowLeftOutlined, ApartmentOutlined, BookOutlined, EditOutlined, FileSearchOutlined, HomeOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined, ReadOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, ApartmentOutlined, BookOutlined, EditOutlined, FileSearchOutlined, FundProjectionScreenOutlined, HomeOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined, ReadOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { WorkspaceRenameDialog } from "./WorkspaceRenameDialog";
 import { useCollapsed } from "../hooks";
@@ -14,6 +14,7 @@ const NAV = [
   { section: "graph", label: "知识图谱", path: "graph", icon: <ApartmentOutlined /> },
   { section: "studio", label: "智能问答", path: "studio", icon: <MessageOutlined /> },
   { section: "compare", label: "文献推荐", path: "compare", icon: <ShareAltOutlined /> },
+  { section: "fields", label: "研究领域", path: "fields", icon: <FundProjectionScreenOutlined /> },
 ];
 export function WorkspaceFrame({ project, section, children }: { project: Project; section: WorkspaceSection; children: ReactNode }) {
   const { projects: list } = useProjects();

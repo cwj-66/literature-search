@@ -47,6 +47,7 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from app.infrastructure import demo
+    from app.services.research_fields import evolution as field_evolution, identify as field_identify
     if demo.enabled():
         worker = asyncio.create_task(demo.workers())
         try:
@@ -68,9 +69,15 @@ async def lifespan(_app: FastAPI):
     if os.getenv("RELATION_PRECOMPUTE_WORKER", "1") != "0":
         await asyncio.to_thread(relation_precompute.recover)
         relation_worker = asyncio.create_task(relation_precompute.worker())
+    field_worker = asyncio.create_task(field_evolution.report_worker())
+    identification_worker = asyncio.create_task(field_identify.worker())
     try:
         yield
     finally:
+        for task in (field_worker, identification_worker):
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
         if relation_worker:
             relation_worker.cancel()
             with suppress(asyncio.CancelledError):
@@ -88,6 +95,8 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="文献检索", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 from app.infrastructure.demo import DemoMiddleware
 app.add_middleware(DemoMiddleware)
+from app.services.research_fields.api import router as field_router
+app.include_router(field_router)
 app.include_router(conversation_router)
 app.include_router(assistant_chat_router)
 app.add_middleware(

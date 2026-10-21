@@ -143,8 +143,16 @@ class EvidenceReference(BaseModel):
     quote: str = Field(min_length=8, max_length=900)
 
 
+class ResearchField(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    canonical_name: str = Field(min_length=2, max_length=140)
+    aliases: list[str] = Field(default_factory=list, max_length=8)
+    parent: str | None = Field(None, max_length=140)
+
+
 class AnalysisClaim(BaseModel):
-    kind: Literal["summary", "research_problem", "main_content", "technical_method", "method_step", "innovation", "evaluation", "limitation", "keyword", "paper_type"]
+    research_field: ResearchField | None = None
+    kind: Literal["summary", "research_problem", "main_content", "technical_method", "method_step", "innovation", "evaluation", "limitation", "keyword", "paper_type", "research_field"]
     text: str = Field(min_length=1, max_length=2000)
     evidence: list[EvidenceReference] = Field(default_factory=list, max_length=6)
     dataset: str | None = Field(None, max_length=300)
@@ -166,6 +174,7 @@ class SourceParagraph(BaseModel):
 
 
 class AnalysisFields(BaseModel):
+    research_fields: list[ResearchField] = Field(default_factory=list, max_length=3)
     summary: str | None = None
     paper_type: str = "未知"
     claims: list[AnalysisClaim] = Field(default_factory=list)

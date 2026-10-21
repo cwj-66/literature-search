@@ -122,6 +122,16 @@ def connection():
                 description TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS paper_fields (
+                local_id TEXT NOT NULL REFERENCES papers(local_id) ON DELETE CASCADE,
+                field_id TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                PRIMARY KEY(local_id, field_id)
+            );
+            CREATE TABLE IF NOT EXISTS field_identifications (
+                local_id TEXT PRIMARY KEY REFERENCES papers(local_id) ON DELETE CASCADE,
+                status TEXT NOT NULL DEFAULT 'queued', error TEXT, updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS app_config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
