@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Link } from "react-router-dom";
 import { prepareWorkspace, researchDecision, startResearch, uploadPaper, workspacePapers, fetchResearchTask, cancelResearchTask } from "../../api";
 import { projects, useProjects } from "../../projects";
-import { ResearchSources } from "../../components/ResearchSources";
 import type { ResearchChat, ResearchTurn as Turn } from "../../researchChats";
 import { CopyOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
 import { Button, message } from "antd";
@@ -15,7 +14,7 @@ import { useWorkspaceProject } from "./shared";
 
 
 
-const WELCOME = ["你好！我是你的 AI 研究助手。", "告诉我研究主题和要求，我可以帮你搜索、筛选学术论文，也可以回答一般问题。论文关系和知识图谱请在对应模块中查看。"];
+const WELCOME = ["你好！我是检索助手。", "告诉我研究主题和要求，我可以帮你搜索、筛选学术论文，也可以回答一般问题。针对已收录论文提问，请到智能问答并勾选论文。"];
 const RESEARCH_STEP: Record<string, string> = {
   route: "理解研究目标", plan: "制定研究计划", prepare: "理解论文需求", search: "寻找相关论文",
   finding: "判断下一步检索方向", detail: "查看候选论文详情",
@@ -264,7 +263,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                   <p>{turn.task.interrupt?.hint || "请确认本次操作后继续。"}</p>
                   {turn.task.interrupt?.queries?.map(query => <p key={query}>{query}</p>)}
                   {turn.task.interrupt?.paper_ids?.map(ref => <p key={ref}>{project?.papers[ref]?.paper.title || ref}</p>)}
-                  {turn.task.interrupt?.type === "clarify" ? <p className="small-print">请在上方资料栏中添加论文，再点击确认继续。</p> : null}
+                  {turn.task.interrupt?.type === "clarify" ? <p className="small-print">可上传 PDF，或到智能问答勾选论文后再提问。</p> : null}
                   <button type="button" disabled={busy || disabled} onClick={() => void decide(turn, true)}>确认并继续</button>{" "}
                   <button type="button" disabled={busy || disabled} onClick={() => void decide(turn, false)}>拒绝本次操作</button>
                 </div> : null}
@@ -279,7 +278,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
         </div>
         {pollError ? <p className="assistant-attach-note" role="status">{pollError}</p> : null}
         {attachNote ? <p className="assistant-attach-note" role="status">{attachNote}</p> : null}
-        <p className="research-access-hint">{selectedIds.length ? `已选择 ${selectedIds.length} 篇本地资料；搜索新论文无需选择本地资料。` : "可以直接输入需求，搜索和筛选论文。"}</p>
+        <p className="research-access-hint">{selectedIds.length ? <>本对话还留有 {selectedIds.length} 篇已选资料。<button type="button" className="link-button" disabled={busy || disabled} onClick={() => setSelectedIds([])}>清除</button> 按论文提问请到智能问答勾选范围。</> : "可以直接输入需求，搜索和筛选论文。"}</p>
         <form className="assistant-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
           <button type="button" className="assistant-clip" aria-label="上传 PDF" disabled={attaching || busy || disabled} onClick={() => fileRef.current?.click()}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 12.2 14.6 6a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a4.4 4.4 0 0 1-6.2-6.2l7.6-7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
@@ -294,7 +293,6 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
           <input ref={fileRef} hidden type="file" accept=".pdf,application/pdf" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void onAttach(file); }} />
         </form>
       </div>
-      <ResearchSources currentId={id} selected={selectedIds} onChange={setSelectedIds} disabled={busy || disabled} />
     </div>
   </div>;
 }

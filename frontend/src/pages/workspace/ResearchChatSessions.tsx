@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Dropdown, Empty, Input, Modal, Segmented, message } from "antd";
-import { CopyOutlined, DeleteOutlined, EllipsisOutlined, ExportOutlined, PushpinFilled, SearchOutlined } from "@ant-design/icons";
+import { CopyOutlined, DeleteOutlined, EllipsisOutlined, ExportOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, PushpinFilled, SearchOutlined } from "@ant-design/icons";
 import { Link, useSearchParams } from "react-router-dom";
 import { RenameDialog } from "../../components/RenameDialog";
 import { exportChat, useResearchChats, type ResearchChat } from "../../researchChats";
 import { ResearchConversation } from "./ResearchConversation";
+import { useCollapsed } from "../../hooks";
 
 export function ResearchChatSessions({ id, name }: { id: string; name: string }) {
   const store = useResearchChats(id, name);
@@ -14,6 +15,7 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
   const [busy, setBusy] = useState(false);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [messageApi, context] = message.useMessage();
+  const [collapsed, toggleCollapsed] = useCollapsed("sg-research-chats");
   const seeded = useRef(false);
   const visible = store.chats.filter(chat => !!chat.archived === archived &&
     `${chat.title}\n${chat.turns.map(turn => `${turn.question}\n${turn.task?.answer ?? ""}`).join("\n")}`.toLowerCase().includes(query.trim().toLowerCase()))
@@ -31,7 +33,7 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
   useEffect(() => {
     if (store.ready && params.get("papers") && !seeded.current) { seeded.current = true; create(undefined, params.get("papers")!.split(",").filter(Boolean)); }
   }, [store.ready]);
-  useEffect(() => { document.title = `${active?.title ?? "研究助手"} - ${name}`; }, [active?.title, name]);
+  useEffect(() => { document.title = `${active?.title ?? "检索助手"} - ${name}`; }, [active?.title, name]);
   function patch(chat: ResearchChat, changes: Partial<ResearchChat>) { store.patch(chat.id, changes); }
   function remove(chat: ResearchChat) {
     Modal.confirm({ title: `删除对话「${chat.title}」？`, content: "删除聊天记录和本对话的资料选择。工作区中的论文会保留。此操作无法撤销。",
@@ -49,9 +51,10 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
   }
   return <div className="research-layout">
     {context}
-    <aside className="research-chats" aria-label="研究对话列表">
-      <h2>研究助手</h2><Button type="primary" block disabled={!store.ready || busy} onClick={() => create()}>＋ 新建对话</Button>
-      <Input allowClear prefix={<SearchOutlined />} aria-label="搜索研究对话" placeholder="搜索名称或聊天内容" value={query} onChange={e => setQuery(e.target.value)} />
+    <aside className={`research-chats${collapsed ? " is-collapsed" : ""}`} aria-label="检索对话列表">
+      <div className="rail-head">{collapsed ? null : <h2>检索助手</h2>}<button type="button" className="side-collapse" aria-expanded={!collapsed} aria-label={collapsed ? "展开对话列表" : "收起对话列表"} title={collapsed ? "展开对话列表" : "收起对话列表"} onClick={toggleCollapsed}>{collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}</button></div>
+      <Button type="primary" aria-label="新建对话" block={!collapsed} icon={collapsed ? <PlusOutlined /> : undefined} disabled={!store.ready || busy} onClick={() => create()}>{collapsed ? null : "新建对话"}</Button>
+      {collapsed ? null : <><Input allowClear prefix={<SearchOutlined />} aria-label="搜索研究对话" placeholder="搜索名称或聊天内容" value={query} onChange={e => setQuery(e.target.value)} />
       <Segmented className="research-chat-filter" disabled={busy} block value={archived ? "archived" : "active"} onChange={value => { setArchived(value === "archived"); setParams({}); }}
         options={[{ label: "对话", value: "active" }, { label: `归档 ${store.chats.filter(c => c.archived).length}`, value: "archived" }]} />
       <p className="research-sync-state" role="status">{!store.ready ? "正在读取已保存对话…" : store.error ? "同步失败，浏览器副本已保留" : store.pending ? "正在保存到服务器…" : "已保存到服务器"}</p>
@@ -71,7 +74,7 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
           <button type="button" className="research-chat-more" aria-label={`对话操作：${chat.title}`} title="对话操作"><EllipsisOutlined /></button>
         </Dropdown>
       </div>)}{!visible.length && store.ready ? <p className="small-print">{query ? "没有匹配的对话" : archived ? "还没有归档对话" : "新建一个对话开始研究"}</p> : null}</div>
-      <Link to={`/w/${id}/studio`}>查看原研究台历史对话</Link>
+      <Link to={`/w/${id}/studio`}>打开智能问答</Link></>}
     </aside>
     <section className="research-conversation-main">
       {store.error ? <Alert type="warning" showIcon message={store.error} action={<Button size="small" onClick={store.retry}>重试同步</Button>} /> : null}
@@ -82,7 +85,7 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
         <ResearchConversation key={`${active.id}:${store.ready}`} id={id} chat={active} onBusy={setBusy} disabled={!store.ready || !!active.archived}
           onChange={changes => patch(active, changes)} />
       </> : <div className="research-empty"><Empty description={store.ready ? "开始一个研究对话，找论文、读论文或比较研究方法。" : "正在加载研究对话…"}>
-        <Button type="primary" disabled={!store.ready} onClick={() => create()}>新建研究对话</Button></Empty></div>}
+        <Button type="primary" disabled={!store.ready} onClick={() => create()}>新建对话</Button></Empty></div>}
     </section>
     <RenameDialog open={!!renaming} title="重命名对话" label="对话名称" value={renaming?.title ?? ""} maxLength={120}
       onClose={() => setRenameId(null)} onSave={title => { if (renaming) patch(renaming, { title, titleEdited: true }); }} />

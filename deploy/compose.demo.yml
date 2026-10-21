@@ -1,0 +1,10 @@
+# Layer over compose.yml; reuse the single API container and original data volume.
+services:
+  api:
+    group_add:
+      - "33" # Existing portfolio visitor database group; mount remains read-only.
+    environment:
+      PAPER_DEMO: "1"
+      PAPER_PORTFOLIO_DB: /app/visitor-data/visitors.sqlite3
+    volumes:
+      - /var/lib/chenwj-visitors:/app/visitor-data:ro

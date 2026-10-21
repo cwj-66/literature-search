@@ -46,9 +46,9 @@ export function WorkspaceEmpty({ workspaceId, title, description, art }: {
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
           去论文搜索
         </Link>
-        <Link className="empty-state-secondary" to={`/w/${workspaceId}`}>
+        <Link className="empty-state-secondary" to={`/w/${workspaceId}/research`}>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 4.2h9.6v6.1H6.4L3.2 12.6V4.2Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
-          去 AI 研究助手
+          去检索助手
         </Link>
       </div>
     </section>

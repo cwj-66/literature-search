@@ -55,6 +55,21 @@
 }
 
 /* Sidebar shell (top-level pages) */
+.side-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6d82a8;
+  cursor: pointer;
+}
+.side-collapse:hover { background: #e7efff; color: #1459ee; }
+.side-collapse:focus-visible { outline: 2px solid #1459ee; outline-offset: 2px; }
 .shell-side {
   position: sticky;
   top: 0;
@@ -68,12 +83,19 @@
   padding: 22px 14px;
   background: transparent;
 }
+.shell-side > .side-collapse { position: absolute; top: 18px; right: 10px; z-index: 2; }
+.shell-side.is-collapsed { width: 76px; padding-inline: 10px; align-items: center; }
+.shell-side.is-collapsed > .side-collapse { position: static; margin-bottom: 8px; }
+.shell-side.is-collapsed .shell-brand { justify-content: center; padding: 2px 0 12px; }
+.shell-side.is-collapsed .shell-label { display: none; }
+.shell-side.is-collapsed .shell-nav { width: 100%; }
+.shell-side.is-collapsed .shell-nav a { justify-content: center; padding: 0; gap: 0; }
 
 .shell-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 2px 8px 26px;
+  padding: 2px 36px 26px 8px;
   color: var(--ink);
   font-family: var(--font-read);
   font-size: 17px;
@@ -438,7 +460,8 @@
 }
 @media (max-width: 860px) {
   .app { flex-direction: column; }
-  .shell-side {
+  .shell-side,
+  .shell-side.is-collapsed {
     position: sticky;
     top: 0;
     z-index: 60;
@@ -458,10 +481,17 @@
     box-shadow: var(--shadow-xs);
     scrollbar-width: none;
   }
+  .shell-side > .side-collapse,
+  .shell-side.is-collapsed > .side-collapse { display: none; }
+  .shell-side.is-collapsed .shell-label { display: inline; }
+  .shell-side.is-collapsed .shell-brand { justify-content: flex-start; padding: 0 10px 0 2px; }
+  .shell-side.is-collapsed .shell-nav a { justify-content: flex-start; padding: 0 10px; gap: 11px; }
   .shell-side::-webkit-scrollbar { display: none; }
   .shell-brand { padding: 0 10px 0 2px; }
   .shell-brand svg { width: 28px; height: 28px; }
-  .shell-brand span { display: none; }
+  .shell-brand span,
+  .shell-side.is-collapsed .shell-brand .shell-label { display: none; }
+  .shell-side.is-collapsed .shell-nav .shell-label { display: inline; }
   .shell-nav { flex: 0 1 auto; flex-direction: row; gap: 2px; min-width: 0; overflow-x: auto; }
   .shell-nav::-webkit-scrollbar { display: none; }
   .shell-nav a { height: 34px; flex: none; padding: 0 10px; font-size: var(--fs-sm); white-space: nowrap; }
@@ -489,3 +519,10 @@
   .paper-title { font-size: 16px; }
   .paper-facts { font-size: var(--fs-xs); }
 }
+/* The shared portfolio session applies to all demo pages. */
+.demo-banner { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; padding: 9px 20px; background: #eaf1ff; color: #264677; font-size: 12px; line-height: 1.6; }
+.demo-banner a { white-space: nowrap; color: inherit; }
+.app:has(> .demo-banner) { padding-top: 38px; }
+.app > .demo-banner { position: fixed; inset: 0 0 auto; z-index: 100; }
+.app:has(> .demo-banner) .shell-side { top: 38px; height: calc(100dvh - 38px); }
+@media (max-width: 600px) { .demo-banner { padding: 8px 12px; } .app:has(> .demo-banner) { padding-top: 58px; } }

@@ -1164,6 +1164,8 @@ def build(checkpointer=None):
 
 _GRAPH = None
 _CHECKPOINTER = None
+_DEMO_GRAPHS = {}
+_DEMO_GRAPH_LOCK = asyncio.Lock()
 
 
 async def make_async_checkpointer():
@@ -1182,6 +1184,14 @@ async def make_async_checkpointer():
 
 async def graph():
     global _GRAPH, _CHECKPOINTER
+    from app.infrastructure.demo import visitor
+    ident = visitor.get()
+    if ident:
+        async with _DEMO_GRAPH_LOCK:
+            if ident not in _DEMO_GRAPHS:
+                saver = await make_async_checkpointer()
+                _DEMO_GRAPHS[ident] = (build(saver), saver)
+            return _DEMO_GRAPHS[ident][0]
     if _GRAPH is None:
         _CHECKPOINTER = await make_async_checkpointer()
         _GRAPH = build(_CHECKPOINTER)
@@ -1190,12 +1200,20 @@ async def graph():
 
 async def reset_graph():
     global _GRAPH, _CHECKPOINTER
+    for ident in list(_DEMO_GRAPHS):
+        await close_demo_graph(ident)
     saver = _CHECKPOINTER
     _GRAPH = None
     _CHECKPOINTER = None
     conn = getattr(saver, "conn", None)
     if conn is not None:
         await conn.close()
+
+
+async def close_demo_graph(ident):
+    entry = _DEMO_GRAPHS.pop(ident, None)
+    if entry and getattr(entry[1], "conn", None) is not None:
+        await entry[1].conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1205,6 +1223,12 @@ async def reset_graph():
 _ACTIVE: set[str] = set()
 _BACKGROUND: dict[str, asyncio.Task] = {}
 _CHANNELS: dict[str, "_Channel"] = {}
+
+
+def _runtime_id(task_id):
+    from app.infrastructure.demo import visitor
+    ident = visitor.get()
+    return f"{ident}:{task_id}" if ident else task_id
 
 
 class _Channel:
@@ -1254,6 +1278,7 @@ async def _snapshot(task_id: str) -> tuple[dict | None, object, list]:
 
 
 def _claim_local(task_id: str) -> None:
+    task_id = _runtime_id(task_id)
     if task_id in _ACTIVE:
         raise TaskConflict("任务正在执行，不能重复启动或恢复")
     _ACTIVE.add(task_id)
@@ -1261,6 +1286,7 @@ def _claim_local(task_id: str) -> None:
 
 
 def _release_local(task_id: str) -> None:
+    task_id = _runtime_id(task_id)
     _ACTIVE.discard(task_id)
     channel = _CHANNELS.get(task_id)
     if channel is not None:
@@ -1312,7 +1338,7 @@ async def _prepare_resume(task_id: str, value) -> tuple[object, dict]:
 
 async def _run_segment(task_id: str, graph_input, max_seconds, recovering: bool = False) -> dict:
     """执行一段图运行（直到完成或中断），逐节点心跳与广播，结束时落快照。"""
-    channel = _CHANNELS.get(task_id) or _Channel()
+    channel = _CHANNELS.get(_runtime_id(task_id)) or _Channel()
     config = {"configurable": {"thread_id": task_id}, "recursion_limit": 128}
     store.set_deadline(task_id, max_seconds)
     meter = llm.UsageMeter()
@@ -1372,6 +1398,7 @@ async def _run_segment(task_id: str, graph_input, max_seconds, recovering: bool 
 
 
 def _spawn(task_id: str, coro) -> None:
+    task_id = _runtime_id(task_id)
     task = asyncio.create_task(coro)
     _BACKGROUND[task_id] = task
 
@@ -1444,7 +1471,7 @@ async def continue_task(task_id: str, background: bool = False) -> dict | None:
 
 async def subscribe(task_id: str):
     """订阅本进程内任务的进度广播（先回放已发生的事件）。"""
-    channel = _CHANNELS.get(task_id)
+    channel = _CHANNELS.get(_runtime_id(task_id))
     if channel is None:
         return
     queue: asyncio.Queue = asyncio.Queue()
@@ -1463,7 +1490,7 @@ async def subscribe(task_id: str):
 
 async def watch(task_id: str):
     """SSE 只订阅：本进程有广播则订阅，否则下发检查点状态快照。"""
-    if task_id in _CHANNELS:
+    if _runtime_id(task_id) in _CHANNELS:
         async for item in subscribe(task_id):
             yield item
         return
@@ -1476,7 +1503,7 @@ async def stream_run(goal: str, year_from: int | None = None, year_to: int | Non
                      task_id: str | None = None, mode: str = "auto", context: dict | None = None):
     """兼容入口：未在执行的任务先在后台启动，再订阅进度；客户端断开不影响任务继续执行。"""
     task_id = task_id or uuid4().hex
-    if task_id not in _ACTIVE:
+    if _runtime_id(task_id) not in _ACTIVE:
         await start_background(goal, year_from, year_to, auto_approve, task_id=task_id, mode=mode, context=context)
     async for item in subscribe(task_id):
         yield item
@@ -1496,11 +1523,11 @@ async def recover_state(task_id: str) -> dict | None:
         payload = public_state(state)
         payload["status"] = status
         payload["interrupt"] = paused
-        return {"task_id": task_id, "status": status, "state": payload, "interrupt": paused, "next": nxt, "active": task_id in _ACTIVE}
+        return {"task_id": task_id, "status": status, "state": payload, "interrupt": paused, "next": nxt, "active": _runtime_id(task_id) in _ACTIVE}
     if row is None:
         return None
     return {"task_id": task_id, "status": row.get("status"), "state": row, "interrupt": row.get("interrupt"), "next": [],
-            "active": task_id in _ACTIVE, "checkpoint_missing": True}
+            "active": _runtime_id(task_id) in _ACTIVE, "checkpoint_missing": True}
 
 
 def request_cancel(task_id: str) -> None:

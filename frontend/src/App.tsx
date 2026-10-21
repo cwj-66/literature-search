@@ -4,6 +4,7 @@ import zhCN from "antd/locale/zh_CN";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/AppLayout";
 import { antdTheme } from "./theme";
+import { isDemo, DEMO_BASE } from "./demo";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
 const WorkspaceHome = lazy(() => import("./pages/workspace/HomePage"));
@@ -24,7 +25,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 export default function App() {
   return (
     <ConfigProvider button={{ autoInsertSpace: false }} locale={zhCN} theme={antdTheme}>
-      <BrowserRouter>
+      <BrowserRouter basename={isDemo ? DEMO_BASE : undefined}>
         <AppLayout>
           <Suspense fallback={<div className="route-loading" role="status">正在加载页面…</div>}>
             <Routes>

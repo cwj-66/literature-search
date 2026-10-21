@@ -59,6 +59,9 @@ def get_queue() -> asyncio.Queue:
 
 
 async def enqueue(task_id: str) -> None:
+    from app.infrastructure.demo import visitor
+    if visitor.get():
+        return  # The demo worker polls this visitor's durable queue.
     await get_queue().put(task_id)
 
 

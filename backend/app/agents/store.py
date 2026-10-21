@@ -33,7 +33,8 @@ def _now() -> str:
 
 
 def checkpoint_path() -> Path:
-    base = Path(os.getenv("PAPER_DB_PATH", str(Path(__file__).resolve().parents[2] / "data" / "papers.sqlite3")))
+    from app.infrastructure.demo import database_path
+    base = database_path()
     return base.with_name("research-checkpoints.sqlite3")
 
 

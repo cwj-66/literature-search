@@ -46,6 +46,17 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    from app.infrastructure import demo
+    if demo.enabled():
+        worker = asyncio.create_task(demo.workers())
+        try:
+            yield
+        finally:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+            await agent.reset_graph()
+        return
     await asyncio.to_thread(conversations.recover)
     pending = await asyncio.to_thread(analysis_store.recover)
     queue = analysis.get_queue()
@@ -75,6 +86,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="文献检索", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+from app.infrastructure.demo import DemoMiddleware
+app.add_middleware(DemoMiddleware)
 app.include_router(conversation_router)
 app.include_router(assistant_chat_router)
 app.add_middleware(

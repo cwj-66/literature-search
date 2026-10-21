@@ -14,6 +14,7 @@ backend/pytest-cache-files-*/
 .playwright-mcp/
 .analysis-test-output.txt
 .cursor-checks.txt
+.qa/
 .graph-check-output.txt
 .progressive-checks.txt
 backend/.*tests.txt

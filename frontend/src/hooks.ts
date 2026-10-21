@@ -15,6 +15,18 @@ export function useSessionState<T>(key: string, initial: T) {
   return [value, setValue] as const;
 }
 
+export function useCollapsed(key: string) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(key) === "1"; } catch { return false; }
+  });
+  const toggle = () => setCollapsed(value => {
+    const next = !value;
+    try { localStorage.setItem(key, next ? "1" : "0"); } catch { return next; }
+    return next;
+  });
+  return [collapsed, toggle] as const;
+}
+
 export function useMediaQuery(query: string) {
   return useSyncExternalStore(
     listener => {

@@ -8,7 +8,8 @@ from pathlib import Path
 
 @contextmanager
 def connection():
-    path = Path(os.getenv("PAPER_DB_PATH", str(Path(__file__).resolve().parents[2] / "data" / "papers.sqlite3")))
+    from app.infrastructure.demo import database_path
+    path = database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=10)
     db.row_factory = sqlite3.Row

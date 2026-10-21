@@ -3,6 +3,7 @@ import { Alert, Button, Input, Switch } from "antd";
 import { ApiOutlined, PlusOutlined } from "@ant-design/icons";
 import { fetchSources, saveSemanticKey } from "../api";
 import { providers, useProviders, type ProviderConn, type ProviderModel } from "../providers";
+import { isDemo, demoInfo } from "../demo";
 
 const SECTIONS = [{ key: "providers", label: "模型提供商" }, { key: "sources", label: "检索数据源" }, { key: "about", label: "说明" }] as const;
 
@@ -86,6 +87,17 @@ export default function SettingsPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   useEffect(() => { document.title = "设置 - 文献研究助手"; }, []);
+  if (isDemo) return <main className="settings-main">
+    <h1 className="page-title">演示配置</h1>
+    <section className="provider-card"><h2>演示模型</h2>
+      <p>{demoInfo?.model_configured ? "已配置，可直接在检索助手中提问。" : "模型暂不可用，请联系作者。"}</p>
+      <p>当前模型：{demoInfo?.model}</p>
+      <p>模型和检索服务由作者配置，无需填写 API Key。</p>
+    </section>
+    <section className="provider-card"><h2>体验数据</h2><p>每位访客有独立的示例工作区。新建工作区、增删文献与对话不会改变其他访客的体验。</p>
+      <p>记录在闲置 7 天后清理，不提供长期个人存储。每天最多发起 30 次研究或处理请求。</p>
+    </section>
+  </main>;
   return <div className="settings-page">
     <nav className="settings-nav" aria-label="设置分区">
       {SECTIONS.map(item => <button type="button" key={item.key} aria-current={section === item.key ? "page" : undefined} onClick={() => setSection(item.key)}>{item.label}</button>)}
