@@ -16,6 +16,7 @@ export function mergeRelationSnapshots(parts: RelateResponse[]): RelateResponse 
   const centers = parts.flatMap(p => p.centers).filter((c, i, all) => all.findIndex(other => other.id === c.id) === i)
     .map((c, i) => ({ ...c, color_index: i }));
   return { centers, satellites: parts.flatMap(p => p.satellites), center_edges: parts.flatMap(p => p.center_edges),
+    pending_ids: [...new Set(parts.flatMap(p => p.pending_ids ?? []))], precompute: parts.flatMap(p => p.precompute ?? []),
     overlaps: parts.flatMap(p => p.overlaps), warnings: [...new Set(parts.flatMap(p => p.warnings))],
     computed_at: parts.map(p => p.computed_at).sort().at(-1) ?? "" };
 }

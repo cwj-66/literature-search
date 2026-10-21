@@ -1,12 +1,13 @@
-"""Multi-center relationship graph: per-center satellites, overlaps, and pairwise similarity."""
+"""Assemble selected papers and saved recommendations without external calls."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
 
-from app.infrastructure import embeddings
+from app.services.papers import library
 from app.services.papers.paper_merge import identity_keys
-from app.services.retrieval import recommend, relation_score
+from app.services.retrieval import recommend, relation_precompute
 
 logger = logging.getLogger(__name__)
 
@@ -58,20 +59,26 @@ async def relate(ids: list[str], refresh: bool = False) -> dict:
     warnings: list[str] = []
     centers = []
     satellites = []
-    seeds = []
+    pending_ids = []
+    precompute = []
     for raw in ids:
         try:
-            seed = await recommend.load_seed(raw)
+            seed = await asyncio.to_thread(library.get_paper, raw)
+            if seed is None:
+                _warn(warnings, f"论文 {raw} 尚未入库")
+                continue
         except Exception as exc:
             _warn(warnings, f"论文 {raw} 关系计算失败：{exc}")
             continue
-        try:
-            payload = await recommend.bundle(raw, refresh, seed=seed)
-        except Exception:
-            logger.exception("relate discovery did not finish for %s", raw)
-            # The user selected a known paper; failed discovery must not make its large node disappear.
-            payload = {"recommendations": {"groups": [{"key": key, "status": "unavailable",
-                         "matched_count": 0, "items": []} for key in CATEGORIES], "warnings": []}}
+        await asyncio.to_thread(relation_precompute.ensure_job, seed.local_id, refresh)
+        snapshot = await asyncio.to_thread(relation_precompute.read, seed.local_id)
+        preparing = snapshot["status"] in {"queued", "running"}
+        if preparing:
+            pending_ids.append(seed.local_id)
+        precompute.append({"paper_id": seed.local_id, "status": snapshot["status"], "computed_at": snapshot["computed_at"]})
+        payload = snapshot["payload"] or {"recommendations": {"groups": [{"key": key,
+            "status": "pending" if preparing else "unavailable", "matched_count": 0, "items": []}
+            for key in CATEGORIES], "warnings": []}}
         seed_id = recommend.canonical_id(seed)
         if any(center["id"] == seed_id for center in centers):
             continue
@@ -86,7 +93,6 @@ async def relate(ids: list[str], refresh: bool = False) -> dict:
                         "title": seed.title, "year": seed.year, "authors": list(seed.authors),
                         "venue": seed.venue, "citation_count": seed.citation_count,
                         "color_index": index, "similarities": {}})
-        seeds.append(seed)
         groups = payload["recommendations"]["groups"]
         by_key = {group["key"]: group for group in groups}
         satellites.extend({"center_id": seed_id, "category": key,
@@ -123,18 +129,7 @@ async def relate(ids: list[str], refresh: bool = False) -> dict:
                 edge_keys.add(key)
                 center_edges.append(edge)
 
-    if len(centers) > 1:
-        texts = [relation_score.embed_input(seed.title, seed.abstract) for seed in seeds]
-        try:
-            _, vectors = await embeddings.embed_siliconflow(texts, persist=False)
-            for left in range(len(centers)):
-                for right in range(left + 1, len(centers)):
-                    similarity = round(relation_score.cosine(vectors.get(texts[left]), vectors.get(texts[right])), 4)
-                    centers[left]["similarities"][centers[right]["id"]] = similarity
-                    centers[right]["similarities"][centers[left]["id"]] = similarity
-        except embeddings.EmbeddingError as exc:
-            _warn(warnings, f"{exc.message}；主论文距离按均布展示")
-
     return {"centers": centers, "satellites": satellites, "center_edges": center_edges,
             "overlaps": overlaps, "warnings": warnings,
+            "pending_ids": list(dict.fromkeys(pending_ids)), "precompute": precompute,
             "computed_at": datetime.now(timezone.utc).isoformat()}

@@ -6,7 +6,7 @@ import httpx
 from app.infrastructure import embeddings
 from app.schemas import LocalPaperOut, PaperOut
 from app.services.analysis.analysis import ResolveError
-from app.services.retrieval import recommend, relate
+from app.services.retrieval import recommend, relate, relation_precompute
 
 CATEGORIES = ("citation", "semantic", "keyword")
 
@@ -34,22 +34,24 @@ def payload(group_items: dict[str, list[dict]], fused: list[dict] | None = None,
 class RelateTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         patchers = [
-            patch.object(recommend, "load_seed", new=AsyncMock()),
+            patch.object(relate.library, "get_paper"),
             patch.object(recommend, "bundle", new=AsyncMock()),
+            patch.object(relation_precompute, "read"),
+            patch.object(relation_precompute, "ensure_job"),
             patch.object(embeddings, "embed_siliconflow", new=AsyncMock(side_effect=self._vectors)),
         ]
         for p in patchers:
             p.start()
             self.addCleanup(p.stop)
         self.seeds = {"local-1": seed("1", "Alpha"), "local-2": seed("2", "Beta")}
-        recommend.load_seed.side_effect = lambda raw: self.seeds[raw]
+        relate.library.get_paper.side_effect = lambda raw: self.seeds[raw]
 
     @staticmethod
     async def _vectors(texts, **kwargs):
         return "test-model", {text: [1.0, 0.0] for text in texts}
 
     def use_payloads(self, mapping):
-        recommend.bundle.side_effect = lambda raw, refresh, seed=None: mapping[raw]
+        relation_precompute.read.side_effect = lambda raw: {"payload": mapping[raw], "status": "ready", "computed_at": None}
 
     async def test_top_one_per_category_without_changing_candidate_ranking(self):
         groups = {key: [item(f"c1-{key}-{n}", relations=[key], categories=[key], strength=60 - n) for n in range(1, 8)] for key in CATEGORIES}
@@ -129,9 +131,8 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["overlaps"], [{"paper_id": "shared", "center_ids": ["arxiv:1", "arxiv:2"]}])
 
     async def test_discovery_failure_keeps_selected_center(self):
-        recommend.bundle.side_effect = TimeoutError("upstream timed out")
-        with self.assertLogs("app.services.retrieval.relate", level="ERROR"):
-            result = await relate.relate(["local-1"])
+        relation_precompute.read.return_value = {"payload": None, "status": "failed", "computed_at": None}
+        result = await relate.relate(["local-1"])
         self.assertEqual([c["id"] for c in result["centers"]], ["arxiv:1"])
         self.assertEqual([g["status"] for g in result["satellites"]], ["unavailable"] * 3)
 
@@ -166,19 +167,34 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
                 raise ResolveError(404, "没有找到这篇论文")
             return self.seeds[raw]
 
-        recommend.load_seed.side_effect = load
+        relate.library.get_paper.side_effect = load
         result = await relate.relate(["local-1", "bad"])
         self.assertEqual([c["id"] for c in result["centers"]], ["arxiv:1"])
         self.assertTrue(any("bad" in warning for warning in result["warnings"]))
 
-    async def test_embedding_unavailable_yields_null_distances(self):
+    async def test_graph_read_does_not_compute_embeddings_or_discovery(self):
         groups = {key: [item(f"a-{key}-1", categories=[key]), item(f"a-{key}-2", categories=[key])] for key in CATEGORIES}
         self.use_payloads({"local-1": payload(groups), "local-2": payload({key: [item(f"b-{key}-1", categories=[key]), item(f"b-{key}-2", categories=[key])] for key in CATEGORIES})})
         embeddings.embed_siliconflow.side_effect = embeddings.EmbeddingError("无可用向量")
         result = await relate.relate(["local-1", "local-2"])
         for center in result["centers"]:
             self.assertEqual(center["similarities"], {})
-        self.assertTrue(any("均布" in warning for warning in result["warnings"]))
+        embeddings.embed_siliconflow.assert_not_awaited()
+        recommend.bundle.assert_not_awaited()
+
+    async def test_pending_snapshot_returns_main_node_without_waiting(self):
+        relation_precompute.read.return_value = {"payload": None, "status": "queued", "computed_at": None}
+        result = await relate.relate(["local-1"])
+        self.assertEqual(result["pending_ids"], ["local-1"])
+        self.assertTrue(all(g["status"] == "pending" for g in result["satellites"]))
+        recommend.bundle.assert_not_awaited()
+
+    async def test_refresh_only_enqueues_and_keeps_saved_results(self):
+        self.use_payloads({"local-1": payload({"semantic": [item("B", categories=["semantic"])]})})
+        result = await relate.relate(["local-1"], True)
+        relation_precompute.ensure_job.assert_called_once_with("local-1", True)
+        self.assertEqual(result["satellites"][1]["items"][0]["id"], "B")
+        recommend.bundle.assert_not_awaited()
 
     async def test_no_backfill_from_fused_items(self):
         groups = {key: [item(f"chosen-{key}", categories=[key])] for key in CATEGORIES}

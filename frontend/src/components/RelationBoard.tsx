@@ -8,12 +8,12 @@ import type { RecommendationItem, RelateResponse } from "../types";
 import { paperLocation, workspacePaperPath } from "../workspace";
 
 const META: Record<RelationCategory, { name: string; color: string; dash: number[] }> = {
-  citation: { name: "引用关联", color: "#2f5db8", dash: [] },
-  semantic: { name: "主题相似", color: "#0f7c74", dash: [7, 5] },
-  keyword: { name: "关键词关联", color: "#b7791f", dash: [1.5, 5] },
+  citation: { name: "引用关联", color: "#3867e8", dash: [] },
+  semantic: { name: "主题相似", color: "#079888", dash: [7, 5] },
+  keyword: { name: "关键词关联", color: "#d38116", dash: [2, 5] },
 };
 const ROOT_COLORS = ["#24479e", "#6a4bb0", "#a8344f", "#0d6b64", "#8a5a12"];
-const DIAMETER = { center: 72, satellite: 28 };
+const DIAMETER = { center: 36, satellite: 13 };
 type Camera = { x: number; y: number; k: number };
 
 function frame(graph: SpaceGraph, width: number, height: number, floor: number): Camera {
@@ -23,14 +23,16 @@ function frame(graph: SpaceGraph, width: number, height: number, floor: number):
   return { k, x: (width - (maxX - minX) * k) / 2 - minX * k, y: 52 + (height - 120 - (maxY - minY) * k) / 2 - minY * k };
 }
 
-export function RelationBoard({ data, workspaceId, from, busy, saving, error, libraryIds, onSave, onRemove }: {
+export function RelationBoard({ data, workspaceId, from, busy, preparing, saving, error, libraryIds, onSave, onRemove }: {
   data: RelateResponse; workspaceId: string; from: string; busy: boolean; saving: boolean; error: string;
+  preparing: boolean;
   libraryIds: string[];
   onSave: (item: RecommendationItem, expand: boolean) => Promise<void>;
   onRemove: (id: string) => void;
 }) {
   const graph = useMemo(() => buildSpaceGraph(data), [data]);
   const [active, setActive] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const [categories, setCategories] = useState<RelationCategory[]>([...CATEGORY_ORDER]);
   const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
   const [size, setSize] = useState({ width: 1100, height: 700 });
@@ -82,7 +84,8 @@ export function RelationBoard({ data, workspaceId, from, busy, saving, error, li
 
   const visibleEdges = graph.edges.filter(e => categories.includes(e.category));
   const visibleIds = new Set([...graph.nodes.filter(n => n.center).map(n => n.id), ...visibleEdges.flatMap(e => [e.source, e.target])]);
-  const connected = new Set(active ? visibleEdges.filter(e => e.source === active || e.target === active).flatMap(e => [e.source, e.target]) : []);
+  const focusId = hovered ?? active;
+  const connected = new Set(focusId ? visibleEdges.filter(e => e.source === focusId || e.target === focusId).flatMap(e => [e.source, e.target]) : []);
   const byId = new Map(graph.nodes.map(n => [n.id, n]));
   const colorOf = (n: SpaceNode) => n.center ? ROOT_COLORS[n.center.color_index % ROOT_COLORS.length] : META[n.categories[0] ?? "semantic"].color;
   const k = camera.k, inv = 1 / k, grow = Math.pow(k, -0.6);
@@ -113,17 +116,15 @@ export function RelationBoard({ data, workspaceId, from, busy, saving, error, li
     const start = { x: a.x + (mx - a.x) / ta * ra, y: a.y + (my - a.y) / ta * ra };
     const end = { x: b.x + (mx - b.x) / tb * rb, y: b.y + (my - b.y) / tb * rb };
     const d = `M ${start.x} ${start.y} Q ${mx} ${my} ${end.x} ${end.y}`;
-    const lit = Boolean(active && (edge.source === active || edge.target === active));
-    const dim = Boolean(active) && !lit;
+    const lit = Boolean(focusId && (edge.source === focusId || edge.target === focusId));
+    const dim = Boolean(focusId) && !lit;
     const meta = META[edge.category];
-    const width = (1.1 + Math.max(0, Math.min(1, edge.strength ?? 0)) * 1.5 + (lit ? 0.6 : 0)) * inv;
-    const marker = edge.category === "citation" ? "url(#space-arrow)" : undefined;
+    const width = (2 + Math.max(0, Math.min(1, edge.strength ?? 0)) * 1.1 + (lit ? 0.6 : 0)) * inv;
     return <g key={edge.id} className={`space-edge${dim ? " is-dim" : ""}${lit ? " is-lit" : ""}`} data-source={edge.source} data-target={edge.target} data-category={edge.category}
       style={{ "--edge-color": meta.color } as CSSProperties}>
       <path className="space-edge-line" d={d} style={{ d: `path("${d}")` } as CSSProperties} fill="none" stroke={meta.color} strokeWidth={width}
         strokeDasharray={meta.dash.length ? meta.dash.map(v => v * inv).join(" ") : undefined} strokeLinecap="round"
-        markerEnd={edge.arrow === "out" || edge.arrow === "both" ? marker : undefined}
-        markerStart={edge.arrow === "in" || edge.arrow === "both" ? marker : undefined} />
+        />
       {lit ? <path key={active} className="space-edge-trace" d={d} pathLength={1} fill="none" stroke={meta.color} strokeWidth={width + inv} strokeLinecap="round" /> : null}
       <path d={d} fill="none" stroke="transparent" strokeWidth={14 * inv} pointerEvents="stroke" className="space-edge-hit"
         onClick={() => setActive(b.center && !a.center ? a.id : b.id)}><title>{meta.name} · {metricText(edge.item, edge.category)}</title></path>
@@ -161,10 +162,13 @@ export function RelationBoard({ data, workspaceId, from, busy, saving, error, li
   };
 
   const graphIssues = data.satellites.filter(g => g.status === "unavailable");
+  const hoverNode = graph.nodes.find(n => n.id === hovered);
+  const tooltipX = hoverNode ? Math.max(12, Math.min(size.width - Math.min(350, size.width - 24) - 12, hoverNode.x * k + camera.x + 22)) : 12;
+  const tooltipY = hoverNode ? Math.max(52, Math.min(size.height - 150, hoverNode.y * k + camera.y - 30)) : 52;
   return <section className={`space-board${settling ? " is-settling" : ""}${shown ? " has-panel" : ""}`} ref={boardRef} aria-label="论文空间关系网">
     <div className="space-heading">
       <strong>{data.centers.length} 篇主论文</strong><span>{graph.nodes.filter(n => !n.center).length} 篇关联论文</span>
-      {busy ? <span className="space-loading" role="status">正在展开关系</span> : null}
+      {busy || preparing ? <span className="space-loading" role="status">{preparing ? "后台正在准备关联" : "正在读取关系"}</span> : null}
     </div>
     <div className="space-controls" aria-label="视图控制">
       <button aria-label="放大" title="放大" onClick={() => zoom(1.25)}><PlusOutlined /></button>
@@ -187,13 +191,9 @@ export function RelationBoard({ data, workspaceId, from, busy, saving, error, li
       }}
       onPointerUp={() => { if (drag.current && !drag.current.moved) setActive(null); drag.current = null; setDragging(false); }}
       onPointerCancel={() => { drag.current = null; setDragging(false); }}>
-      <div className="space-world" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${k})`, "--inv": inv, "--grow": grow } as CSSProperties}>
+      <div className="space-world" style={{ width: graph.width, height: graph.height,
+        transform: `translate(${camera.x}px, ${camera.y}px) scale(${k})`, "--inv": inv, "--grow": grow } as CSSProperties}>
         <svg className="space-lines" width={graph.width} height={graph.height} aria-label="论文之间的真实关系">
-          <defs>
-            <marker id="space-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4.2" markerHeight="4.2" orient="auto-start-reverse">
-              <path d="M 0 1 L 9 5 L 0 9 z" fill={META.citation.color} />
-            </marker>
-          </defs>
           {visibleEdges.map(drawEdge)}
         </svg>
         {graph.nodes.filter(n => visibleIds.has(n.id)).map(node => {
@@ -205,10 +205,14 @@ export function RelationBoard({ data, workspaceId, from, busy, saving, error, li
           const label = Math.max(130, Math.min(node.center ? 232 : 188, (node.center ? 260 : 220) * k));
           const diameter = node.center ? DIAMETER.center : DIAMETER.satellite;
           return <button key={node.id} type="button" data-node={node.id} data-center={Boolean(node.center)}
-            className={`space-node${node.center ? " is-center" : ""}${shared ? " is-shared" : ""}${active === node.id ? " is-active" : ""}${active && !connected.has(node.id) && active !== node.id ? " is-dim" : ""}${promoted.includes(node.id) ? " is-promoted" : ""}`}
+            className={`space-node${node.center ? " is-center" : ""}${shared ? " is-shared" : ""}${active === node.id ? " is-active" : ""}${focusId && !connected.has(node.id) && focusId !== node.id ? " is-dim" : ""}${promoted.includes(node.id) ? " is-promoted" : ""}`}
             style={{ left: node.x, top: node.y, "--node-color": color, "--d": `${diameter}px`, "--label-width": `${label}px`, "--fx": `${origin.x}px`, "--fy": `${origin.y}px`,
               "--delay": `${node.center ? 0 : 80 + CATEGORY_ORDER.indexOf(node.categories[0] ?? "semantic") * 60}ms`, ...(ring ? { "--ring": ring } : {}) } as CSSProperties}
-            onClick={() => setActive(node.id)} aria-label={`${node.center ? "主论文" : "关联论文"}：${node.title}`} aria-pressed={active === node.id} title={node.title}>
+            onClick={() => { setHovered(null); setActive(node.id); }}
+            onPointerEnter={() => setHovered(node.id)} onPointerLeave={() => setHovered(null)}
+            onFocus={() => setHovered(node.id)} onBlur={() => setHovered(null)}
+            aria-describedby={hovered === node.id ? "space-title-tooltip" : undefined}
+            aria-label={`${node.center ? "主论文" : "关联论文"}：${node.title}`} aria-pressed={active === node.id}>
             <span className="space-node-inner">
               <span className="space-orb">{node.center ? <span>{data.centers.indexOf(node.center) + 1}</span> : null}</span>
               <span className="space-node-label"><span className="space-node-title">{node.title}</span>
@@ -218,6 +222,10 @@ export function RelationBoard({ data, workspaceId, from, busy, saving, error, li
         })}
       </div>
     </div>
+    {hoverNode ? <div id="space-title-tooltip" role="tooltip" className="space-tooltip" style={{ left: tooltipX, top: tooltipY }}>
+      <span>{hoverNode.center ? "主论文" : hoverNode.owners.length > 1 ? "共享关联论文" : "关联论文"} {hoverNode.year ?? ""}</span>
+      <strong>{hoverNode.title}</strong>
+    </div> : null}
     <div className="space-legend" aria-label="筛选关系类型">{CATEGORY_ORDER.map(key => <button key={key} aria-pressed={categories.includes(key)} onClick={() => setCategories(current => current.includes(key) ? current.filter(c => c !== key) : [...current, key])}>
       <svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke={META[key].color} strokeWidth="2" strokeLinecap="round" strokeDasharray={META[key].dash.join(" ") || undefined} /></svg>{META[key].name}</button>)}
       <span>每篇主论文每类取 1 篇</span></div>

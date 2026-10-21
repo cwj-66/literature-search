@@ -93,6 +93,21 @@ def connection():
                 computed_at TEXT NOT NULL,
                 PRIMARY KEY (source_local_id, cache_key)
             );
+            CREATE TABLE IF NOT EXISTS relation_snapshots (
+                local_id TEXT PRIMARY KEY REFERENCES papers(local_id) ON DELETE CASCADE,
+                payload TEXT NOT NULL,
+                version TEXT NOT NULL,
+                computed_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS relation_jobs (
+                local_id TEXT PRIMARY KEY REFERENCES papers(local_id) ON DELETE CASCADE,
+                status TEXT NOT NULL DEFAULT 'queued',
+                revision INTEGER NOT NULL DEFAULT 1,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                next_attempt REAL NOT NULL DEFAULT 0,
+                requested_at TEXT NOT NULL,
+                error TEXT
+            );
             CREATE TABLE IF NOT EXISTS citation_queries (
                 local_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,

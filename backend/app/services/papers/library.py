@@ -80,6 +80,9 @@ def save_paper(paper: PaperOut, reference: str) -> tuple[LocalPaperOut, bool]:
         keys.update(identity_keys(paper))
         keys.add(paper.id)
         db.executemany("INSERT OR REPLACE INTO paper_keys VALUES (?, ?)", ((key, local_id) for key in keys))
+        # Durable enqueue in the same transaction as import. No network work blocks saving.
+        db.execute("INSERT OR IGNORE INTO relation_jobs (local_id, requested_at) VALUES (?, ?)",
+                   (local_id, datetime.now(timezone.utc).isoformat()))
         return LocalPaperOut(**paper.model_dump(), local_id=local_id, imported_at=imported_at), created
 
 

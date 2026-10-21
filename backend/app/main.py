@@ -24,7 +24,7 @@ from app.schemas import (
 from app.services.analysis import analysis, analysis_store, attribution
 from app.services.knowledge_graph import knowledge_graph, themes, tools as knowledge_tools
 from app.services.papers import ccf, library, metadata, upload
-from app.services.retrieval import hybrid, recommend, relate, tools as relation_tools
+from app.services.retrieval import hybrid, recommend, relate, relation_precompute, tools as relation_tools
 from app.services.retrieval.search import SourceFailure, fetch_paper, normalize_query, search_papers, search_papers_stream, semantic_enabled, semantic_has_key
 import app.tools.analyze_paper as analyze_tool
 import app.tools.index_paper as index_tool
@@ -52,9 +52,17 @@ async def lifespan(_app: FastAPI):
         queue.put_nowait(task_id)
     worker = asyncio.create_task(analysis.worker(queue)) if os.getenv("ANALYSIS_WORKER", "1") != "0" else None
     import_worker = asyncio.create_task(processing.worker()) if os.getenv("PAPER_PROCESSING_WORKER", "1") != "0" else None
+    relation_worker = None
+    if os.getenv("RELATION_PRECOMPUTE_WORKER", "1") != "0":
+        await asyncio.to_thread(relation_precompute.recover)
+        relation_worker = asyncio.create_task(relation_precompute.worker())
     try:
         yield
     finally:
+        if relation_worker:
+            relation_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await relation_worker
         if import_worker:
             import_worker.cancel()
             with suppress(asyncio.CancelledError):

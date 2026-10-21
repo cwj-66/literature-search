@@ -17,6 +17,7 @@ export default function ComparePage() {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<RelateResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -30,7 +31,7 @@ export default function ComparePage() {
 
   useEffect(() => { document.title = `${project?.name ?? "工作区"} - 论文关系`; }, [project?.name]);
   useEffect(() => {
-    if (!selection) { setData(null); setError(""); setLoading(false); return; }
+    if (!selection) { setData(null); setError(""); setLoading(false); setPreparing(false); return; }
     const controller = new AbortController();
     const keys = selection.split(",");
     const snapshots = new Map(keys.map(key => [key, cache.current.get(`${id}:${key}`)
@@ -40,27 +41,31 @@ export default function ComparePage() {
     };
     publish();
     setError("");
-    const missing = keys.filter(key => request.refresh || !cache.current.has(`${id}:${key}`));
-    if (!missing.length) { setLoading(false); return () => controller.abort(); }
-    setLoading(true);
-    void Promise.allSettled(missing.map(async key => {
-      const result = await fetchRelate([key], request.refresh, controller.signal);
-      if (controller.signal.aborted) return;
-      if (!result.centers.length) throw new Error("这篇论文的关系还没有取到");
-      // An upstream timeout keeps the previous usable result, and remains retryable.
-      const incomplete = result.satellites.some(g => g.status === "unavailable" || g.status === "partial");
-      if (!incomplete || !cache.current.has(`${id}:${key}`)) {
-        cache.current.set(`${id}:${key}`, result);
-        snapshots.set(key, result);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setLoading(!keys.every(key => cache.current.has(`${id}:${key}`)));
+    const load = async (refresh = false) => {
+      try {
+        // One local snapshot read for all selected papers; never waits for discovery.
+        const result = await fetchRelate(keys, refresh, controller.signal);
+        if (controller.signal.aborted) return;
+        for (const key of keys) {
+          const center = result.centers.find(c => c.local_id === key || c.id === key || c.aliases?.includes(key));
+          if (!center) continue;
+          const part = { ...result, centers: [center], satellites: result.satellites.filter(g => g.center_id === center.id) };
+          snapshots.set(key, part); cache.current.set(`${id}:${key}`, part);
+        }
+        publish();
+        const pending = Boolean(result.pending_ids?.length);
+        setPreparing(pending); setLoading(false);
+        setError(result.precompute?.some(p => p.status === "failed" || p.status === "partial") ? "部分关系尚未准备好，可重试。" : "");
+        if (pending) timer = setTimeout(() => void load(), 2500);
+      } catch {
+        if (controller.signal.aborted) return;
+        setLoading(false); setPreparing(false); setError("关系读取未完成，已显示的关系仍保留。");
       }
-      publish();
-      if (incomplete) throw new Error("部分关系还没有取全");
-    })).then(results => {
-      if (controller.signal.aborted) return;
-      if (results.some(r => r.status === "rejected")) setError("部分关系还没有取全，已取得的关系仍保留。");
-      setLoading(false);
-    });
-    return () => controller.abort();
+    };
+    void load(request.refresh);
+    return () => { controller.abort(); if (timer) clearTimeout(timer); };
   }, [id, selection, request]);
 
   if (!project) return <MissingWorkspace />;
@@ -97,7 +102,7 @@ export default function ComparePage() {
       if (expand) {
         const key = existing ?? paperKey(saved);
         select([...new Set([...selected, key])]);
-        message.success("已加入论文库，正在展开它的关联论文");
+        message.success("已加入论文库，关联结果将在后台准备");
       } else message.success("已加入当前工作区的论文库");
     } catch (err) { setSaveError(err instanceof Error ? err.message : "保存失败，请重试"); }
     finally { setSaving(false); }
@@ -120,7 +125,7 @@ export default function ComparePage() {
         <span className="relations-selection-count">{selected.length}/5 已展开</span>
       </section>
       <div className="relations-board-wrap">
-        {selected.length && data?.centers.length ? <RelationBoard data={data} workspaceId={id} from={here} busy={loading} saving={saving} error={saveError}
+        {selected.length && data?.centers.length ? <RelationBoard data={data} workspaceId={id} from={here} busy={loading} preparing={preparing} saving={saving} error={saveError}
           libraryIds={entries.flatMap(([key, { paper }]) => [key, paper.id, ...(paper.arxiv_id ? [`arxiv:${paper.arxiv_id}`] : []), ...(paper.doi ? [`doi:${paper.doi.toLowerCase()}`] : []), ...(paper.semantic_scholar_id ? [`s2:${paper.semantic_scholar_id}`] : [])])}
           onSave={save} onRemove={remove} /> :
           <div className="relations-loading" role="status">{loading ? <Spin /> : null}<h2>{loading ? "正在构建论文关系空间" : selected.length ? "关系还没有取到" : "选择一篇或多篇主论文"}</h2>

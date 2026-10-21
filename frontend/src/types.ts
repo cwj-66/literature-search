@@ -360,6 +360,8 @@ export interface RelateCenterEdge {
 }
 
 export interface RelateResponse {
+  pending_ids?: string[];
+  precompute?: { paper_id: string; status: string; computed_at: string | null }[];
   centers: RelateCenter[];
   satellites: RelateSatelliteGroup[];
   center_edges: RelateCenterEdge[];
