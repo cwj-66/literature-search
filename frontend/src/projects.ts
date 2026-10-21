@@ -106,15 +106,19 @@ export const projects = {
   },
   ensure() { return state.currentId || projects.create("我的第一个研究项目"); },
   add(paper: Paper) {
-    projects.ensure();
+    projects.addTo(projects.ensure(), paper);
+  },
+  addTo(id: string, paper: Paper) {
+    if (!state.projects.some(p => p.id === id)) return;
     const key = paperKey(paper);
-    patchCurrent(project => {
+    commit({ ...state, projects: state.projects.map(project => {
+      if (project.id !== id) return project;
       const existing = findKey(project, paper);
       const papers = { ...project.papers };
       if (existing && existing !== key) { papers[key] = { ...papers[existing], paper }; delete papers[existing]; }
-      else papers[key] = existing ? { ...papers[key], paper } : { paper, status: "unread", note: "", addedAt: new Date().toISOString() };
+      else papers[key] = existing ? { ...papers[key], paper } : { paper, status: "unread" as ReadStatus, note: "", addedAt: new Date().toISOString() };
       return { ...project, papers };
-    });
+    }) });
   },
   removePaper(key: string) {
     patchCurrent(project => { const papers = { ...project.papers }; delete papers[key]; return { ...project, papers }; });

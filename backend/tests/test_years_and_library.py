@@ -132,6 +132,22 @@ class YearsAndLibraryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(bad.status_code, 400)
                 self.assertIsInstance(bad.json()["detail"], str)
 
+    async def test_semantic_key_is_stored_server_side_and_used(self):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            status = (await client.get("/api/sources")).json()["semantic_scholar"]
+            self.assertFalse(status["key_configured"])
+            saved = await client.post("/api/config/semantic-scholar", json={"api_key": "secret-key-1"})
+            self.assertEqual(saved.status_code, 200)
+            self.assertTrue(saved.json()["key_configured"])
+            self.assertNotIn("secret-key-1", saved.text)
+            status = (await client.get("/api/sources")).json()["semantic_scholar"]
+            self.assertTrue(status["key_configured"])
+            self.assertNotIn("secret-key-1", status["message"])
+            self.assertEqual(provider.s2_headers()["x-api-key"], "secret-key-1")
+            cleared = await client.post("/api/config/semantic-scholar", json={"api_key": ""})
+            self.assertFalse(cleared.json()["key_configured"])
+            self.assertNotIn("x-api-key", provider.s2_headers())
+
     async def test_import_errors_do_not_write_and_allow_retry(self):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             for payload, status in [({}, 422), ({"external_id": "invalid"}, 400), ({"url": "http://localhost/a"}, 400)]:

@@ -235,8 +235,6 @@
   font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--accent-border);
 }
-.ccf-filter { margin-top: var(--s4); }
-.ccf-filter .ant-checkbox-group { display: grid; gap: 6px; }
 
 /* ==========================================================================
    4. Library (collection page)
@@ -1590,25 +1588,7 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
 .lib-toolbar .ws-tools .ant-input-affix-wrapper { max-width: 380px; height: 38px; border-radius: var(--radius-md); }
 .lib-toolbar .ws-upload .ant-btn { height: 38px; padding: 0 18px; border-radius: var(--radius-md); }
 .ws-upload { margin-left: auto; }
-.analyze-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
-.analyze-label { color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
-.lib-toolbar .ant-checkbox-group { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.lib-toolbar .ant-checkbox-group .ant-checkbox-wrapper {
-  margin: 0;
-  padding: 4px 11px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text);
-  font-size: var(--fs-xs);
-  transition: border-color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
-}
-.lib-toolbar .ant-checkbox-group .ant-checkbox-wrapper:hover { border-color: var(--accent-border); }
-.lib-toolbar .ant-checkbox-group .ant-checkbox-wrapper-checked { border-color: transparent; background: var(--accent-soft); color: var(--accent); font-weight: 550; }
-.lib-toolbar .ant-segmented { padding: 3px; border-radius: var(--radius-md); background: var(--subtle); }
-.lib-toolbar .ant-segmented-item { border-radius: calc(var(--radius-md) - 2px); }
-.lib-toolbar .ant-segmented-item-selected { color: var(--accent); }
-.lib-toolbar .analyze-bar .ant-btn { border-radius: var(--radius-md); }
+.lib-toolbar .ws-tools .ant-select { min-width: 128px; }
 
 .ws-library .paper-row {
   padding: 20px var(--s5) 20px 28px;
@@ -2139,8 +2119,6 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
   .results-filters .filter-field { display: flex; align-items: center; gap: var(--s2); }
   .results-filters .filter-field > span:first-child { display: none; }
   .results-filters .ant-select { width: 150px; }
-  .results-filters .ccf-filter { margin-top: var(--s3); }
-  .results-filters .ccf-filter .ant-checkbox-group { display: flex; gap: var(--s3); }
   .studio-layout { grid-template-columns: minmax(0, 1fr); }
   .scope-panel { position: static; max-height: none; }
   .scope-expand { display: inline-flex; }

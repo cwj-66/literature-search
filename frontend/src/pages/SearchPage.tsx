@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Checkbox, Empty, Input, InputNumber, Pagination, Segmented, Select, Skeleton } from "antd";
+import { Alert, Button, Empty, Input, InputNumber, Pagination, Segmented, Select, Skeleton } from "antd";
 import { LoadingOutlined, SearchOutlined } from "@ant-design/icons";
 import type { InputRef } from "antd";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
@@ -46,7 +46,6 @@ export default function SearchPage() {
   const previousRetry = useRef(0);
   const searchInput = useRef<InputRef>(null);
   const heroInput = useRef<HTMLInputElement>(null);
-  const [ccf, setCcf] = useState<string[]>([]);
   const [excluded, setExcluded] = useSessionState<string[]>("search-excluded", []);
   const [citeSort, setCiteSort] = useState(false);
 
@@ -237,16 +236,12 @@ export default function SearchPage() {
   const hidden = new Set(excluded);
   const visibleAll = received.filter(p => !hidden.has(p.id));
   const excludedCount = received.length - visibleAll.length;
-  const filtered = ccf.length ? visibleAll.filter(p => p.ccf_rank && ccf.includes(p.ccf_rank)) : visibleAll;
-  const papers = citeSort ? [...filtered].sort((a, b) => (b.citation_count ?? -1) - (a.citation_count ?? -1)) : filtered;
+  const papers = citeSort ? [...visibleAll].sort((a, b) => (b.citation_count ?? -1) - (a.citation_count ?? -1)) : visibleAll;
   const here = location.pathname + location.search;
   return <main className="page page-wide search-results">
     <div className="results-layout">
       <aside className="results-filters" aria-label="筛选">
         {filters}
-        <div className="filter-field ccf-filter"><span>CCF 等级（仅筛选本页已返回的结果）</span>
-          <Checkbox.Group value={ccf} onChange={v => setCcf(v as string[])} options={["A", "B", "C"].map(v => ({ value: v, label: `CCF ${v}` }))} />
-        </div>
         <p className="field-help">需要中文问题生成检索计划？<Link to="/">进入工作区的智能调研</Link></p>
       </aside>
       <section className="results-main" aria-label="检索结果" aria-busy={loading}>
@@ -273,7 +268,7 @@ export default function SearchPage() {
           action={<SourceRetry seconds={retrySeconds} loading={loading} onRetry={() => setRetry(v => v + 1)} />} /> : null}
         {sourceNotes.length ? <p className="results-note">{sourceNotes.join("；")}</p> : null}
         {loading && !papers.length ? <div className="row-skeletons" aria-hidden>{[0, 1, 2].map(i => <Skeleton key={i} active title={{ width: "70%" }} paragraph={{ rows: 2 }} />)}</div> : null}
-        {result && !papers.length && !loading && !error && !sourceErrors.length ? <Empty description={received.length ? "当前筛选或排除后没有论文，可取消 CCF 筛选或恢复已排除论文。" : "没有找到相关论文。可以换用英文关键词，或放宽年份范围。"} /> : null}
+        {result && !papers.length && !loading && !error && !sourceErrors.length ? <Empty description={received.length ? "当前筛选或排除后没有论文，可恢复已排除论文。" : "没有找到相关论文。可以换用英文关键词，或放宽年份范围。"} /> : null}
         <div className="paper-list">
           {papers.map(paper => <PaperRow key={paper.id} paper={paper} from={here}
             side={<><CollectButton paper={paper} /><ExternalLinks paper={paper} />

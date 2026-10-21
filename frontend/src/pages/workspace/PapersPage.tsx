@@ -1,59 +1,31 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Checkbox, Empty, Input, Popconfirm, Segmented, Upload } from "antd";
+import { Alert, Button, Empty, Input, Popconfirm, Select, Upload } from "antd";
 import { ArrowRightOutlined, DeleteOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
-import { Link, useNavigate } from "react-router-dom";
-import { analyzePapers, prepareWorkspace, removeWorkspacePapers, uploadPaper } from "../../api";
-import { AnalyzeResult } from "../../components/AnalyzeResult";
+import { Link } from "react-router-dom";
+import { prepareWorkspace, removeWorkspacePapers, uploadPaper } from "../../api";
 import { PaperRow } from "../../components/PaperRow";
 import { STATUS_LABEL, projects } from "../../projects";
-import type { AnalyzePaperResult } from "../../types";
 import { workspacePaperPath } from "../../workspace";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
 
-const FIELDS = [
-  ["research_content", "研究内容"],
-  ["technical_scheme", "技术方案"],
-  ["contributions", "创新点与主要贡献"],
-  ["experiments", "实验结果"],
-  ["limitations", "局限性"],
+const SORTS = [
+  ["added_desc", "最近加入"],
+  ["added_asc", "最早加入"],
+  ["year_desc", "年份（新到旧）"],
+  ["year_asc", "年份（旧到新）"],
+  ["title", "标题"],
 ] as const;
+type SortKey = (typeof SORTS)[number][0];
 
 export default function PapersPage() {
   const { id, project } = useWorkspaceProject();
-  const navigate = useNavigate();
-  const [openingChat, setOpeningChat] = useState(false);
   const [filter, setFilter] = useState("");
-  const [picked, setPicked] = useState<string[]>([]);
-  const [fields, setFields] = useState<string[]>(FIELDS.map(item => item[0]));
-  const [depth, setDepth] = useState<"standard" | "deep">("standard");
-  const [report, setReport] = useState<AnalyzePaperResult | null>(null);
-  const [analyzeError, setAnalyzeError] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
+  const [sort, setSort] = useState<SortKey>("added_desc");
+  const [actionError, setActionError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadNote, setUploadNote] = useState("");
   const here = `/w/${id}/library`;
-  async function openChat() {
-    if (!project || !picked.length || openingChat) return;
-    setOpeningChat(true); setAnalyzeError("");
-    try {
-      await prepareWorkspace(id, project.name, Object.keys(project.papers));
-      navigate(`/w/${id}/research?papers=${encodeURIComponent(picked.join(","))}`);
-    } catch (err) { setAnalyzeError(err instanceof Error ? err.message : "创建对话失败"); }
-    finally { setOpeningChat(false); }
-  }
-  function toggle(key: string) {
-    setPicked(current => current.includes(key) ? current.filter(item => item !== key) : current.length >= 5 ? current : [...current, key]);
-  }
-  function analyze() {
-    if (!picked.length || !fields.length || analyzing) return;
-    setAnalyzing(true); setAnalyzeError("");
-    setReport(null);
-    analyzePapers({ paper_ids: picked, fields, depth, workspace_id: id })
-      .then(setReport)
-      .catch((err: Error) => setAnalyzeError(err.message || "分析失败，请重试"))
-      .finally(() => setAnalyzing(false));
-  }
   async function onUpload(file: File) {
     if (uploading) return;
     setUploading(true); setUploadError(""); setUploadNote("");
@@ -71,7 +43,14 @@ export default function PapersPage() {
   }
   useEffect(() => { document.title = project ? `${project.name} - 论文库` : "工作区"; }, [project]);
   if (!project) return <MissingWorkspace />;
-  const entries = Object.entries(project.papers).sort((a, b) => (b[1].openedAt ?? b[1].addedAt).localeCompare(a[1].openedAt ?? a[1].addedAt));
+  // 默认按加入时间排序；打开论文只影响阅读状态，不改变列表顺序。
+  const entries = Object.entries(project.papers).sort((a, b) => {
+    if (sort === "added_asc") return a[1].addedAt.localeCompare(b[1].addedAt);
+    if (sort === "year_desc") return (b[1].paper.year ?? -1) - (a[1].paper.year ?? -1);
+    if (sort === "year_asc") return (a[1].paper.year ?? 9999) - (b[1].paper.year ?? 9999);
+    if (sort === "title") return a[1].paper.title.localeCompare(b[1].paper.title, "zh-Hans-CN");
+    return b[1].addedAt.localeCompare(a[1].addedAt);
+  });
   const needle = filter.trim().toLocaleLowerCase();
   const shown = entries.filter(([, item]) => !needle || [item.paper.title, ...item.paper.authors, item.paper.year, item.paper.venue].filter(Boolean).join(" ").toLocaleLowerCase().includes(needle));
   return <main className="ws-page ws-library">
@@ -85,18 +64,12 @@ export default function PapersPage() {
     {entries.length ? <section className="lib-toolbar">
       <div className="ws-tools">
         <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选工作区论文" placeholder="筛选标题、作者或年份" />
+        <Select aria-label="排序方式" value={sort} onChange={value => setSort(value as SortKey)}
+          options={SORTS.map(([value, label]) => ({ value, label }))} />
         <span className="small-print">{needle ? `匹配 ${shown.length} / ${entries.length} 篇` : `共 ${entries.length} 篇`}</span>
         <Upload className="ws-upload" accept=".pdf,application/pdf" maxCount={1} showUploadList={false} beforeUpload={file => { void onUpload(file); return false; }}>
           <Button type="primary" icon={<UploadOutlined />} loading={uploading}>{uploading ? "正在解析" : "上传论文"}</Button>
         </Upload>
-      </div>
-      <div className="analyze-bar">
-        <span className="analyze-label">分析字段：</span>
-        <Checkbox.Group value={fields} options={FIELDS.map(([value, label]) => ({ value, label }))} onChange={value => setFields(value as string[])} />
-        <Segmented value={depth} onChange={value => setDepth(value as "standard" | "deep")} options={[{ value: "standard", label: "标准" }, { value: "deep", label: "深度" }]} />
-        <Button disabled={!picked.length || !fields.length} loading={analyzing} onClick={analyze}>分析所选</Button>
-        <Button disabled={!picked.length} loading={openingChat} onClick={openChat}>对所选提问</Button>
-        <span className="small-print">已选 {picked.length} / 5</span>
       </div>
     </section> : null}
     {uploadError ? <Alert type="error" showIcon message={uploadError} /> : null}
@@ -128,14 +101,11 @@ export default function PapersPage() {
         <article><span className="lib-ico is-green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 7.2A5.2 5.2 0 0 1 11.2 2h1.6A5.2 5.2 0 0 1 18 7.2v3.2A4.2 4.2 0 0 1 13.8 14.6H12l-3.2 2.2v-2.4A5 5 0 0 1 6 10.4Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg></span><strong>支持 AI 问答</strong><span>基于论文内容进行问答，快速获取关键信息。</span></article>
       </div>
     </section> : <>
-      {analyzeError ? <Alert type="error" showIcon message={analyzeError} /> : null}
-      {report ? <AnalyzeResult result={report} /> : null}
+      {actionError ? <Alert type="error" showIcon message={actionError} /> : null}
       {!shown.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的论文"><Button onClick={() => setFilter("")}>清除筛选</Button></Empty> : <div className="paper-list">
-        {shown.map(([key, item]) => <PaperRow key={key} paper={item.paper} from={here} href={workspacePaperPath(id, key, here)} selected={picked.includes(key)} onOpen={() => { projects.select(id); projects.open(item.paper); }} leading={
-          <Checkbox aria-label={`选择：${item.paper.title}`} checked={picked.includes(key)} disabled={!picked.includes(key) && picked.length >= 5} onChange={() => toggle(key)} />
-        } side={<>
+        {shown.map(([key, item]) => <PaperRow key={key} paper={item.paper} from={here} href={workspacePaperPath(id, key, here)} onOpen={() => { projects.select(id); projects.open(item.paper); }} side={<>
           <span className={`status status-${item.status === "read" ? "success" : item.status === "reading" ? "accent" : "neutral"}`}>{STATUS_LABEL[item.status]}</span>
-          <Popconfirm title="从当前工作区移出这篇论文？" description="文献库中的记录和分析会保留。" okText="移出" cancelText="取消" onConfirm={async () => { try { await prepareWorkspace(id, project.name, Object.keys(project.papers)); await removeWorkspacePapers(id, [key]); projects.select(id); projects.removePaper(key); setPicked(current => current.filter(ref => ref !== key)); } catch (err) { setAnalyzeError(err instanceof Error ? err.message : "移出论文失败"); } }}>
+          <Popconfirm title="从当前工作区移出这篇论文？" description="文献库中的记录和分析会保留。" okText="移出" cancelText="取消" onConfirm={async () => { try { await prepareWorkspace(id, project.name, Object.keys(project.papers)); await removeWorkspacePapers(id, [key]); projects.select(id); projects.removePaper(key); } catch (err) { setActionError(err instanceof Error ? err.message : "移出论文失败"); } }}>
             <Button size="small" type="text" icon={<DeleteOutlined />} aria-label={`移出：${item.paper.title}`}>移出</Button>
           </Popconfirm>
         </>} />)}

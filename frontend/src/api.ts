@@ -26,6 +26,20 @@ async function errorMessage(response: Response): Promise<string> {
 
 const searchCache = new Map<string, { expires: number; data: SearchResponse }>();
 
+export interface SourcesStatus {
+  semantic_scholar: { enabled: boolean; key_configured: boolean; message: string };
+}
+
+export async function fetchSources(signal?: AbortSignal): Promise<SourcesStatus> {
+  const response = await fetch("/api/sources", { signal });
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+export function saveSemanticKey(apiKey: string): Promise<{ key_configured: boolean }> {
+  return postJson("/api/config/semantic-scholar", { api_key: apiKey });
+}
+
 export async function searchPapers(params: SearchParams, signal?: AbortSignal, onProgress?: (data: SearchResponse) => void, bypassCache = false): Promise<SearchResponse> {
   const query = new URLSearchParams({
     q: params.q,

@@ -15,6 +15,7 @@ from urllib.parse import quote
 import httpx
 import ijson
 
+from app.infrastructure import config as server_config
 from app.infrastructure import provider_cache
 from app.schemas import PaperOut
 from app.services.papers import ccf
@@ -96,9 +97,19 @@ def local_text(element, name: str) -> str | None:
     return None
 
 
+def s2_api_key() -> str:
+    env = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+    if env:
+        return env
+    try:
+        return server_config.get("semantic_scholar_api_key").strip()
+    except (sqlite3.Error, OSError):
+        return ""
+
+
 def s2_headers() -> dict[str, str]:
     headers = {"User-Agent": USER_AGENT}
-    api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+    api_key = s2_api_key()
     if api_key:
         headers["x-api-key"] = api_key
     return headers
@@ -323,7 +334,7 @@ def semantic_enabled() -> bool:
 
 
 def semantic_has_key() -> bool:
-    return bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip())
+    return bool(s2_api_key())
 
 
 def quota_scope(label: str, headers: dict | None = None) -> str:

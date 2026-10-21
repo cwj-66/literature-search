@@ -1,9 +1,54 @@
 import { useEffect, useState } from "react";
-import { Button, Input, Switch } from "antd";
+import { Alert, Button, Input, Switch } from "antd";
 import { ApiOutlined, PlusOutlined } from "@ant-design/icons";
+import { fetchSources, saveSemanticKey } from "../api";
 import { providers, useProviders, type ProviderConn, type ProviderModel } from "../providers";
 
-const SECTIONS = [{ key: "providers", label: "模型提供商" }, { key: "about", label: "说明" }] as const;
+const SECTIONS = [{ key: "providers", label: "模型提供商" }, { key: "sources", label: "检索数据源" }, { key: "about", label: "说明" }] as const;
+
+function SemanticKeyCard() {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSources(controller.signal)
+      .then(data => setConfigured(data.semantic_scholar.key_configured))
+      .catch(() => { if (!controller.signal.aborted) setConfigured(null); });
+    return () => controller.abort();
+  }, []);
+  async function save(key: string) {
+    setSaving(true); setError(""); setNote("");
+    try {
+      const result = await saveSemanticKey(key);
+      setConfigured(result.key_configured);
+      setDraft("");
+      setNote(result.key_configured ? "密钥已保存到服务器，检索会立即使用。" : "已清除服务器上的密钥，检索回到公开匿名额度。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败，请重试");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <section className="provider-card" aria-label="Semantic Scholar 密钥">
+    <h2>Semantic Scholar API Key</h2>
+    <p className="field-help">
+      状态：{configured === null ? "正在检查…" : configured ? "已配置" : "未配置（使用公开匿名额度，容易限流）"}。
+      密钥只保存在服务器，用于访问 Semantic Scholar 官方 API，不会回显。
+      没有密钥可到 <a href="https://www.semanticscholar.org/product/api#api-key-form" target="_blank" rel="noreferrer">Semantic Scholar 申请</a>。
+    </p>
+    <div className="provider-edit-actions">
+      <Input.Password value={draft} maxLength={200} placeholder={configured ? "输入新密钥以替换" : "粘贴 API Key"}
+        aria-label="Semantic Scholar API Key" onChange={e => { setDraft(e.target.value); setError(""); setNote(""); }} />
+      <Button type="primary" loading={saving} disabled={!draft.trim()} onClick={() => void save(draft)}>保存</Button>
+      {configured ? <Button danger loading={saving} onClick={() => void save("")}>清除密钥</Button> : null}
+    </div>
+    {error ? <Alert type="error" showIcon message={error} /> : null}
+    {note ? <Alert type="success" showIcon message={note} /> : null}
+  </section>;
+}
 
 function blank(): Omit<ProviderConn, "id"> {
   return { name: "", baseUrl: "https://api.openai.com/v1", apiKey: "", enabled: true, models: [{ id: "", economy: true, strong: false }] };
@@ -49,7 +94,10 @@ export default function SettingsPage() {
       {section === "about" ? <section>
         <h1 className="page-title">说明</h1>
         <p className="page-sub">模型连接和密钥只保存在当前浏览器，不会发送到后端，也不参与检索与分析。更换浏览器或清除站点数据后需要重新填写。</p>
-      </section> : <>
+      </section> : section === "sources" ? <>
+        <h1 className="page-title">检索数据源</h1>
+        <SemanticKeyCard />
+      </> : <>
         <h1 className="page-title">模型提供商</h1>
         <section className="provider-card" aria-label="已连接的提供商">
           <h2>已连接的提供商</h2>

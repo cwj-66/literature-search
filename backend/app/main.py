@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents import agent
 from app.assistant_chats import router as assistant_chat_router
+from app.infrastructure import config as server_config
 from app.infrastructure import llm
 from app.schemas import (
     AnalyzeRequest, AnalysisFields, AnalysisResponse, CompareRequest, ImportRequest, ImportResult,
@@ -211,6 +212,21 @@ async def sources():
                else "Semantic Scholar 使用公开批量检索；相关性为本地排序，结果按批次缓存")
     return {"semantic_scholar": {"enabled": enabled, "key_configured": keyed,
             "message": message if enabled else "Semantic Scholar 已由管理员停用"}}
+
+
+class SemanticKeyRequest(BaseModel):
+    api_key: str = Field("", max_length=200)
+
+
+@app.post("/api/config/semantic-scholar")
+async def configure_semantic_key(payload: SemanticKeyRequest):
+    # The stored key is write-only over the API: it is never returned in any response.
+    key = payload.api_key.strip()
+    try:
+        await asyncio.to_thread(server_config.set, "semantic_scholar_api_key", key)
+    except (sqlite3.Error, OSError):
+        raise HTTPException(status_code=503, detail="配置存储暂不可用，请稍后重试") from None
+    return {"key_configured": semantic_has_key()}
 
 
 @app.post("/api/papers/import", response_model=ImportResult)
