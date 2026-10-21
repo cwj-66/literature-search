@@ -3,6 +3,15 @@ import type { EntityGraph, EntityKind, EntityNode } from "./graphData";
 export const EMPTY_GRAPH: EntityGraph = { nodes: [], edges: [], total_papers: 0, scope: "" };
 export const ENTITY_KINDS: EntityKind[] = ["paper", "author", "keyword", "venue"];
 
+export function selectGraphPapers(data: EntityGraph, selected: string[]): EntityGraph {
+  if (!selected.length) return data;
+  const papers = new Set(data.nodes.filter(n => n.kind === "paper" && selected.includes(n.id)).map(n => n.id));
+  const edges = data.edges.filter(e => papers.has(e.source) &&
+    (!["cites", "similar"].includes(e.relation) || papers.has(e.target)));
+  const keep = new Set([...papers, ...edges.map(e => e.target)]);
+  return { ...data, nodes: data.nodes.filter(n => keep.has(n.id)), edges, total_papers: papers.size };
+}
+
 export function filterGraph(data: EntityGraph, query = "", from = 0, to = 0): EntityGraph {
   const term = query.trim().toLocaleLowerCase();
   const matched = new Set(data.nodes.filter(n => n.label.toLocaleLowerCase().includes(term)).map(n => n.id));

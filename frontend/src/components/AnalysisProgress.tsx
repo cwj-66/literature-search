@@ -4,12 +4,12 @@ const STAGES = ["未分析", "排队中", "准备材料", "分析中", "分析�
 const STAGE_INDEX: Record<string, number> = { idle: 0, pending: 1, preparing: 2, analyzing: 3, success: 4 };
 const HINTS: Record<string, string> = {
   loading: "正在读取任务状态…",
-  idle: "点击“开始分析”，生成论文分析与原文依据。",
+  idle: "这篇论文尚无分析结果；新入库论文会在后台自动分析。",
   pending: "任务已提交，正在等待处理。",
   preparing: "正在获取并整理论文材料。",
   analyzing: "正在提取结论并核对原文依据，请稍候。",
   success: "分析结果已保存，可以查看原文依据或导出分析。",
-  failed: "本次分析未完成，请重试。",
+  failed: "本次分析未完成。",
   unavailable: "暂时无法读取进度，请刷新重试。",
 };
 
@@ -23,7 +23,7 @@ export function AnalysisProgress({ status, hasResult, starting }: { status: stri
   return <section className={`analysis-progress${failed ? " is-failed" : ""}${phase === "success" ? " is-complete" : ""}`} aria-label="论文分析进度" aria-busy={busy}>
     <div className="analysis-progress-head" role="status" aria-live="polite">
       <strong>{busy ? <LoadingOutlined aria-hidden /> : null}{label}</strong>
-      <span>{failed && hasResult ? "本次分析失败，上次结果仍保留，可重新分析。" : HINTS[phase] ?? HINTS.unavailable}</span>
+      <span>{failed && hasResult ? "本次分析失败，上次保存的结果仍保留。" : HINTS[phase] ?? HINTS.unavailable}</span>
     </div>
     <ol className="analysis-progress-stages">
       {STAGES.map((name, step) => {

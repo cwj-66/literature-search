@@ -67,7 +67,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     if (!inside) return;
     document.querySelector(".ws-main")?.scrollTo({ top: 0 });
   }, [inside, location.pathname, location.search]);
-  return <div className={inside ? "app ws-app" : "app"} onClickCapture={event => {
+  return <div className={inside ? "app ws-app" : "app scholar-desktop"} onClickCapture={event => {
     const anchor = event.target instanceof Element ? event.target.closest("a") : null;
     if (!anchor || anchor.target === "_blank" || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const next = new URL(anchor.href, window.location.origin);

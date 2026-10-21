@@ -19,7 +19,7 @@ type Camera = { x: number; y: number; k: number };
 function frame(graph: SpaceGraph, width: number, height: number, floor: number): Camera {
   const xs = graph.nodes.map(n => n.x), ys = graph.nodes.map(n => n.y);
   const minX = Math.min(...xs) - 130, maxX = Math.max(...xs) + 130, minY = Math.min(...ys) - 60, maxY = Math.max(...ys) + 130;
-  const k = Math.max(floor, Math.min(1.1, (width - 48) / (maxX - minX), (height - 130) / (maxY - minY)));
+  const k = Math.max(graph.nodes.filter(n => n.center).length > 5 ? 0.03 : floor, Math.min(1.1, (width - 48) / (maxX - minX), (height - 130) / (maxY - minY)));
   return { k, x: (width - (maxX - minX) * k) / 2 - minX * k, y: 52 + (height - 120 - (maxY - minY) * k) / 2 - minY * k };
 }
 
@@ -27,7 +27,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
   data: RelateResponse; workspaceId: string; from: string; busy: boolean; saving: boolean; error: string;
   preparing: boolean;
   libraryIds: string[];
-  onSave: (item: RecommendationItem, expand: boolean) => Promise<void>;
+  onSave: (item: RecommendationItem) => Promise<void>;
   onRemove: (id: string) => void;
 }) {
   const graph = useMemo(() => buildSpaceGraph(data), [data]);
@@ -61,7 +61,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
       setSettling(0);
       const rect = el.getBoundingClientRect(), c = cameraRef.current;
       const x = event.clientX - rect.left, y = event.clientY - rect.top;
-      const k = Math.max(0.25, Math.min(2, c.k * Math.exp(-event.deltaY * 0.001)));
+      const k = Math.max(0.03, Math.min(2, c.k * Math.exp(-event.deltaY * 0.001)));
       setCamera({ x: x - (x - c.x) * k / c.k, y: y - (y - c.y) * k / c.k, k });
     };
     el.addEventListener("wheel", wheel, { passive: false });
@@ -78,7 +78,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
   }, [signature, graph.nodes.length, size.width, size.height]);
   const ease = (next: Camera) => { setSettling(t => t + 1); setCamera(next); };
   const zoom = (factor: number) => {
-    const k = Math.max(0.25, Math.min(2, camera.k * factor));
+    const k = Math.max(0.03, Math.min(2, camera.k * factor));
     ease({ x: size.width / 2 - (size.width / 2 - camera.x) * k / camera.k, y: size.height / 2 - (size.height / 2 - camera.y) * k / camera.k, k });
   };
 
@@ -140,9 +140,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
       <h2>{node.title}</h2>
       <p className="space-panel-meta">{node.year ?? "年份未知"} · {(node.center?.authors ?? node.item?.authors ?? []).slice(0, 3).join("，") || "作者未知"}</p>
       {!node.center && node.item ? <div className="space-actions">
-        <Button type="primary" loading={saving} disabled={busy || data.centers.length >= 5} onClick={() => void onSave(node.item!, true)}>{saved ? "展开为主论文" : "加入论文库并展开为主论文"}</Button>
-        <Button loading={saving} disabled={busy || saved} onClick={() => void onSave(node.item!, false)}>{saved ? "已在论文库" : "仅加入论文库"}</Button>
-        {data.centers.length >= 5 ? <p>已展开 5 篇主论文，收起一篇后可继续展开。</p> : null}
+        <Button type="primary" loading={saving} disabled={busy || saved} onClick={() => void onSave(node.item!)}>{saved ? "已在论文库" : "加入论文库"}</Button>
       </div> : <Button className="space-collapse" onClick={() => onRemove(node.id)} disabled={busy || saving}>收起这篇主论文</Button>}
       {error ? <p className="space-action-error" role="alert">{error}</p> : null}
       {relations.length ? <><h3>关联依据</h3><div className="space-evidence">{relations.map(edge => {

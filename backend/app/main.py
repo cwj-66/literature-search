@@ -223,7 +223,12 @@ async def import_paper(payload: ImportRequest, response: Response):
         existing = await asyncio.to_thread(library.get_paper, reference)
         if existing:
             return {"paper": existing, "created": False}
-        paper = await paper_detail(reference)
+        if payload.snapshot is not None:
+            paper = library.paper_from_snapshot(reference, payload.snapshot)
+            if paper is None:
+                raise HTTPException(status_code=400, detail="论文快照缺少标题，无法直接入库")
+        else:
+            paper = await paper_detail(reference)
         saved, created = await asyncio.to_thread(library.save_paper, paper, reference)
     except (sqlite3.Error, OSError):
         logging.exception("Local library write failed")
@@ -308,8 +313,8 @@ class RelateRequest(BaseModel):
 
 @app.post("/api/papers/relate")
 async def papers_relate(payload: RelateRequest):
-    if not payload.ids or len(payload.ids) > 5:
-        raise HTTPException(status_code=422, detail="请选择 1 到 5 篇论文")
+    if not payload.ids:
+        raise HTTPException(status_code=422, detail="请至少选择一篇论文")
     try:
         return await relate.relate(payload.ids, payload.refresh)
     except (sqlite3.Error, OSError):

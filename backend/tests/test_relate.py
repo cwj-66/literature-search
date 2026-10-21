@@ -206,11 +206,14 @@ class RelateTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RelateApiTests(unittest.IsolatedAsyncioTestCase):
-    async def test_endpoint_rejects_six_ids(self):
+    async def test_endpoint_accepts_more_than_five_ids(self):
         from app.main import app
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post("/api/papers/relate", json={"ids": ["a", "b", "c", "d", "e", "f"]})
-        self.assertEqual(response.status_code, 422)
+        ids = [str(i) for i in range(12)]
+        with patch.object(relate, "relate", new=AsyncMock(return_value={"centers": []})) as mocked:
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/api/papers/relate", json={"ids": ids})
+        self.assertEqual(response.status_code, 200)
+        mocked.assert_awaited_once_with(ids, False)
 
     async def test_endpoint_returns_relate_payload(self):
         from app.main import app

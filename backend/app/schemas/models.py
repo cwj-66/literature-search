@@ -42,12 +42,23 @@ class SearchResponse(BaseModel):
     total_is_limited: bool = False
 
 
+class ImportSnapshot(BaseModel):
+    title: str = Field(min_length=1, max_length=1000)
+    authors: list[str] = Field(default_factory=list, max_length=200)
+    abstract: str | None = Field(None, max_length=20000)
+    year: int | None = Field(None, ge=1900, le=2100)
+    venue: str | None = Field(None, max_length=300)
+    url: str | None = Field(None, max_length=500)
+    citation_count: int | None = Field(None, ge=0)
+
+
 class ImportRequest(BaseModel):
     external_id: str | None = Field(None, min_length=1, max_length=500)
     url: str | None = Field(None, min_length=1, max_length=500)
     id: str | None = Field(None, min_length=1, max_length=500)
     arxiv_id: str | None = Field(None, min_length=1, max_length=100)
     doi: str | None = Field(None, min_length=1, max_length=300)
+    snapshot: ImportSnapshot | None = None
 
     @model_validator(mode="after")
     def one_reference(self):

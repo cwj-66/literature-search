@@ -46,6 +46,39 @@ def as_paper(row) -> LocalPaperOut:
     return LocalPaperOut(**paper.model_dump(), local_id=row["local_id"], imported_at=row["imported_at"])
 
 
+def paper_from_snapshot(reference: str, snapshot) -> PaperOut | None:
+    """Build a PaperOut from client-supplied metadata, avoiding a live upstream fetch.
+
+    The reference stays the source of truth for external identity; only descriptive
+    fields come from the snapshot. Returns None when the snapshot lacks a usable title.
+    """
+    title = snapshot.title.strip()
+    if not reference.startswith(("arxiv:", "doi:", "s2:")) or not title:
+        return None
+    scheme, value = reference.split(":", 1)
+    authors = [name.strip() for name in snapshot.authors if name.strip()][:200]
+    url = snapshot.url
+    paper = PaperOut(id=reference, title=title, authors=authors,
+                     abstract=snapshot.abstract, year=snapshot.year, venue=snapshot.venue,
+                     citation_count=snapshot.citation_count)
+    if scheme == "arxiv":
+        paper.sources = ["arxiv"]
+        paper.arxiv_id = value
+        paper.url = url or f"https://arxiv.org/abs/{value}"
+        paper.pdf_url = f"https://arxiv.org/pdf/{value}"
+        if not paper.venue:
+            paper.venue = "arXiv（预印本）"
+    elif scheme == "doi":
+        paper.sources = ["semantic_scholar"]
+        paper.doi = value
+        paper.url = url or f"https://doi.org/{value}"
+    else:
+        paper.sources = ["semantic_scholar"]
+        paper.semantic_scholar_id = value
+        paper.url = url or f"https://www.semanticscholar.org/paper/{value}"
+    return paper
+
+
 def get_paper(ref: str) -> LocalPaperOut | None:
     with connection() as db:
         row = db.execute("""SELECT * FROM papers WHERE local_id = ? OR local_id IN
@@ -53,7 +86,7 @@ def get_paper(ref: str) -> LocalPaperOut | None:
         return as_paper(row) if row else None
 
 
-def save_paper(paper: PaperOut, reference: str) -> tuple[LocalPaperOut, bool]:
+def save_paper(paper: PaperOut, reference: str, *, document: dict | None = None) -> tuple[LocalPaperOut, bool]:
     paper = ccf.annotate(paper)
     keys = identity_keys(paper) | {paper.id, reference}
     with connection() as db, db:
@@ -80,9 +113,18 @@ def save_paper(paper: PaperOut, reference: str) -> tuple[LocalPaperOut, bool]:
         keys.update(identity_keys(paper))
         keys.add(paper.id)
         db.executemany("INSERT OR REPLACE INTO paper_keys VALUES (?, ?)", ((key, local_id) for key in keys))
+        if document is not None:
+            # Uploaded text is visible before either background worker can claim this paper.
+            from app.services.papers import documents
+            documents.save_in_transaction(db, local_id, paper.id, **document)
         # Durable enqueue in the same transaction as import. No network work blocks saving.
         db.execute("INSERT OR IGNORE INTO relation_jobs (local_id, requested_at) VALUES (?, ?)",
                    (local_id, datetime.now(timezone.utc).isoformat()))
+        # Reuse the analysis store's identity/result checks; import never waits on a model.
+        from app.infrastructure import llm
+        from app.services.analysis import analysis_store
+        analysis_store.create_task_in_transaction(db, local_id, keys, local_id, False,
+                                                  llm.model_name(), llm.PROMPT_VERSION)
         return LocalPaperOut(**paper.model_dump(), local_id=local_id, imported_at=imported_at), created
 
 

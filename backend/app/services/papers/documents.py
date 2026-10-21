@@ -21,20 +21,24 @@ def _ensure(db) -> None:
 
 
 def save(local_id: str, paper_id: str, text: str, filename: str, structure: dict | None = None) -> None:
-    stamp = datetime.now(timezone.utc).isoformat()
     with connection() as db, db:
-        _ensure(db)
-        db.execute(
-            """INSERT INTO paper_documents (local_id, paper_id, filename, text, created_at, structure)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(local_id) DO UPDATE SET
-                paper_id = excluded.paper_id,
-                filename = excluded.filename,
-                text = excluded.text,
-                created_at = excluded.created_at,
-                structure = excluded.structure""",
-            (local_id, paper_id, filename, text, stamp, json.dumps(structure, ensure_ascii=False) if structure else None),
-        )
+        save_in_transaction(db, local_id, paper_id, text, filename, structure)
+
+
+def save_in_transaction(db, local_id: str, paper_id: str, text: str, filename: str, structure: dict | None = None) -> None:
+    stamp = datetime.now(timezone.utc).isoformat()
+    _ensure(db)
+    db.execute(
+        """INSERT INTO paper_documents (local_id, paper_id, filename, text, created_at, structure)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(local_id) DO UPDATE SET
+            paper_id = excluded.paper_id,
+            filename = excluded.filename,
+            text = excluded.text,
+            created_at = excluded.created_at,
+            structure = excluded.structure""",
+        (local_id, paper_id, filename, text, stamp, json.dumps(structure, ensure_ascii=False) if structure else None),
+    )
 
 
 def get_text(*ids: str | None) -> str | None:

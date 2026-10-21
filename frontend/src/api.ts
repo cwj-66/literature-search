@@ -103,10 +103,20 @@ export async function uploadPaper(file: File, workspaceId: string): Promise<Uplo
   return result;
 }
 
-export async function importPaper(externalId: string): Promise<ImportResult> {
+export interface ImportSnapshot {
+  title: string;
+  authors?: string[];
+  abstract?: string | null;
+  year?: number | null;
+  venue?: string | null;
+  url?: string | null;
+  citation_count?: number | null;
+}
+
+export async function importPaper(externalId: string, snapshot?: ImportSnapshot): Promise<ImportResult> {
   const response = await fetch("/api/papers/import", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ external_id: externalId }),
+    body: JSON.stringify(snapshot ? { external_id: externalId, snapshot } : { external_id: externalId }),
   });
   if (!response.ok) throw new Error(await errorMessage(response));
   const result: ImportResult = await response.json();

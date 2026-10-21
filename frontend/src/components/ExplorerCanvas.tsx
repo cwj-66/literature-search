@@ -1,159 +1,39 @@
-import { useEffect, useRef, useState } from "react";
-import { Button } from "antd";
-import { EdgeEvent, Graph, NodeEvent, type IElementEvent } from "@antv/g6";
-import { KIND_COLOR, KIND_LABEL, KIND_TINT, RELATIONS, type EntityGraph, type EntityKind } from "../graphData";
-import { useMediaQuery } from "../hooks";
-import { tokens } from "../theme";
-
-const cameras = new Map<string, { position: [number, number]; zoom: number; signature: string; nodes: Record<string, [number, number]> }>();
-
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AimOutlined, BankOutlined, ExpandOutlined, FileTextOutlined, MinusOutlined, PlusOutlined, TagOutlined, UserOutlined } from "@ant-design/icons";
+import { KIND_LABEL, RELATIONS, type EntityGraph } from "../graphData";
+import { scholarLayout } from "../scholarGraphLayout";
+const ICON = { paper: <FileTextOutlined />, keyword: <TagOutlined />, author: <UserOutlined />, venue: <BankOutlined /> };
+const cameras = new Map<string, { x:number; y:number; k:number }>();
 export function ExplorerCanvas({ data, selected, onSelect, onSelectEdge, scope, resetKey }: {
-  data: EntityGraph; selected: string; onSelect: (id: string) => void; onSelectEdge?: (id: string) => void; scope: string; resetKey: number;
+  data: EntityGraph; selected: string; onSelect: (id:string)=>void; onSelectEdge?: (id:string)=>void; scope:string; resetKey:number;
 }) {
-  const container = useRef<HTMLDivElement>(null);
-  const instance = useRef<Graph | null>(null);
-  const callback = useRef(onSelect);
-  const edgeCallback = useRef(onSelectEdge);
-  callback.current = onSelect;
-  edgeCallback.current = onSelectEdge;
-  const selection = useRef(selected);
-  const lastFocused = useRef(selected);
-  selection.current = selected;
-  const [failed, setFailed] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [fitKey, setFitKey] = useState(0);
-  const still = useMediaQuery("(prefers-reduced-motion: reduce)");
-
-  useEffect(() => {
-    const box = container.current;
-    if (!box || !data.nodes.length) return;
-    let alive = true, settled = false, rendered = false;
-    const signature = JSON.stringify([data.nodes.map(n => n.id), data.edges.map(e => [e.source, e.target, e.relation])]);
-    const saved = cameras.get(scope);
-    const restored = saved?.signature === signature && !fitKey && !resetKey ? saved : undefined;
-    setFailed(false); setReady(false);
-    const kindOf = (d: { data?: Record<string, unknown> }) => (d.data?.kind ?? "paper") as EntityKind;
-    const graph = new Graph({
-      container: box, width: box.clientWidth, height: box.clientHeight,
-      padding: [40, 70, 50, 70], autoFit: "view", zoomRange: [.15, 4],
-      animation: still ? false : { duration: 360, easing: "ease-out" },
-      data: {
-        nodes: data.nodes.map(n => ({ id: n.id, data: { ...n }, ...(restored?.nodes[n.id] ? { style: { x: restored.nodes[n.id][0], y: restored.nodes[n.id][1] } } : {}) })),
-        edges: data.edges.map((e, i) => ({ id: `edge-${i}`, source: e.source, target: e.target, data: { ...e } })),
-      },
-      layout: restored ? undefined : { type: "force", preventOverlap: true, nodeSize: 120, linkDistance: 150, maxIteration: 350, gravity: 4, animation: false },
-      node: {
-        type: d => kindOf(d) === "author" ? "circle" : "rect",
-        style: {
-          size: d => ({ paper: [150, 48], keyword: [104, 30], venue: [96, 28], author: 14 } as const)[kindOf(d)] as number | [number, number],
-          radius: (d: { data?: Record<string, unknown> }) => kindOf(d) === "keyword" ? 15 : kindOf(d) === "author" ? 7 : 6,
-          fill: d => kindOf(d) === "author" ? KIND_COLOR.author : KIND_TINT[kindOf(d)],
-          stroke: d => kindOf(d) === "author" ? "#ffffff" : kindOf(d) === "paper" ? "#cbd2dc" : KIND_COLOR[kindOf(d)],
-          lineWidth: d => kindOf(d) === "author" ? 2 : 1,
-          strokeOpacity: d => kindOf(d) === "keyword" || kindOf(d) === "venue" ? .45 : 1,
-          shadowColor: "rgba(19, 32, 58, .14)",
-          shadowBlur: d => kindOf(d) === "paper" ? 10 : 0,
-          shadowOffsetY: d => kindOf(d) === "paper" ? 3 : 0,
-          labelText: d => { const text = String(d.data?.label ?? ""); return text.length > 52 ? `${text.slice(0, 51)}…` : text; },
-          labelPlacement: d => kindOf(d) === "author" ? "bottom" : "center",
-          labelFontFamily: d => kindOf(d) === "paper" ? tokens.fonts.read : tokens.fonts.ui,
-          labelFontSize: d => kindOf(d) === "paper" ? 12 : 11.5,
-          labelFontWeight: d => kindOf(d) === "paper" ? 400 : 500,
-          labelLineHeight: 15,
-          labelFill: d => kindOf(d) === "paper" ? tokens.ink : KIND_COLOR[kindOf(d)],
-          labelWordWrap: true, labelMaxWidth: d => kindOf(d) === "paper" ? 132 : 96, labelMaxLines: 2,
-          labelBackground: d => kindOf(d) === "author", labelBackgroundFill: "#ffffff", labelBackgroundOpacity: .9, labelBackgroundRadius: 4,
-          cursor: "pointer",
-        },
-        state: {
-          selected: { stroke: tokens.ink, lineWidth: 1.5, strokeOpacity: 1, halo: true, haloStroke: tokens.brand, haloStrokeOpacity: .16, haloLineWidth: 12 },
-          neighbor: { strokeOpacity: 1, lineWidth: 1.5 },
-          dim: { opacity: .2 },
-        },
-      },
-      edge: {
-        type: "quadratic",
-        style: {
-          stroke: d => RELATIONS[String(d.data?.relation)]?.color ?? tokens.lineStrong,
-          lineDash: d => RELATIONS[String(d.data?.relation)]?.dash ?? [],
-          endArrow: d => d.data?.relation === "cites", endArrowSize: 7, curveOffset: 14,
-          lineWidth: d => d.data?.relation === "cites" || d.data?.relation === "similar" ? 1.5 : 1,
-          opacity: d => d.data?.relation === "cites" || d.data?.relation === "similar" ? .7 : .45,
-        },
-        state: { active: { opacity: 1, lineWidth: 2.2 }, dim: { opacity: .05 } },
-      },
-      behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
-      plugins: [{ type: "tooltip", getContent: (_event: unknown, items: { data?: Record<string, unknown> }[]) => {
-        const el = document.createElement("div");
-        const node = items[0]?.data;
-        el.style.maxWidth = "300px";
-        el.textContent = node?.kind ? `${KIND_LABEL[node.kind as keyof typeof KIND_LABEL]}：${node.label}` : RELATIONS[String(node?.relation)]?.label ?? "关系";
-        return el;
-      } }],
-    });
-    graph.on(NodeEvent.CLICK, event => {
-      const id = (event as IElementEvent).target.id;
-      if (id) callback.current(id === selection.current ? "" : id);
-    });
-    graph.on(EdgeEvent.CLICK, event => {
-      const id = (event as IElementEvent).target.id;
-      if (id) edgeCallback.current?.(id);
-    });
-    graph.render().then(async () => {
-      settled = true;
-      if (!alive) { graph.destroy(); return; }
-      rendered = true;
-      if (restored) {
-        await graph.zoomTo(restored.zoom, false);
-        if (alive) await graph.translateTo(restored.position, false);
-      }
-      if (alive) { instance.current = graph; setReady(true); }
-    }).catch(() => { settled = true; if (!alive) graph.destroy(); else setFailed(true); });
-    let previousWidth = box.clientWidth;
-    const resize = new ResizeObserver(() => {
-      if (alive && rendered && box.clientWidth > 0) {
-        graph.resize(box.clientWidth, box.clientHeight);
-        if (Math.abs(box.clientWidth - previousWidth) > 80) void graph.fitView({}, false).catch(() => undefined);
-        previousWidth = box.clientWidth;
-      }
-    });
-    resize.observe(box);
-    return () => {
-      alive = false; resize.disconnect();
-      if (rendered) {
-        const pos = graph.getPosition();
-        const nodePositions = Object.fromEntries(data.nodes.map(n => {
-          const p = graph.getElementPosition(n.id);
-          return [n.id, [p[0], p[1]] as [number, number]];
-        }));
-        cameras.set(scope, { position: [pos[0], pos[1]], zoom: graph.getZoom(), signature, nodes: nodePositions });
-        if (cameras.size > 24) cameras.delete(cameras.keys().next().value!);
-      }
-      instance.current = null;
-      if (settled) graph.destroy();
-    };
-  }, [data, scope, fitKey, resetKey, still]);
-
-  useEffect(() => {
-    const graph = instance.current;
-    if (!graph || !ready) return;
-    const adjacent = new Set([selected]);
-    data.edges.filter(e => e.source === selected || e.target === selected).forEach(e => { adjacent.add(e.source); adjacent.add(e.target); });
-    const states: Record<string, string[]> = {};
-    data.nodes.forEach(n => { states[n.id] = !selected ? [] : n.id === selected ? ["selected"] : adjacent.has(n.id) ? ["neighbor"] : ["dim"]; });
-    data.edges.forEach((e, i) => { states[`edge-${i}`] = !selected ? [] : e.source === selected || e.target === selected ? ["active"] : ["dim"]; });
-    void graph.setElementState(states, !still).catch(() => undefined);
-    if (selected && selected !== lastFocused.current && data.nodes.some(n => n.id === selected)) void graph.focusElement(selected, still ? false : { duration: 480, easing: "ease-out" }).catch(() => undefined);
-    lastFocused.current = selected;
-  }, [selected, data, ready, still]);
-
-  return <div className="kg-explorer-canvas">
-    <div className="kg-canvas-tools"><div>
-      <Button size="small" disabled={!ready} aria-label="缩小图谱" onClick={() => { const g = instance.current; if (g) void g.zoomTo(Math.max(.15, g.getZoom() / 1.25)); }}>−</Button>
-      <Button size="small" disabled={!ready} aria-label="放大图谱" onClick={() => { const g = instance.current; if (g) void g.zoomTo(Math.min(4, g.getZoom() * 1.25)); }}>＋</Button>
-      <Button size="small" onClick={() => { cameras.delete(scope); setFitKey(k => k + 1); }}>适应画布</Button>
-    </div></div>
-    {failed ? <p className="kg-render-status" role="alert">图谱暂时无法绘制，可在右侧列表继续探索。<Button size="small" onClick={() => setFitKey(k => k + 1)}>重新绘制</Button></p> : !ready ? <p className="kg-render-status" role="status">正在排列节点…</p> : null}
-    <div ref={container} className="kg-g6-canvas" aria-label="可拖动缩放的科研知识关系网络" />
+  const box=useRef<HTMLDivElement>(null);
+  const layout=useMemo(()=>scholarLayout(data, data.nodes.find(n=>n.kind==="paper")?.id??""),[data]);
+  const [size,setSize]=useState({width:900,height:680});
+  const [camera,setCamera]=useState(cameras.get(scope)??{x:0,y:0,k:.8});
+  const cameraRef=useRef(camera); cameraRef.current=camera;
+  const drag=useRef<{id:number;x:number;y:number;cx:number;cy:number;moved:boolean}|null>(null);
+  const suppressClick=useRef(false);
+  const [hover,setHover]=useState("");
+  const fit=()=>{ const k=Math.min(1.1,(size.width-40)/layout.width,(size.height-100)/layout.height);setCamera({x:(size.width-layout.width*k)/2,y:(size.height-layout.height*k)/2+20,k}); };
+  useEffect(()=>{const el=box.current;if(!el)return;const ro=new ResizeObserver(()=>setSize({width:el.clientWidth,height:el.clientHeight}));ro.observe(el);return()=>ro.disconnect();},[]);
+  useEffect(()=>{fit();},[layout.width,layout.height,size.width,size.height,resetKey,scope]);
+  useEffect(()=>()=>{cameras.set(scope,cameraRef.current);},[scope]);
+  useEffect(()=>{const el=box.current;if(!el)return;const wheel=(event:WheelEvent)=>{event.preventDefault();const r=el.getBoundingClientRect(),c=cameraRef.current,x=event.clientX-r.left,y=event.clientY-r.top,k=Math.max(.1,Math.min(2.5,c.k*Math.exp(-event.deltaY*.001)));setCamera({x:x-(x-c.x)*k/c.k,y:y-(y-c.y)*k/c.k,k});};el.addEventListener("wheel",wheel,{passive:false});return()=>el.removeEventListener("wheel",wheel);},[]);
+  const byId=new Map(layout.nodes.map(n=>[n.node.id,n]));
+  const focus=hover||selected;
+  const adjacent=new Set([focus,...data.edges.filter(e=>e.source===focus||e.target===focus).flatMap(e=>[e.source,e.target])]);
+  const zoom=(factor:number)=>{const c=camera,k=Math.max(.1,Math.min(2.5,c.k*factor));setCamera({k,x:size.width/2-(size.width/2-c.x)*k/c.k,y:size.height/2-(size.height/2-c.y)*k/c.k});};
+  return <div ref={box} className="kg-explorer-canvas scholar-canvas" aria-label="可拖动缩放的科研知识关系网络" onPointerDown={event=>{suppressClick.current=false;if((event.target as Element).closest("button,a"))return;drag.current={id:event.pointerId,x:event.clientX,y:event.clientY,cx:camera.x,cy:camera.y,moved:false};suppressClick.current=false;event.currentTarget.setPointerCapture(event.pointerId);}} onPointerMove={event=>{const d=drag.current;if(!d||event.pointerId!==d.id)return;const dx=event.clientX-d.x,dy=event.clientY-d.y;if(Math.abs(dx)+Math.abs(dy)>5)d.moved=true;if(d.moved)setCamera(c=>({...c,x:d.cx+dx,y:d.cy+dy}));}} onPointerUp={()=>{suppressClick.current=Boolean(drag.current?.moved);drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}>
+    <div className="scholar-canvas-caption"><span><TagOutlined /></span><div><b>知识关系网络</b><small>探索论文与关键词之间的连接</small></div></div>
+    <div className="kg-canvas-tools"><button aria-label="缩小图谱" onClick={()=>zoom(1/1.2)}><MinusOutlined /></button><button aria-label="放大图谱" onClick={()=>zoom(1.2)}><PlusOutlined /></button><button onClick={fit}><ExpandOutlined /> 适应画布</button><button aria-label="定位选中节点" onClick={()=>{const n=byId.get(selected);if(n)setCamera(c=>({...c,x:size.width/2-n.x*c.k,y:size.height/2-n.y*c.k}));else fit();}}><AimOutlined /></button></div>
+    <svg className="scholar-network" width={size.width} height={size.height} aria-label={`${layout.nodes.length} 个知识节点`}>
+      <defs>{Object.entries(RELATIONS).map(([key,value])=><marker key={key} id={`scholar-${key}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7Z" fill={value.color}/></marker>)}</defs>
+      <g transform={`translate(${camera.x},${camera.y}) scale(${camera.k})`}>
+        {data.edges.map((edge,i)=>{const a=byId.get(edge.source),b=byId.get(edge.target);if(!a||!b)return null;const dx=b.x-a.x,dy=b.y-a.y,t=1/Math.max(Math.abs(dx)/(b.width/2+4),Math.abs(dy)/(b.height/2+4),1),x=b.x-dx*t,y=b.y-dy*t,mx=(a.x+x)/2-dy*.12,my=(a.y+y)/2+dx*.12;const meta=RELATIONS[edge.relation];return <g key={`${edge.source}-${edge.target}-${edge.relation}`} className={`scholar-edge ${focus&&!adjacent.has(edge.source)&&!adjacent.has(edge.target)?"is-muted":""}`} onClick={()=>{if(!suppressClick.current)onSelectEdge?.(`edge-${i}`);}}><path d={`M${a.x},${a.y} Q${mx},${my} ${x},${y}`} fill="none" stroke={meta?.color??"#bac9de"} strokeWidth={edge.source===focus||edge.target===focus?1.6:1} strokeDasharray={meta?.dash?.join(" ")} markerEnd={edge.relation==="cites"?"url(#scholar-cites)":undefined}/>{(edge.source===selected||edge.target===selected)&&["cites","similar","authored_by","published_in"].includes(edge.relation)?<text x={mx} y={my-6} textAnchor="middle" fill={meta?.color} fontSize="10">{edge.relation==="cites"?"引用":edge.relation==="similar"?"相似":edge.relation==="authored_by"?"作者":"发表"}</text>:null}</g>;})}
+        {layout.nodes.map(({node,x,y,width,height})=><foreignObject key={node.id} x={x-width/2} y={y-height/2} width={width} height={height} overflow="visible"><button type="button" className={`scholar-node is-${node.kind}${node.id===selected?" is-selected":""}${focus&&!adjacent.has(node.id)?" is-muted":""}`} title={node.label} aria-label={`${KIND_LABEL[node.kind]}：${node.label}`} aria-pressed={node.id===selected} onMouseEnter={()=>setHover(node.id)} onMouseLeave={()=>setHover("")} onFocus={()=>setHover(node.id)} onBlur={()=>setHover("")} onClick={()=>{if(!suppressClick.current)onSelect(node.id);}}><i>{ICON[node.kind]}</i><span><b>{node.label}</b>{node.kind==="paper"?<small>{node.year??"年份未知"}<em>·</em>{node.venue||node.sources?.[0]||"论文"}</small>:null}</span></button></foreignObject>)}
+      </g>
+    </svg>
+    {!data.nodes.length?<p className="scholar-canvas-empty">当前筛选下没有节点，请调整上方显示类型。</p>:null}
   </div>;
 }

@@ -3,18 +3,18 @@ import { Alert, Button } from "antd";
 import type { ReactNode } from "react";
 import {
   ArrowLeftOutlined, BarChartOutlined, BulbOutlined, ClockCircleOutlined, ExportOutlined, FileTextOutlined,
-  PlayCircleOutlined, PlusSquareOutlined, ProfileOutlined, ReadOutlined, SettingOutlined,
+  ProfileOutlined, ReadOutlined, ReloadOutlined, SettingOutlined,
   StarOutlined,
 } from "@ant-design/icons";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { fetchPaper, prepareWorkspace, startAnalysis } from "../../api";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { fetchPaper, startAnalysis } from "../../api";
 import { useAnalysisPolling } from "../../useAnalysisPolling";
 import { Abstract, formatAuthors } from "../../components/PaperRow";
 import { AnalysisProgress } from "../../components/AnalysisProgress";
 import { projects } from "../../projects";
 import type { AnalysisClaim, AnalysisResult, AnalysisState, ClaimKind, Paper } from "../../types";
 import { ccfLabel, SOURCE_LABEL } from "../../types";
-import { recommendLocation, safeReturn, workspacePaperPath } from "../../workspace";
+import { safeReturn } from "../../workspace";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
 
 const ACTIVE = new Set(["pending", "preparing", "analyzing"]);
@@ -40,7 +40,6 @@ function sectionText(result: AnalysisResult | null, kinds: ClaimKind[], legacy: 
 }
 
 export default function PaperReadPage() {
-  const navigate = useNavigate();
   const { paperKey: key = "" } = useParams();
   const { id, project } = useWorkspaceProject();
   const [params] = useSearchParams();
@@ -51,10 +50,10 @@ export default function PaperReadPage() {
   const stored = project?.papers[key];
   const [paper, setPaper] = useState<Paper | null>(stored?.paper ?? null);
   const [state, setState] = useState<AnalysisState | null>(null);
-  const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
-  const [openingChat, setOpeningChat] = useState(false);
-  const connectionError = useAnalysisPolling(key, starting, setState);
+  const [actionError, setActionError] = useState("");
+  const [repoll, setRepoll] = useState(false);
+  const connectionError = useAnalysisPolling(key, repoll, setState);
   const [tab, setTab] = useState<"analysis" | "source">("analysis");
   const [open, setOpen] = useState("");
   useEffect(() => { document.title = paper ? `${paper.title} - 论文详情` : "论文详情"; }, [paper]);
@@ -79,21 +78,6 @@ export default function PaperReadPage() {
     "05": [result?.experimental_results ?? "", result?.limitations ?? ""],
   };
 
-  async function rerun() {
-    setStarting(true); setError("");
-    try { setState(await startAnalysis(key, Boolean(result))); }
-    catch (err) { setError(err instanceof TypeError ? "提交时网络连接中断，请以重新获取的任务进度为准。" : err instanceof Error ? err.message : "分析失败，请重试"); }
-    finally { setStarting(false); }
-  }
-  async function openChat() {
-    if (openingChat || !project || !paper) return;
-    setOpeningChat(true); setError("");
-    try {
-      await prepareWorkspace(id, project.name, Object.keys(project.papers));
-      navigate(`/w/${id}/research?papers=${encodeURIComponent(key)}`);
-    } catch (err) { setError(err instanceof Error ? err.message : "新建对话失败"); }
-    finally { setOpeningChat(false); }
-  }
   function exportAnalysis() {
     const lines = [`# ${paper!.title}`, "", summary && `> ${summary}`, ""];
     for (const group of GROUPS) lines.push(`## ${group.no} ${group.title}`, "", sectionText(result, group.kinds, legacy[group.no]) || "未分析", "");
@@ -103,7 +87,19 @@ export default function PaperReadPage() {
     anchor.href = url; anchor.download = `${paper!.title.slice(0, 40)}.md`; anchor.click();
     URL.revokeObjectURL(url);
   }
-  const busy = running || starting;
+  const busy = running;
+  async function runAnalysis(reanalyze: boolean) {
+    setStarting(true);
+    setActionError("");
+    try {
+      setState(await startAnalysis(key, reanalyze));
+      setRepoll(value => !value);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "分析启动失败，请重试");
+    } finally {
+      setStarting(false);
+    }
+  }
   const sources = paper.sources.map(source => SOURCE_LABEL[source] ?? source);
   const keywords = claimsOf(result, ["keyword"]).map(claim => claim.text);
   const tags = [...new Set([ccfLabel(paper), ...sources, ...(keywords.length ? keywords : result?.keywords ?? [])])]
@@ -134,15 +130,15 @@ export default function PaperReadPage() {
         {tags.length ? <i className="read-split" aria-hidden /> : null}
         {tags.map(item => <span key={item} className="read-tag">{item}</span>)}
       </div>
-      <AnalysisProgress status={state?.task?.status ?? (state ? result ? "success" : "idle" : error ? "unavailable" : "loading")} hasResult={Boolean(result)} starting={starting} />
+      <AnalysisProgress status={state?.task?.status ?? (state ? result ? "success" : "idle" : "loading")} hasResult={Boolean(result)} starting={starting} />
       <div className="read-actions">
-        <Button type={result ? "default" : "primary"} icon={<PlayCircleOutlined />} loading={busy} onClick={rerun}>{result ? "重新分析" : "开始分析"}</Button>
-        <Button icon={<PlusSquareOutlined />} onClick={() => navigate(`/w/${id}/compare/table?pick=${encodeURIComponent(key)}`)}>加入论文对比</Button>
-        <Button onClick={() => navigate(recommendLocation(key, workspacePaperPath(id, key)))}>论文相似度搜索</Button>
-        <Button loading={openingChat} onClick={openChat}>与研究助手讨论</Button>
         <Button icon={<ExportOutlined />} disabled={!result} onClick={exportAnalysis}>导出分析</Button>
+        {result || state?.task?.status === "failed"
+          ? <Button icon={<ReloadOutlined />} disabled={running} loading={starting}
+              onClick={() => void runAnalysis(Boolean(result))}>{state?.task?.status === "failed" && !result ? "重试分析" : "重新分析"}</Button>
+          : <Button icon={<StarOutlined />} disabled={running} loading={starting} onClick={() => void runAnalysis(false)}>开始分析</Button>}
       </div>
-      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {actionError ? <Alert type="error" showIcon message={actionError} /> : null}
       {connectionError ? <Alert type="warning" showIcon message={connectionError} /> : null}
       {state?.task?.status === "failed" ? <Alert type="error" showIcon message={state.task.error || "分析失败，请重试"} /> : null}
       <div className="read-tabs" role="tablist">

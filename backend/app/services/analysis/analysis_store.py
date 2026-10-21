@@ -80,26 +80,31 @@ def _latest_result(db, aliases: set[str], local_id: str | None):
 
 
 def create_task(paper_ref: str, aliases: set[str], local_id: str | None, reanalyze: bool, model_name: str, prompt_version: str) -> Decision:
-    aliases = set(aliases)
-    aliases.add(paper_ref)
     with connection() as db, db:
         db.execute("BEGIN IMMEDIATE")
-        sql, params = task_filter(aliases, local_id)
-        active = db.execute(f"""SELECT * FROM analysis_tasks WHERE status IN ('pending', 'preparing', 'analyzing') AND {sql}
-            ORDER BY created_at DESC LIMIT 1""", params).fetchone()
-        result = _latest_result(db, aliases, local_id)
-        if active:
-            return Decision(dict(active), False, True, dict(result) if result else None)
-        if result and not reanalyze:
-            task = db.execute(f"SELECT * FROM analysis_tasks WHERE {sql} ORDER BY created_at DESC LIMIT 1", params).fetchone()
-            return Decision(dict(task) if task else None, False, False, dict(result))
-        task_id = uuid4().hex
-        db.execute("""INSERT INTO analysis_tasks
-            (task_id, paper_ref, local_id, status, error, model_name, prompt_version, reanalyze, created_at)
-            VALUES (?, ?, ?, 'pending', NULL, ?, ?, ?, ?)""",
-            (task_id, paper_ref, local_id, model_name, prompt_version, int(reanalyze), now()))
-        created = db.execute("SELECT * FROM analysis_tasks WHERE task_id = ?", (task_id,)).fetchone()
-        return Decision(dict(created), True, False, dict(result) if result else None)
+        return create_task_in_transaction(db, paper_ref, aliases, local_id, reanalyze, model_name, prompt_version)
+
+
+def create_task_in_transaction(db, paper_ref: str, aliases: set[str], local_id: str | None,
+                               reanalyze: bool, model_name: str, prompt_version: str) -> Decision:
+    aliases = set(aliases)
+    aliases.add(paper_ref)
+    sql, params = task_filter(aliases, local_id)
+    active = db.execute(f"""SELECT * FROM analysis_tasks WHERE status IN ('pending', 'preparing', 'analyzing') AND {sql}
+        ORDER BY created_at DESC LIMIT 1""", params).fetchone()
+    result = _latest_result(db, aliases, local_id)
+    if active:
+        return Decision(dict(active), False, True, dict(result) if result else None)
+    if result and not reanalyze:
+        task = db.execute(f"SELECT * FROM analysis_tasks WHERE {sql} ORDER BY created_at DESC LIMIT 1", params).fetchone()
+        return Decision(dict(task) if task else None, False, False, dict(result))
+    task_id = uuid4().hex
+    db.execute("""INSERT INTO analysis_tasks
+        (task_id, paper_ref, local_id, status, error, model_name, prompt_version, reanalyze, created_at)
+        VALUES (?, ?, ?, 'pending', NULL, ?, ?, ?, ?)""",
+        (task_id, paper_ref, local_id, model_name, prompt_version, int(reanalyze), now()))
+    created = db.execute("SELECT * FROM analysis_tasks WHERE task_id = ?", (task_id,)).fetchone()
+    return Decision(dict(created), True, False, dict(result) if result else None)
 
 
 def get_state(aliases: set[str], local_id: str | None) -> tuple[dict | None, dict | None]:
@@ -172,3 +177,9 @@ def create_tool_task(paper_ref: str, local_id: str, model_name: str, prompt_vers
             VALUES (?, ?, ?, 'preparing', ?, ?, ?, ?)""",
             (task_id, paper_ref, local_id, model_name, prompt_version, stamp, stamp))
     return task_id
+
+
+def next_pending() -> str | None:
+    with connection() as db:
+        row = db.execute("SELECT task_id FROM analysis_tasks WHERE status='pending' ORDER BY created_at, task_id LIMIT 1").fetchone()
+        return row[0] if row else None

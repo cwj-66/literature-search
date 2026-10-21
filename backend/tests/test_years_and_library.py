@@ -108,6 +108,30 @@ class YearsAndLibraryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(library.list_papers(1, 20)["total"], 1)
         self.assertEqual(library.get_paper("doi:10.1234/test").local_id, results[0][0].local_id)
 
+    async def test_import_with_snapshot_skips_upstream_fetch(self):
+        snapshot = {"title": "Snapshot Title", "authors": ["A", "B"], "year": 2026, "venue": "arXiv（预印本）",
+                    "abstract": "S", "url": "https://arxiv.org/abs/2604.11209", "citation_count": 3}
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            with patch("app.main.fetch_paper", new=AsyncMock(side_effect=AssertionError("must not fetch upstream"))):
+                result = await client.post("/api/papers/import", json={"external_id": "arxiv:2604.11209", "snapshot": snapshot})
+                self.assertEqual(result.status_code, 201)
+                saved = result.json()["paper"]
+                self.assertEqual(saved["title"], "Snapshot Title")
+                self.assertEqual(saved["authors"], ["A", "B"])
+                self.assertEqual(saved["arxiv_id"], "2604.11209")
+                self.assertEqual(saved["citation_count"], 3)
+                duplicate = await client.post("/api/papers/import", json={"external_id": "2604.11209v2", "snapshot": snapshot})
+                self.assertEqual(duplicate.status_code, 200)
+                self.assertFalse(duplicate.json()["created"])
+                self.assertEqual(duplicate.json()["paper"]["local_id"], saved["local_id"])
+                doi = await client.post("/api/papers/import", json={"external_id": "doi:10.1234/snap", "snapshot": {**snapshot, "url": None}})
+                self.assertEqual(doi.status_code, 201)
+                self.assertEqual(doi.json()["paper"]["doi"], "10.1234/snap")
+                self.assertEqual(doi.json()["paper"]["url"], "https://doi.org/10.1234/snap")
+                bad = await client.post("/api/papers/import", json={"external_id": "arxiv:2604.11210", "snapshot": {**snapshot, "title": "  "}})
+                self.assertEqual(bad.status_code, 400)
+                self.assertIsInstance(bad.json()["detail"], str)
+
     async def test_import_errors_do_not_write_and_allow_retry(self):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             for payload, status in [({}, 422), ({"external_id": "invalid"}, 400), ({"url": "http://localhost/a"}, 400)]:

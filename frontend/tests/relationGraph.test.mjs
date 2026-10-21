@@ -93,3 +93,13 @@ test('pending imported paper is promoted using its known aliases before discover
   assert.equal(graph.nodes.filter(n => n.center).length, 2);
   assert.equal(graph.edges[0].target, 'arxiv:B');
 });
+
+
+test('many roots retain all nodes and grow the layout beyond the five-root canvas', () => {
+  const roots = Array.from({length: 30}, (_, i) => root(`R${i}`));
+  const graph = buildSpaceGraph(payload(roots, roots.map(r => group(r.id, [`child-${r.id}`]))));
+  assert.equal(graph.nodes.filter(n => n.center).length, 30);
+  assert.equal(graph.edges.length, 30);
+  assert.equal(new Set(graph.nodes.filter(n => n.center).map(n => `${n.x},${n.y}`)).size, 30);
+  assert.ok(graph.width > 1900 && graph.height > 1400);
+});

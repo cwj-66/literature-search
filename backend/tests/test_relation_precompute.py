@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import tempfile
@@ -39,6 +40,40 @@ class PrecomputeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot["status"], "ready")
         self.assertTrue(all(len(g["items"]) == 1 for g in snapshot["payload"]["recommendations"]["groups"]))
         self.assertEqual(library.list_papers(1, 100)["total"], 1)
+
+    async def test_import_automatically_queues_analysis_once_and_worker_reads_durable_job(self):
+        from app.services.analysis import analysis, analysis_store
+        library.save_paper(self.paper, self.paper.id)
+        with connection() as db:
+            rows = db.execute("SELECT * FROM analysis_tasks WHERE local_id=?", (self.saved.local_id,)).fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "pending")
+        self.assertEqual(analysis_store.next_pending(), rows[0]["task_id"])
+        reached = asyncio.Event()
+
+        async def run(task_id):
+            self.assertEqual(task_id, rows[0]["task_id"])
+            reached.set()
+            await asyncio.Future()
+
+        with patch.object(analysis, "run_task", new=run):
+            worker = asyncio.create_task(analysis.worker(asyncio.Queue()))
+            try:
+                await asyncio.wait_for(reached.wait(), 5)
+            finally:
+                worker.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await worker
+
+    async def test_analysis_enqueue_failure_rolls_back_import_and_relation_job(self):
+        from app.services.analysis import analysis_store
+        other = PaperOut(id="arxiv:2401.00009", title="Other")
+        with patch.object(analysis_store, "create_task_in_transaction", side_effect=RuntimeError("enqueue failed")):
+            with self.assertRaises(RuntimeError):
+                library.save_paper(other, other.id)
+        self.assertIsNone(library.get_paper(other.id))
+        with connection() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM relation_jobs").fetchone()[0], 1)
 
     async def test_new_import_does_not_invalidate_existing_snapshot(self):
         job = store.claim(); store.finish(job, payload())

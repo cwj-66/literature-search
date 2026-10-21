@@ -9,14 +9,14 @@ function loadModule(relative) {
   return import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 }
 
-const { MAX_CENTERS, toggleSelection, parseSeeds, CATEGORY_ORDER, resolveFocus, assignSections, arrowOf, metricText } = await loadModule('../src/relationLayout.ts');
+const { toggleSelection, parseSeeds, CATEGORY_ORDER, resolveFocus, assignSections, arrowOf, metricText } = await loadModule('../src/relationLayout.ts');
 
-test('toggleSelection appends in order, removes on re-click, rejects a sixth pick without mutating', () => {
+test('toggleSelection appends in order, removes on re-click, allows more than five picks without mutating', () => {
   let selected = [];
   for (const key of ['a', 'b', 'c', 'd', 'e']) selected = toggleSelection(selected, key);
   assert.deepEqual(selected, ['a', 'b', 'c', 'd', 'e']);
-  assert.equal(toggleSelection(selected, 'f'), null);
-  assert.deepEqual(selected, ['a', 'b', 'c', 'd', 'e'], 'rejected pick must not mutate');
+  assert.deepEqual(toggleSelection(selected, 'f'), ['a', 'b', 'c', 'd', 'e', 'f']);
+  assert.deepEqual(selected, ['a', 'b', 'c', 'd', 'e'], 'appending must not mutate');
   const removed = toggleSelection(selected, 'b');
   assert.deepEqual(removed, ['a', 'c', 'd', 'e']);
   assert.deepEqual(selected, ['a', 'b', 'c', 'd', 'e'], 'original array unchanged');

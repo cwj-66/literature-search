@@ -5,6 +5,7 @@ import { cssVars } from "./theme";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/pages.css";
+import "./styles/scholar-workspace.css";
 
 for (const [name, value] of Object.entries(cssVars)) document.documentElement.style.setProperty(name, value);
 

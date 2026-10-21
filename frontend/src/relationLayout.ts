@@ -1,10 +1,7 @@
 import type { RecommendationItem, RelateSatelliteGroup } from "./types";
 
-export const MAX_CENTERS = 5;
-
-export function toggleSelection(selected: string[], key: string): string[] | null {
+export function toggleSelection(selected: string[], key: string): string[] {
   if (selected.includes(key)) return selected.filter((item) => item !== key);
-  if (selected.length >= MAX_CENTERS) return null;
   return [...selected, key];
 }
 

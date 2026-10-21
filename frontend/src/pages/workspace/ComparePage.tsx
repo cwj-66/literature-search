@@ -7,7 +7,7 @@ import { RelationBoard } from "../../components/RelationBoard";
 import { parseSeeds, toggleSelection } from "../../relationLayout";
 import { mergeRelationSnapshots, paperSnapshot } from "../../relationGraph";
 import { findKey, projects } from "../../projects";
-import { paperKey, type RecommendationItem, type RelateResponse } from "../../types";
+import { type RecommendationItem, type RelateResponse } from "../../types";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
 import "../../styles/paper-relations.css";
 
@@ -81,29 +81,28 @@ export default function ComparePage() {
   }
   function toggle(key: string) {
     const next = toggleSelection(selected, key);
-    if (next === null) { message.warning("最多同时展开 5 篇主论文"); return; }
     select(next);
   }
   function refresh() {
     setRequest(r => ({ seq: r.seq + 1, refresh: true }));
   }
-  async function save(item: RecommendationItem, expand: boolean) {
+  async function save(item: RecommendationItem) {
     if (saving || loading) return;
-    if (expand && selected.length >= 5) { setSaveError("最多同时展开 5 篇主论文，请先收起一篇。"); return; }
     setSaving(true); setSaveError("");
     try {
       const existing = findKey(project, item) || entries.find(([key, { paper }]) =>
         [item.id, ...(item.aliases ?? [])].some(alias => alias === key || alias === paper.id
           || alias === `arxiv:${paper.arxiv_id}` || alias === `doi:${paper.doi?.toLowerCase()}` || alias === `s2:${paper.semantic_scholar_id}`))?.[0];
-      const saved = existing ? project!.papers[existing].paper : (await importPaper(item.id)).paper;
+      const saved = existing ? project!.papers[existing].paper : (await importPaper(item.id, {
+        // The recommendation already carries the metadata; no upstream fetch is needed to join the library.
+        title: item.title, authors: item.authors ?? [], year: item.year,
+        venue: item.venue ?? null, abstract: item.abstract ?? null, url: item.url ?? null,
+        citation_count: item.citation_count ?? null,
+      })).paper;
       // Persist workspace membership before updating local selection or expanding the graph.
       await prepareWorkspace(id, project!.name, [saved.local_id ?? saved.id]);
       projects.select(id); projects.add(saved);
-      if (expand) {
-        const key = existing ?? paperKey(saved);
-        select([...new Set([...selected, key])]);
-        message.success("已加入论文库，关联结果将在后台准备");
-      } else message.success("已加入当前工作区的论文库");
+      message.success("已加入论文库，分析和相似论文将在后台自动准备");
     } catch (err) { setSaveError(err instanceof Error ? err.message : "保存失败，请重试"); }
     finally { setSaving(false); }
   }
@@ -122,7 +121,7 @@ export default function ComparePage() {
           className={`chip${selected.includes(key) ? " is-selected" : ""}`} onClick={() => toggle(key)}>
           <span className="chip-check">{selected.includes(key) ? "✓" : "+"}</span><span className="chip-title">{item.paper.title}</span></button>)}
           {!visible.length ? <span className="chip-no-results">未找到匹配论文</span> : null}</div>
-        <span className="relations-selection-count">{selected.length}/5 已展开</span>
+        <span className="relations-selection-count">{selected.length} 篇已展开</span>
       </section>
       <div className="relations-board-wrap">
         {selected.length && data?.centers.length ? <RelationBoard data={data} workspaceId={id} from={here} busy={loading} preparing={preparing} saving={saving} error={saveError}

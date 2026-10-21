@@ -15,7 +15,11 @@ export function ImportButton({ paper, onSaved, primary = false }: { paper: Paper
     setLoading(true);
     setError("");
     try {
-      const result = await importPaper(paper.id);
+      const result = await importPaper(paper.id, {
+        title: paper.title, authors: paper.authors, year: paper.year,
+        venue: paper.venue, abstract: paper.abstract, url: paper.url,
+        citation_count: paper.citation_count,
+      });
       setSaved({ created: result.created });
       onSaved?.(result.paper);
     } catch (err) {

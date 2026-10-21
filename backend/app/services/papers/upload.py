@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.infrastructure import mineru
 from app.schemas import PaperOut
-from app.services.papers import documents, library
+from app.services.papers import library
 from app.tools import index_paper as index_tool
 from app.tools.parse_paper import parse_paper
 
@@ -75,7 +75,7 @@ async def ingest_pdf(data: bytes, filename: str | None, workspace_id: str | None
         venue="本地上传",
         sources=["upload"],
     )
-    saved, created = await asyncio.to_thread(library.save_paper, paper, paper.id)
-    await asyncio.to_thread(documents.save, saved.local_id, saved.id, body, name, structure)
+    saved, created = await asyncio.to_thread(library.save_paper, paper, paper.id,
+        document={"text": body, "filename": name, "structure": structure})
     indexed = await index_tool.index_paper(saved.local_id, text=body, title=saved.title, workspace_id=workspace_id)
     return {"paper": saved, "created": created, "index": indexed}

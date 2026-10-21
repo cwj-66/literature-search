@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../src/knowledgeGraph.ts', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } });
-const { filterGraph, canvasGraph, topicStats, relatedPapers, topicGroups } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+const { selectGraphPapers, filterGraph, canvasGraph, topicStats, relatedPapers, topicGroups } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 const graph = {
   total_papers: 3, scope: 'test',
   nodes: [
@@ -57,4 +57,16 @@ test('canvas cap cannot truncate statistics and keeps selected paper plus valid 
   const ids = new Set(canvas.nodes.map(n => n.id));
   assert.ok(canvas.edges.every(e => ids.has(e.source) && ids.has(e.target) && e.relation === 'has_keyword'));
   assert.equal(canvasGraph(graph, [], '').edges.length, 0);
+});
+
+
+test('paper selector preserves shared entities and drops edges to unselected papers',()=>{
+ const one=selectGraphPapers(graph,['p1']);
+ assert.deepEqual(one.nodes.filter(n=>n.kind==='paper').map(n=>n.id),['p1']);
+ assert.ok(one.nodes.some(n=>n.id==='k1'));
+ assert.ok(!one.edges.some(e=>e.source==='p2'||e.target==='p2'));
+ assert.equal(selectGraphPapers(graph,[]),graph);
+ const two=selectGraphPapers(graph,['p1','p2']);
+ assert.equal(two.nodes.filter(n=>n.id==='k1').length,1);
+ assert.ok(two.edges.some(e=>e.relation==='cites'));
 });

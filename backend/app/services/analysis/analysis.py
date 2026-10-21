@@ -131,7 +131,14 @@ async def run_task(task_id: str) -> None:
 
 async def worker(queue: asyncio.Queue) -> None:
     while True:
-        task_id = await queue.get()
+        from_queue = True
+        try:
+            task_id = await asyncio.wait_for(queue.get(), timeout=1)
+        except TimeoutError:
+            from_queue = False
+            task_id = await asyncio.to_thread(store.next_pending)
+            if task_id is None:
+                continue
         try:
             await run_task(task_id)
         except asyncio.CancelledError:
@@ -140,4 +147,5 @@ async def worker(queue: asyncio.Queue) -> None:
             log.exception("analysis worker failed for %s", task_id)
             await asyncio.to_thread(store.fail, task_id, "分析失败，请重试")
         finally:
-            queue.task_done()
+            if from_queue:
+                queue.task_done()

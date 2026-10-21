@@ -77,7 +77,7 @@ npm --prefix frontend run build
 
 | 请求 | 参数 / 结果 |
 | --- | --- |
-| `POST /api/papers/import` | JSON `{ "external_id": "arxiv:2005.11401" }`，也支持单独提供 `url`、`id`、`arxiv_id` 或 `doi`，这些字段只能选一个 |
+| `POST /api/papers/import` | JSON `{ "external_id": "arxiv:2005.11401" }`，也支持单独提供 `url`、`id`、`arxiv_id` 或 `doi`，这些字段只能选一个；可附带 `snapshot`（title 必填，authors/year/venue/abstract/url/citation_count 可选），提供时直接按快照入库，不再请求上游，外部标识仍以规范化后的参考为准 |
 | 新增成功 | HTTP 201，`{ "paper": { ...论文字段, "local_id": "内部ID", "imported_at": "UTC时间" }, "created": true }` |
 | 重复导入 | HTTP 200，`created: false`，返回已有 `local_id` |
 | `GET /api/papers/{id}` | 读取已入库论文；id 可为 local_id 或已保存的外部 ID，路径特殊字符需编码；未入库返回中文 404 |

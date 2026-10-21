@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { Alert, Button, Skeleton } from "antd";
 import { useLocation } from "react-router-dom";
-import { fillGraphCitations, fillGraphSimilar } from "../../api";
 import { GraphEmpty } from "../../components/EmptyState";
 import { KnowledgeExplorer } from "../../components/KnowledgeExplorer";
 import { useKnowledgeGraph, withWorkspaceMetadata, workspaceNodeKey } from "../../useKnowledgeGraph";
@@ -24,8 +23,8 @@ export default function GraphPage() {
     {!count ? <GraphEmpty workspaceId={id} /> : <>
       {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={refresh}>重试</Button>} /> : null}
       {!raw && !error ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
-      {snapshots ? <p className="kg-data-note">{snapshots} 篇论文尚未入库，展示其真实工作区元数据。打开论文执行 AI 分析后，可补齐主题和方法信息。</p> : null}
-      {data ? <KnowledgeExplorer data={data} scope={`workspace-${id}`} workspaceId={id} references={references} onFill={async ids => { const result = await fillGraphCitations(ids); refresh(); return result; }} onFillSimilar={async ids => { const result = await fillGraphSimilar(ids); refresh(); return result; }} paperKey={node => workspaceNodeKey(project, node)} paperHref={node => {
+      {snapshots ? <p className="kg-data-note">{snapshots} 篇论文尚未入库，展示其真实工作区元数据。入库并完成后台分析后，可补齐主题和方法信息。</p> : null}
+      {data ? <KnowledgeExplorer data={data} scope={`workspace-${id}`} workspaceId={id} references={references} paperKey={node => workspaceNodeKey(project, node)} paperHref={node => {
         const key = workspaceNodeKey(project, node);
         return key ? workspacePaperPath(id, key, here) : paperLocation(node.paper_id ?? node.local_id ?? "", here);
       }} recommendHref={node => {

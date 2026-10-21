@@ -98,13 +98,19 @@ export function buildSpaceGraph(data: RelateResponse): SpaceGraph {
 
 function layoutSpace(nodes: SpaceNode[], edges: SpaceEdge[]): SpaceGraph {
   const centers = nodes.filter(n => n.center);
-  const width = centers.length <= 2 ? Math.max(1160, centers.length * 680) : centers.length < 5 ? 1660 : 1900;
-  const height = centers.length <= 2 ? 850 : centers.length < 5 ? 1240 : 1400;
+  const columns = Math.ceil(Math.sqrt(centers.length));
+  const rows = Math.ceil(centers.length / columns);
+  const width = centers.length > 5 ? columns * 720 : centers.length <= 2 ? Math.max(1160, centers.length * 680) : centers.length < 5 ? 1660 : 1900;
+  const height = centers.length > 5 ? rows * 680 : centers.length <= 2 ? 850 : centers.length < 5 ? 1240 : 1400;
   const centerMap = new Map<string, SpaceNode>();
   centers.forEach((node, i) => {
     const angle = -Math.PI / 2 + i * Math.PI * 2 / centers.length;
     node.x = centers.length <= 2 ? (centers.length === 1 ? width / 2 : 380 + i * (width - 760)) : width / 2 + Math.cos(angle) * (centers.length === 5 ? 480 : 390);
     node.y = centers.length <= 2 ? height / 2 : height / 2 + Math.sin(angle) * (centers.length === 5 ? 410 : 320);
+    if (centers.length > 5) {
+      node.x = 360 + (i % columns) * 720;
+      node.y = 340 + Math.floor(i / columns) * 680;
+    }
     centerMap.set(node.id, node);
   });
   const satellites = nodes.filter(n => !n.center);

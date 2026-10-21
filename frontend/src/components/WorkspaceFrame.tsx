@@ -1,62 +1,34 @@
 import { useState, type ReactNode } from "react";
 import { Dropdown } from "antd";
-import { EditOutlined } from "@ant-design/icons";
-import { WorkspaceRenameDialog } from "./WorkspaceRenameDialog";
+import { ArrowLeftOutlined, ApartmentOutlined, BookOutlined, EditOutlined, FileSearchOutlined, HomeOutlined, MessageOutlined, ReadOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
+import { WorkspaceRenameDialog } from "./WorkspaceRenameDialog";
 import { useProjects, type Project } from "../projects";
 import type { WorkspaceSection } from "../workspace";
-
-const NAV: { section: WorkspaceSection; label: string; href: (id: string) => string; icon: ReactNode }[] = [
-  { section: "assistant", label: "研究助手", href: id => `/w/${id}/research`, icon: <path d="m4 17 5-5 4 3 7-10M15 5h5v5" fill="none" stroke="currentColor" strokeWidth="1.6" /> },
-  { section: "library", label: "论文库", href: id => `/w/${id}/library`, icon: <><path d="M7 3.8h6.4L18 8.2V20H7z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><path d="M13.2 3.8V8.2H18" fill="none" stroke="currentColor" strokeWidth="1.6" /></> },
-  { section: "compare", label: "论文关系", href: id => `/w/${id}/compare`, icon: <><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" /><circle cx="5" cy="5" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" /><circle cx="20" cy="7" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" /><circle cx="18" cy="20" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="m6.5 6.5 3.3 3.3m4.8.8 3.7-2.5m-4.7 6.5 3.2 3.5" stroke="currentColor" strokeWidth="1.6" /></> },
-  { section: "graph", label: "知识图谱", href: id => `/w/${id}/graph`, icon: <><circle cx="7" cy="14" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" /><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" /><circle cx="17" cy="17" r="2" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M8.8 12.8 14.2 8.4M8.7 15.2l6.4 1.2" fill="none" stroke="currentColor" strokeWidth="1.6" /></> },
+const NAV = [
+  { section: "home", label: "首页", path: "home", icon: <HomeOutlined /> },
+  { section: "assistant", label: "检索助手", path: "research", icon: <FileSearchOutlined /> },
+  { section: "search", label: "论文搜索", path: "search", icon: <SearchOutlined /> },
+  { section: "library", label: "文献管理", path: "library", icon: <BookOutlined /> },
+  { section: "graph", label: "知识图谱", path: "graph", icon: <ApartmentOutlined /> },
+  { section: "studio", label: "智能问答", path: "studio", icon: <MessageOutlined /> },
+  { section: "compare", label: "文献推荐", path: "compare", icon: <ShareAltOutlined /> },
 ];
-
-function Glyph({ children }: { children: ReactNode }) {
-  return <svg viewBox="0 0 24 24" aria-hidden="true">{children}</svg>;
-}
-
-function sectionHref(section: WorkspaceSection, id: string) {
-  if (section === "studio") return `/w/${id}/studio`;
-  if (section === "assistant") return `/w/${id}/research`;
-  if (section === "library") return `/w/${id}/library`;
-  if (section === "compare") return `/w/${id}/compare`;
-  if (section === "graph") return `/w/${id}/graph`;
-  return `/w/${id}`;
-}
-
 export function WorkspaceFrame({ project, section, children }: { project: Project; section: WorkspaceSection; children: ReactNode }) {
   const { projects: list } = useProjects();
   const [renaming, setRenaming] = useState(false);
-  const count = Object.keys(project.papers).length;
-  if (section === "reading") return <div className="ws-frame"><div id="main" tabIndex={-1} className="ws-main">{children}</div></div>;
-  return <div className="ws-frame">
-    <header className="ws-top">
-      <div className="ws-heading">
-        <Link to="/" className="ws-mark" aria-label="返回全部工作区" title="全部工作区">
-          <Glyph><path d="M7 5.2h6.2L17.5 9.2V18a1.2 1.2 0 0 1-1.2 1.2H7A1.2 1.2 0 0 1 5.8 18V6.4A1.2 1.2 0 0 1 7 5.2Z" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M13 5.2V9.2h4.4" fill="none" stroke="currentColor" strokeWidth="1.6" /></Glyph>
-        </Link>
-        <Dropdown trigger={["click"]} placement="bottomLeft" popupRender={() => <div className="ws-switch-menu">
-          {list.map(item => <Link key={item.id} to={sectionHref(section, item.id)} aria-current={item.id === project.id ? "true" : undefined}>{item.name}</Link>)}
-          <Link to="/">全部工作区</Link>
-        </div>}>
-          <button type="button" className="ws-switch" aria-label={`当前工作区：${project.name}`}>
-            <span className="ws-name">{project.name}</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
-        </Dropdown>
-        <button type="button" className="ws-rename" aria-label="重命名当前工作区" title="重命名工作区" onClick={() => setRenaming(true)}><EditOutlined /></button>
-      </div>
-      <div id="research-header-slot" />
-      <span className="ws-count"><Glyph><path d="M7 4.5h7.2L18.5 8.6V19a1.2 1.2 0 0 1-1.2 1.2H7A1.2 1.2 0 0 1 5.8 19V5.7A1.2 1.2 0 0 1 7 4.5Z" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M14 4.6V8.7h4.3" fill="none" stroke="currentColor" strokeWidth="1.6" /></Glyph>{count} 篇论文</span>
-    </header>
-    <div className="ws-body">
-      <nav className="ws-nav" aria-label="研究资料">
-        {NAV.map(item => <Link key={item.section} to={item.href(project.id)} aria-current={section === item.section ? "page" : undefined}><Glyph>{item.icon}</Glyph>{item.label}</Link>)}
-      </nav>
-      <div id="main" tabIndex={-1} className="ws-main">{children}</div>
-    </div>
+  const path = NAV.find(item => item.section === section)?.path ?? "home";
+  return <div data-section={section} className={`ws-frame scholar-frame${section === "reading" ? " scholar-reading" : ""}`}>
+    <aside className="scholar-sidebar">
+      <Link to={`/w/${project.id}/home`} className="scholar-brand"><span className="scholar-symbol"><ShareAltOutlined /></span><span><b>ScholarGraph</b><small>学术知识图谱平台</small></span></Link>
+      <nav className="ws-nav" aria-label="工作台导航">{NAV.map(item => <Link key={item.section} to={`/w/${project.id}/${item.path}`} aria-current={section === item.section ? "page" : undefined}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span></Link>)}</nav>
+      <Link className="scholar-side-card" to={`/w/${project.id}/research`}><span className="scholar-book"><ReadOutlined /></span><strong>让科研探索<br />更高效</strong><p>基于大语言模型的<br />学术知识发现平台</p><svg viewBox="0 0 180 48" aria-hidden="true"><path d="M0 48Q30 0 65 30T130 20T180 8V48Z" fill="#dbe6ff"/><path d="M0 48Q40 22 70 40T140 25T180 20V48Z" fill="#bfcfff" opacity=".7"/></svg></Link>
+      <div className="scholar-side-footer"><Link to="/">返回桌面</Link><Link to="/settings" aria-label="设置"><SettingOutlined /></Link></div>
+    </aside>
+    <div className="scholar-content"><header className="ws-top">
+      <div className="ws-heading"><Link to="/" className="scholar-back-desktop"><ArrowLeftOutlined aria-hidden />返回桌面</Link><Dropdown trigger={["click"]} menu={{ items: [...list.map(item => ({ key: item.id, label: <Link to={`/w/${item.id}/${path}`}>{item.name}</Link> })), { key: "all", label: <Link to="/">全部工作区</Link> }] }}><button className="ws-switch" aria-label={`当前工作区：${project.name}`}><span className="ws-name">{project.name}</span><span>⌄</span></button></Dropdown><button className="ws-rename" aria-label="重命名当前工作区" onClick={() => setRenaming(true)}><EditOutlined /></button></div>
+      <div id="research-header-slot" /><div className="scholar-user"><span className="ws-count">{Object.keys(project.papers).length} 篇文献</span><span className="scholar-avatar">研</span><span>Hi, Researcher</span></div>
+    </header><div id="main" tabIndex={-1} className="ws-main">{children}</div></div>
     <WorkspaceRenameDialog project={renaming ? project : null} onClose={() => setRenaming(false)} />
   </div>;
 }
