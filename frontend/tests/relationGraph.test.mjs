@@ -8,7 +8,7 @@ function compile(file) {
 }
 const dataUrl = text => `data:text/javascript;base64,${Buffer.from(text).toString('base64')}`;
 const layoutUrl = dataUrl(compile('../src/relationLayout.ts'));
-const { buildSpaceGraph, mergeRelationSnapshots, paperSnapshot } = await import(dataUrl(compile('../src/relationGraph.ts').replace('"./relationLayout"', JSON.stringify(layoutUrl))));
+const { buildSpaceGraph, mergeRelationSnapshots, paperSnapshot, citationPairs, edgeMainPaperId } = await import(dataUrl(compile('../src/relationGraph.ts').replace('"./relationLayout"', JSON.stringify(layoutUrl))));
 const root = id => ({ id, local_id: `local-${id}`, title: `Root ${id}`, year: 2024, authors: [], color_index: id === 'A' ? 0 : 1, similarities: {} });
 const paper = id => ({ id, title: `Paper ${id}`, year: 2024, strength: 80, semantic_score: .8, keyword_score: .5, citation_score: .6, reasons: [], evidence: [] });
 const group = (owner, ids, category = 'semantic') => ({ center_id: owner, category, status: 'completed', matched_count: ids.length, items: ids.map(paper) });
@@ -112,4 +112,17 @@ test('many roots retain all nodes and grow the layout beyond the five-root canva
   assert.equal(graph.edges.length, 30);
   assert.equal(new Set(graph.nodes.filter(n => n.center).map(n => `${n.x},${n.y}`)).size, 30);
   assert.ok(graph.width > 1900 && graph.height > 1400);
+});
+
+test('citation directions stay anchored to the edge when either endpoint is inspected', () => {
+ const nodes = [{id:'A', center:root('A')}, {id:'B'}];
+ const edge = {source:'A', target:'B', category:'citation', arrow:'out'};
+ assert.deepEqual(citationPairs(edge), [['A','B']]);
+ assert.deepEqual(citationPairs({...edge,arrow:'in'}), [['B','A']]);
+ assert.deepEqual(citationPairs({...edge,arrow:'both'}), [['A','B'],['B','A']]);
+ assert.deepEqual(citationPairs({...edge,arrow:null}), []);
+ assert.deepEqual(citationPairs({...edge,category:'semantic'}), []);
+ assert.equal(edgeMainPaperId(edge,nodes),'A');
+ assert.equal(edgeMainPaperId({...edge,source:'B',target:'A'},nodes),'A');
+ assert.equal(edgeMainPaperId(edge,[...nodes.slice(0,1),{id:'B',center:root('B')}]),'A');
 });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { Button } from "antd";
 import { CloseOutlined, FullscreenOutlined, MinusOutlined, PlusOutlined, AimOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
-import { buildSpaceGraph, type SpaceEdge, type SpaceGraph, type SpaceNode } from "../relationGraph";
+import { buildSpaceGraph, citationPairs, edgeMainPaperId, type SpaceEdge, type SpaceGraph, type SpaceNode } from "../relationGraph";
 import { CATEGORY_ORDER, metricText, type RelationCategory } from "../relationLayout";
 import type { RecommendationItem, RelateResponse } from "../types";
 import { paperLocation, workspacePaperPath } from "../workspace";
@@ -32,6 +32,8 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
 }) {
   const graph = useMemo(() => buildSpaceGraph(data), [data]);
   const [active, setActive] = useState<string | null>(null);
+  const [activeEdge, setActiveEdge] = useState<string | null>(null);
+  const selectNode = (id: string | null) => { setActiveEdge(null); setActive(id); };
   const [hovered, setHovered] = useState<string | null>(null);
   const [categories, setCategories] = useState<RelationCategory[]>([...CATEGORY_ORDER]);
   const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 });
@@ -104,6 +106,15 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
     return () => window.clearTimeout(timer);
   }, [panel?.id]);
   const shown = panel ?? leaving;
+  const paperLabel = (id: string) => {
+    const node = byId.get(id);
+    return `${node?.center ? `主论文 ${data.centers.indexOf(node.center) + 1}` : "关联论文"}《${node?.title ?? id}》`;
+  };
+  const citationDescription = (edge: SpaceEdge) => {
+    const pairs = citationPairs(edge);
+    return pairs.length ? pairs.map(([source, target]) => `${paperLabel(source)} 引用 ${paperLabel(target)}`).join("；")
+      : `${paperLabel(edge.source)} 与 ${paperLabel(edge.target)} 存在间接引用关联，未确认直接引用方向。`;
+  };
 
   const drawEdge = (edge: SpaceEdge) => {
     const a = byId.get(edge.source), b = byId.get(edge.target);
@@ -126,8 +137,14 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
         strokeDasharray={meta.dash.length ? meta.dash.map(v => v * inv).join(" ") : undefined} strokeLinecap="round"
         />
       {lit ? <path key={active} className="space-edge-trace" d={d} pathLength={1} fill="none" stroke={meta.color} strokeWidth={width + inv} strokeLinecap="round" /> : null}
+      {citationPairs(edge).map(([source, target]) => {
+        const tip = target === edge.target ? end : start;
+        const angle = Math.atan2(tip.y - my, tip.x - mx) * 180 / Math.PI;
+        return <path key={`${source}-${target}`} className="space-citation-arrow" d={`M ${-7 * inv} ${-3 * inv} L 0 0 L ${-7 * inv} ${3 * inv}`}
+          transform={`translate(${tip.x} ${tip.y}) rotate(${angle})`} fill="none" stroke={meta.color} strokeWidth={1.6 * inv} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />;
+      })}
       <path d={d} fill="none" stroke="transparent" strokeWidth={14 * inv} pointerEvents="stroke" className="space-edge-hit"
-        onClick={() => setActive(b.center && !a.center ? a.id : b.id)}><title>{meta.name} · {metricText(edge.item, edge.category)}</title></path>
+        onClick={() => { setHovered(null); setActiveEdge(edge.id); setActive(edgeMainPaperId(edge, graph.nodes)); }}><title>{edge.category === "citation" ? citationDescription(edge) : `${meta.name} · ${metricText(edge.item, edge.category)}`}</title></path>
     </g>;
   };
 
@@ -139,6 +156,10 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
       <span className="space-panel-kind" style={{ "--node-color": colorOf(node) } as CSSProperties}><i />{kind}</span>
       <h2>{node.title}</h2>
       <p className="space-panel-meta">{node.year ?? "年份未知"} · {(node.center?.authors ?? node.item?.authors ?? []).slice(0, 3).join("，") || "作者未知"}</p>
+      {activeEdge && relations.some(edge => edge.id === activeEdge) ? <div className="space-selected-relation" role="status"><strong>所选连线 · {META[relations.find(edge => edge.id === activeEdge)!.category].name}</strong><p>{(() => {
+        const edge = relations.find(edge => edge.id === activeEdge)!;
+        return edge.category === "citation" ? citationDescription(edge) : `${paperLabel(edge.source)} 与 ${paperLabel(edge.target)}：${metricText(edge.item, edge.category)}`;
+      })()}</p></div> : null}
       {!node.center && node.item ? <div className="space-actions">
         <Button type="primary" loading={saving} disabled={busy || saved} onClick={() => void onSave(node.item!)}>{saved ? "已在文献库" : "加入文献库"}</Button>
       </div> : <Button className="space-collapse" onClick={() => onRemove(node.id)} disabled={busy || saving}>收起这篇主论文</Button>}
@@ -149,9 +170,12 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
         return <div key={edge.id}>
           <span className="space-evidence-kind" style={{ color: meta.color }}>
             <svg width="18" height="6" aria-hidden="true"><line x1="1" y1="3" x2="17" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray={meta.dash.join(" ") || undefined} /></svg>
-            {meta.name} · {metricText(edge.item, edge.category)}</span>
-          <button onClick={() => setActive(otherId)}>{byId.get(otherId)?.title}</button>
-          {edge.item.reasons.filter(r => r.type === edge.category || (edge.category === "citation" && ["cites", "bibliographic_coupling", "co_citation"].includes(r.type))).map(r => <p key={r.type + r.text}>{r.text}</p>)}
+            {meta.name}{edge.category === "citation" ? citationPairs(edge).length ? " · 直接引用" : " · 间接关联" : ` · ${metricText(edge.item, edge.category)}`}</span>
+          {edge.category === "citation" ? <p className="space-citation-direction">{citationDescription(edge)}</p> : null}
+          <button onClick={() => selectNode(otherId)}>查看{byId.get(otherId)?.center ? `主论文 ${data.centers.indexOf(byId.get(otherId)!.center!) + 1}` : "关联论文"}：{byId.get(otherId)?.title}</button>
+          {edge.item.reasons.filter(r => edge.category !== "citation" && r.type === edge.category).map(r => <p key={r.type + r.text}>{r.text}</p>)}
+          {edge.category === "citation" ? <p>{citationPairs(edge).length ? "依据：Semantic Scholar 引用记录。箭头指向被引用的论文。" : "间接关联不显示方向箭头。"}</p> : null}
+          {edge.category === "citation" ? edge.item.reasons.filter(r => ["bibliographic_coupling", "co_citation"].includes(r.type)).map(r => <p key={r.type + r.text}>{r.text.replaceAll("当前论文", paperLabel(edge.source)).replaceAll("该论文", paperLabel(edge.target))}</p>) : null}
         </div>;
       })}</div></> : null}
       {node.item?.abstract ? <><h3>摘要</h3><p className="space-abstract">{node.item.abstract}</p></> : null}
@@ -187,7 +211,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
         if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) { start.moved = true; setDragging(true); }
         if (start.moved) setCamera(c => ({ ...c, x: start.cx + e.clientX - start.x, y: start.cy + e.clientY - start.y }));
       }}
-      onPointerUp={() => { if (drag.current && !drag.current.moved) setActive(null); drag.current = null; setDragging(false); }}
+      onPointerUp={() => { if (drag.current && !drag.current.moved) selectNode(null); drag.current = null; setDragging(false); }}
       onPointerCancel={() => { drag.current = null; setDragging(false); }}>
       <div className="space-world" style={{ width: graph.width, height: graph.height,
         transform: `translate(${camera.x}px, ${camera.y}px) scale(${k})`, "--inv": inv, "--grow": grow } as CSSProperties}>
@@ -214,7 +238,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
             className={`space-node${node.center ? " is-center" : ""}${shared ? " is-shared" : ""}${active === node.id ? " is-active" : ""}${focusId && !connected.has(node.id) && focusId !== node.id ? " is-dim" : ""}${promoted.includes(node.id) ? " is-promoted" : ""}`}
             style={{ left: node.x, top: node.y, "--node-color": color, "--d": `${diameter}px`, "--label-width": `${label}px`, "--fx": `${origin.x}px`, "--fy": `${origin.y}px`,
               "--delay": `${node.center ? 0 : 80 + CATEGORY_ORDER.indexOf(node.categories[0] ?? "semantic") * 60}ms`, ...(ring ? { "--ring": ring } : {}) } as CSSProperties}
-            onClick={() => { setHovered(null); setActive(node.id); }}
+            onClick={() => { setHovered(null); selectNode(node.id); }}
             onPointerEnter={() => setHovered(node.id)} onPointerLeave={() => setHovered(null)}
             onFocus={() => setHovered(node.id)} onBlur={() => setHovered(null)}
             aria-describedby={hovered === node.id ? "space-title-tooltip" : undefined}
@@ -234,10 +258,10 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
     </div> : null}
     <div className="space-legend" aria-label="筛选关系类型">{CATEGORY_ORDER.map(key => <button key={key} aria-pressed={categories.includes(key)} onClick={() => setCategories(current => current.includes(key) ? current.filter(c => c !== key) : [...current, key])}>
       <svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke={META[key].color} strokeWidth="2" strokeLinecap="round" strokeDasharray={META[key].dash.join(" ") || undefined} /></svg>{META[key].name}</button>)}
-      <span>每篇主论文每类取 1 篇</span></div>
+      <span>箭头指向被引用论文 · 每篇主论文每类取 1 篇</span></div>
     {graphIssues.length ? <div className="space-hint" role="status">部分关系仍待获取，可刷新重试</div> : null}
     {shown ? <aside className={`space-panel${panel ? "" : " is-leaving"}`} aria-label="论文关系详情" aria-hidden={panel ? undefined : true}>
-      <button className="space-panel-close" aria-label="关闭详情" onClick={() => setActive(null)}><CloseOutlined /></button>
+      <button className="space-panel-close" aria-label="关闭详情" onClick={() => selectNode(null)}><CloseOutlined /></button>
       {renderPanel(shown)}
     </aside> : null}
   </section>;

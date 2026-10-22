@@ -127,3 +127,7 @@
   .space-panel { top:84px; width:calc(100% - 20px); right:10px; bottom:10px; }
   .space-panel-body { padding:20px 18px; }
 }
+
+.space-selected-relation { margin:16px 0; padding:12px; border:1px solid #cbd9f5; border-radius:8px; background:#f1f6ff; color:#19366b; }
+.space-selected-relation p,.space-citation-direction { line-height:1.7; overflow-wrap:anywhere; }
+.space-selected-relation p { margin:8px 0 0; }

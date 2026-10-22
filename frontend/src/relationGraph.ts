@@ -44,6 +44,17 @@ export interface SpaceEdge {
 }
 export interface SpaceGraph { nodes: SpaceNode[]; edges: SpaceEdge[]; width: number; height: number }
 
+/** Direction is relative to the original recommendation owner, not the open panel. */
+export function citationPairs(edge: SpaceEdge): [string, string][] {
+  if (edge.category !== "citation") return [];
+  return [...(edge.arrow === "out" || edge.arrow === "both" ? [[edge.source, edge.target] as [string, string]] : []),
+    ...(edge.arrow === "in" || edge.arrow === "both" ? [[edge.target, edge.source] as [string, string]] : [])];
+}
+
+export function edgeMainPaperId(edge: SpaceEdge, nodes: SpaceNode[]): string {
+  return nodes.find(n => n.id === edge.source)?.center ? edge.source : edge.target;
+}
+
 /** Identity, ownership and edges are independent: sharing a child never creates a parent edge. */
 export function buildSpaceGraph(data: RelateResponse): SpaceGraph {
   const parent = new Map<string, string>();
