@@ -1,0 +1,210 @@
+{
+  "checked_at": "2026-10-22",
+  "source": "arXiv public abstract pages",
+  "papers": [
+    {
+      "id": "arxiv:2310.11511",
+      "title": "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection",
+      "authors": [
+        "Asai, Akari",
+        "Wu, Zeqiu",
+        "Wang, Yizhong",
+        "Sil, Avirup",
+        "Hajishirzi, Hannaneh"
+      ],
+      "year": 2023,
+      "abstract": "Despite their remarkable capabilities, large language models (LLMs) often produce responses containing factual inaccuracies due to their sole reliance on the parametric knowledge they encapsulate. Retrieval-Augmented Generation (RAG), an ad hoc approach that augments LMs with retrieval of relevant knowledge, decreases such issues. However, indiscriminately retrieving and incorporating a fixed number of retrieved passages, regardless of whether retrieval is necessary, or passages are relevant, diminishes LM versatility or can lead to unhelpful response generation. We introduce a new framework called Self-Reflective Retrieval-Augmented Generation (Self-RAG) that enhances an LM's quality and factuality through retrieval and self-reflection. Our framework trains a single arbitrary LM that adaptively retrieves passages on-demand, and generates and reflects on retrieved passages and its own generations using special tokens, called reflection tokens. Generating reflection tokens makes the LM controllable during the inference phase, enabling it to tailor its behavior to diverse task requirements. Experiments show that Self-RAG (7B and 13B parameters) significantly outperforms state-of-the-art LLMs and retrieval-augmented models on a diverse set of tasks. Specifically, Self-RAG outperforms ChatGPT and retrieval-augmented Llama2-chat on Open-domain QA, reasoning and fact verification tasks, and it shows significant gains in improving factuality and citation accuracy for long-form generations relative to these models.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2310.11511",
+      "pdf_url": "https://arxiv.org/pdf/2310.11511"
+    },
+    {
+      "id": "arxiv:2310.01352",
+      "title": "RA-DIT: Retrieval-Augmented Dual Instruction Tuning",
+      "authors": [
+        "Lin, Xi Victoria",
+        "Chen, Xilun",
+        "Chen, Mingda",
+        "Shi, Weijia",
+        "Lomeli, Maria",
+        "James, Rich",
+        "Rodriguez, Pedro",
+        "Kahn, Jacob",
+        "Szilvasy, Gergely",
+        "Lewis, Mike",
+        "Zettlemoyer, Luke",
+        "Yih, Scott"
+      ],
+      "year": 2023,
+      "abstract": "Retrieval-augmented language models (RALMs) improve performance by accessing long-tail and up-to-date knowledge from external data stores, but are challenging to build. Existing approaches require either expensive retrieval-specific modifications to LM pre-training or use post-hoc integration of the data store that leads to suboptimal performance. We introduce Retrieval-Augmented Dual Instruction Tuning (RA-DIT), a lightweight fine-tuning methodology that provides a third option by retrofitting any LLM with retrieval capabilities. Our approach operates in two distinct fine-tuning steps: (1) one updates a pre-trained LM to better use retrieved information, while (2) the other updates the retriever to return more relevant results, as preferred by the LM. By fine-tuning over tasks that require both knowledge utilization and contextual awareness, we demonstrate that each stage yields significant performance improvements, and using both leads to additional gains. Our best model, RA-DIT 65B, achieves state-of-the-art performance across a range of knowledge-intensive zero- and few-shot learning benchmarks, significantly outperforming existing in-context RALM approaches by up to +8.9% in 0-shot setting and +1.4% in 5-shot setting on average.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2310.01352",
+      "pdf_url": "https://arxiv.org/pdf/2310.01352"
+    },
+    {
+      "id": "arxiv:2305.14283",
+      "title": "Query Rewriting for Retrieval-Augmented Large Language Models",
+      "authors": [
+        "Ma, Xinbei",
+        "Gong, Yeyun",
+        "He, Pengcheng",
+        "Zhao, Hai",
+        "Duan, Nan"
+      ],
+      "year": 2023,
+      "abstract": "Large Language Models (LLMs) play powerful, black-box readers in the retrieve-then-read pipeline, making remarkable progress in knowledge-intensive tasks. This work introduces a new framework, Rewrite-Retrieve-Read instead of the previous retrieve-then-read for the retrieval-augmented LLMs from the perspective of the query rewriting. Unlike prior studies focusing on adapting either the retriever or the reader, our approach pays attention to the adaptation of the search query itself, for there is inevitably a gap between the input text and the needed knowledge in retrieval. We first prompt an LLM to generate the query, then use a web search engine to retrieve contexts. Furthermore, to better align the query to the frozen modules, we propose a trainable scheme for our pipeline. A small language model is adopted as a trainable rewriter to cater to the black-box LLM reader. The rewriter is trained using the feedback of the LLM reader by reinforcement learning. Evaluation is conducted on downstream tasks, open-domain QA and multiple-choice QA. Experiments results show consistent performance improvement, indicating that our framework is proven effective and scalable, and brings a new framework for retrieval-augmented LLM.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2305.14283",
+      "pdf_url": "https://arxiv.org/pdf/2305.14283"
+    },
+    {
+      "id": "arxiv:2401.15884",
+      "title": "Corrective Retrieval Augmented Generation",
+      "authors": [
+        "Yan, Shi-Qi",
+        "Gu, Jia-Chen",
+        "Zhu, Yun",
+        "Ling, Zhen-Hua"
+      ],
+      "year": 2024,
+      "abstract": "Large language models (LLMs) inevitably exhibit hallucinations since the accuracy of generated texts cannot be secured solely by the parametric knowledge they encapsulate. Although retrieval-augmented generation (RAG) is a practicable complement to LLMs, it relies heavily on the relevance of retrieved documents, raising concerns about how the model behaves if retrieval goes wrong. To this end, we propose the Corrective Retrieval Augmented Generation (CRAG) to improve the robustness of generation. Specifically, a lightweight retrieval evaluator is designed to assess the overall quality of retrieved documents for a query, returning a confidence degree based on which different knowledge retrieval actions can be triggered. Since retrieval from static and limited corpora can only return sub-optimal documents, large-scale web searches are utilized as an extension for augmenting the retrieval results. Besides, a decompose-then-recompose algorithm is designed for retrieved documents to selectively focus on key information and filter out irrelevant information in them. CRAG is plug-and-play and can be seamlessly coupled with various RAG-based approaches. Experiments on four datasets covering short- and long-form generation tasks show that CRAG can significantly improve the performance of RAG-based approaches.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2401.15884",
+      "pdf_url": "https://arxiv.org/pdf/2401.15884"
+    },
+    {
+      "id": "arxiv:2212.10496",
+      "title": "Precise Zero-Shot Dense Retrieval without Relevance Labels",
+      "authors": [
+        "Gao, Luyu",
+        "Ma, Xueguang",
+        "Lin, Jimmy",
+        "Callan, Jamie"
+      ],
+      "year": 2022,
+      "abstract": "While dense retrieval has been shown effective and efficient across tasks and languages, it remains difficult to create effective fully zero-shot dense retrieval systems when no relevance label is available. In this paper, we recognize the difficulty of zero-shot learning and encoding relevance. Instead, we propose to pivot through Hypothetical Document Embeddings~(HyDE). Given a query, HyDE first zero-shot instructs an instruction-following language model (e.g. InstructGPT) to generate a hypothetical document. The document captures relevance patterns but is unreal and may contain false details. Then, an unsupervised contrastively learned encoder~(e.g. Contriever) encodes the document into an embedding vector. This vector identifies a neighborhood in the corpus embedding space, where similar real documents are retrieved based on vector similarity. This second step ground the generated document to the actual corpus, with the encoder's dense bottleneck filtering out the incorrect details. Our experiments show that HyDE significantly outperforms the state-of-the-art unsupervised dense retriever Contriever and shows strong performance comparable to fine-tuned retrievers, across various tasks (e.g. web search, QA, fact verification) and languages~(e.g. sw, ko, ja).",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2212.10496",
+      "pdf_url": "https://arxiv.org/pdf/2212.10496"
+    },
+    {
+      "id": "arxiv:2305.06983",
+      "title": "Active Retrieval Augmented Generation",
+      "authors": [
+        "Jiang, Zhengbao",
+        "Xu, Frank F.",
+        "Gao, Luyu",
+        "Sun, Zhiqing",
+        "Liu, Qian",
+        "Dwivedi-Yu, Jane",
+        "Yang, Yiming",
+        "Callan, Jamie",
+        "Neubig, Graham"
+      ],
+      "year": 2023,
+      "abstract": "Despite the remarkable ability of large language models (LMs) to comprehend and generate language, they have a tendency to hallucinate and create factually inaccurate output. Augmenting LMs by retrieving information from external knowledge resources is one promising solution. Most existing retrieval augmented LMs employ a retrieve-and-generate setup that only retrieves information once based on the input. This is limiting, however, in more general scenarios involving generation of long texts, where continually gathering information throughout generation is essential. In this work, we provide a generalized view of active retrieval augmented generation, methods that actively decide when and what to retrieve across the course of the generation. We propose Forward-Looking Active REtrieval augmented generation (FLARE), a generic method which iteratively uses a prediction of the upcoming sentence to anticipate future content, which is then utilized as a query to retrieve relevant documents to regenerate the sentence if it contains low-confidence tokens. We test FLARE along with baselines comprehensively over 4 long-form knowledge-intensive generation tasks/datasets. FLARE achieves superior or competitive performance on all tasks, demonstrating the effectiveness of our method. Code and datasets are available at https://github.com/jzbjyb/FLARE.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2305.06983",
+      "pdf_url": "https://arxiv.org/pdf/2305.06983"
+    },
+    {
+      "id": "arxiv:2303.08896",
+      "title": "SelfCheckGPT: Zero-Resource Black-Box Hallucination Detection for Generative Large Language Models",
+      "authors": [
+        "Manakul, Potsawee",
+        "Liusie, Adian",
+        "Gales, Mark J. F."
+      ],
+      "year": 2023,
+      "abstract": "Generative Large Language Models (LLMs) such as GPT-3 are capable of generating highly fluent responses to a wide variety of user prompts. However, LLMs are known to hallucinate facts and make non-factual statements which can undermine trust in their output. Existing fact-checking approaches either require access to the output probability distribution (which may not be available for systems such as ChatGPT) or external databases that are interfaced via separate, often complex, modules. In this work, we propose \"SelfCheckGPT\", a simple sampling-based approach that can be used to fact-check the responses of black-box models in a zero-resource fashion, i.e. without an external database. SelfCheckGPT leverages the simple idea that if an LLM has knowledge of a given concept, sampled responses are likely to be similar and contain consistent facts. However, for hallucinated facts, stochastically sampled responses are likely to diverge and contradict one another. We investigate this approach by using GPT-3 to generate passages about individuals from the WikiBio dataset, and manually annotate the factuality of the generated passages. We demonstrate that SelfCheckGPT can: i) detect non-factual and factual sentences; and ii) rank passages in terms of factuality. We compare our approach to several baselines and show that our approach has considerably higher AUC-PR scores in sentence-level hallucination detection and higher correlation scores in passage-level factuality assessment compared to grey-box methods.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2303.08896",
+      "pdf_url": "https://arxiv.org/pdf/2303.08896"
+    },
+    {
+      "id": "arxiv:2305.14251",
+      "title": "FActScore: Fine-grained Atomic Evaluation of Factual Precision in Long Form Text Generation",
+      "authors": [
+        "Min, Sewon",
+        "Krishna, Kalpesh",
+        "Lyu, Xinxi",
+        "Lewis, Mike",
+        "Yih, Wen-tau",
+        "Koh, Pang Wei",
+        "Iyyer, Mohit",
+        "Zettlemoyer, Luke",
+        "Hajishirzi, Hannaneh"
+      ],
+      "year": 2023,
+      "abstract": "Evaluating the factuality of long-form text generated by large language models (LMs) is non-trivial because (1) generations often contain a mixture of supported and unsupported pieces of information, making binary judgments of quality inadequate, and (2) human evaluation is time-consuming and costly. In this paper, we introduce FACTSCORE, a new evaluation that breaks a generation into a series of atomic facts and computes the percentage of atomic facts supported by a reliable knowledge source. We conduct an extensive human evaluation to obtain FACTSCOREs of people biographies generated by several state-of-the-art commercial LMs -- InstructGPT, ChatGPT, and the retrieval-augmented PerplexityAI -- and report new analysis demonstrating the need for such a fine-grained score (e.g., ChatGPT only achieves 58%). Since human evaluation is costly, we also introduce an automated model that estimates FACTSCORE using retrieval and a strong language model, with less than a 2% error rate. Finally, we use this automated metric to evaluate 6,500 generations from a new set of 13 recent LMs that would have cost $26K if evaluated by humans, with various findings: GPT-4 and ChatGPT are more factual than public models, and Vicuna and Alpaca are some of the best public models. FACTSCORE is available for public use via `pip install factscore`.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2305.14251",
+      "pdf_url": "https://arxiv.org/pdf/2305.14251"
+    },
+    {
+      "id": "arxiv:2210.08726",
+      "title": "RARR: Researching and Revising What Language Models Say, Using Language Models",
+      "authors": [
+        "Gao, Luyu",
+        "Dai, Zhuyun",
+        "Pasupat, Panupong",
+        "Chen, Anthony",
+        "Chaganty, Arun Tejasvi",
+        "Fan, Yicheng",
+        "Zhao, Vincent Y.",
+        "Lao, Ni",
+        "Lee, Hongrae",
+        "Juan, Da-Cheng",
+        "Guu, Kelvin"
+      ],
+      "year": 2022,
+      "abstract": "Language models (LMs) now excel at many tasks such as few-shot learning, question answering, reasoning, and dialog. However, they sometimes generate unsupported or misleading content. A user cannot easily determine whether their outputs are trustworthy or not, because most LMs do not have any built-in mechanism for attribution to external evidence. To enable attribution while still preserving all the powerful advantages of recent generation models, we propose RARR (Retrofit Attribution using Research and Revision), a system that 1) automatically finds attribution for the output of any text generation model and 2) post-edits the output to fix unsupported content while preserving the original output as much as possible. When applied to the output of several state-of-the-art LMs on a diverse set of generation tasks, we find that RARR significantly improves attribution while otherwise preserving the original input to a much greater degree than previously explored edit models. Furthermore, the implementation of RARR requires only a handful of training examples, a large language model, and standard web search.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2210.08726",
+      "pdf_url": "https://arxiv.org/pdf/2210.08726"
+    },
+    {
+      "id": "arxiv:2309.11495",
+      "title": "Chain-of-Verification Reduces Hallucination in Large Language Models",
+      "authors": [
+        "Dhuliawala, Shehzaad",
+        "Komeili, Mojtaba",
+        "Xu, Jing",
+        "Raileanu, Roberta",
+        "Li, Xian",
+        "Celikyilmaz, Asli",
+        "Weston, Jason"
+      ],
+      "year": 2023,
+      "abstract": "Generation of plausible yet incorrect factual information, termed hallucination, is an unsolved issue in large language models. We study the ability of language models to deliberate on the responses they give in order to correct their mistakes. We develop the Chain-of-Verification (CoVe) method whereby the model first (i) drafts an initial response; then (ii) plans verification questions to fact-check its draft; (iii) answers those questions independently so the answers are not biased by other responses; and (iv) generates its final verified response. In experiments, we show CoVe decreases hallucinations across a variety of tasks, from list-based questions from Wikidata, closed book MultiSpanQA and longform text generation.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2309.11495",
+      "pdf_url": "https://arxiv.org/pdf/2309.11495"
+    },
+    {
+      "id": "arxiv:2109.07958",
+      "title": "TruthfulQA: Measuring How Models Mimic Human Falsehoods",
+      "authors": [
+        "Lin, Stephanie",
+        "Hilton, Jacob",
+        "Evans, Owain"
+      ],
+      "year": 2021,
+      "abstract": "We propose a benchmark to measure whether a language model is truthful in generating answers to questions. The benchmark comprises 817 questions that span 38 categories, including health, law, finance and politics. We crafted questions that some humans would answer falsely due to a false belief or misconception. To perform well, models must avoid generating false answers learned from imitating human texts. We tested GPT-3, GPT-Neo/J, GPT-2 and a T5-based model. The best model was truthful on 58% of questions, while human performance was 94%. Models generated many false answers that mimic popular misconceptions and have the potential to deceive humans. The largest models were generally the least truthful. This contrasts with other NLP tasks, where performance improves with model size. However, this result is expected if false answers are learned from the training distribution. We suggest that scaling up models alone is less promising for improving truthfulness than fine-tuning using training objectives other than imitation of text from the web.",
+      "source": "arxiv",
+      "venue": "arXiv",
+      "url": "https://arxiv.org/abs/2109.07958",
+      "pdf_url": "https://arxiv.org/pdf/2109.07958"
+    }
+  ]
+}

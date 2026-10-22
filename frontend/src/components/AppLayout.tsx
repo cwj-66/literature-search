@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { AppstoreOutlined, BookOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
 import { Link, useLocation } from "react-router-dom";
 import { projects, useProjects } from "../projects";
@@ -6,8 +6,7 @@ import { sectionOf, workspaceContext } from "../workspace";
 import { WorkspaceFrame } from "./WorkspaceFrame";
 import { isDemo } from "../demo";
 import { useCollapsed } from "../hooks";
-
-const scrollPositions = new Map<string, number>();
+import { useRouteScroll } from "../routeScroll";
 
 const navigation = [
   { label: "研究工作区", href: "/", key: "home", icon: <AppstoreOutlined aria-hidden /> },
@@ -18,8 +17,6 @@ const navigation = [
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const previousPath = useRef("");
-  const leaving = useRef(false);
   const active = sectionOf(location.pathname, new URLSearchParams(location.search));
   const ctx = workspaceContext(location.pathname, location.search);
   const { projects: list } = useProjects();
@@ -35,50 +32,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
     window.history.scrollRestoration = "manual";
     return () => { window.history.scrollRestoration = previous; };
   }, []);
-  useLayoutEffect(() => {
-    leaving.current = false;
-    const key = location.pathname + location.search;
-    const sameGraph = previousPath.current === "/graph" && location.pathname === "/graph";
-    previousPath.current = location.pathname;
-    if (sameGraph) {
-      const save = () => { if (!leaving.current) scrollPositions.set(key, window.scrollY); };
-      window.addEventListener("scroll", save, { passive: true });
-      return () => { window.removeEventListener("scroll", save); };
-    }
-    const target = scrollPositions.get(key) || 0;
-    let restoring = true;
-    const restore = () => { if (restoring && !location.hash) window.scrollTo({ top: target, behavior: "instant" }); };
-    restore();
-    const observer = new ResizeObserver(restore);
-    observer.observe(document.body);
-    const stop = () => { restoring = false; observer.disconnect(); };
-    const timer = window.setTimeout(stop, 4000);
-    const save = () => { if (!restoring && !leaving.current) scrollPositions.set(key, window.scrollY); };
-    window.addEventListener("wheel", stop, { passive: true });
-    window.addEventListener("touchstart", stop, { passive: true });
-    window.addEventListener("keydown", stop);
-    window.addEventListener("scroll", save, { passive: true });
-    return () => {
-      window.clearTimeout(timer); observer.disconnect();
-      window.removeEventListener("wheel", stop); window.removeEventListener("touchstart", stop);
-      window.removeEventListener("keydown", stop); window.removeEventListener("scroll", save);
-    };
-  }, [location.pathname, location.search, location.hash]);
   const inside = Boolean(project && ctx);
+  const captureScroll = useRouteScroll(location.pathname, location.search, location.hash, inside);
   const [shellCollapsed, toggleShell] = useCollapsed("sg-shell-collapsed");
-  useLayoutEffect(() => {
-    if (!inside) return;
-    document.querySelector(".ws-main")?.scrollTo({ top: 0 });
-  }, [inside, location.pathname, location.search]);
   return <div className={inside ? "app ws-app" : "app scholar-desktop"} onClickCapture={event => {
     const anchor = event.target instanceof Element ? event.target.closest("a") : null;
     if (!anchor || anchor.target === "_blank" || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const next = new URL(anchor.href, window.location.origin);
-    const key = location.pathname + location.search;
-    if (next.origin === window.location.origin && next.pathname + next.search !== key) {
-      scrollPositions.set(key, window.scrollY);
-      leaving.current = true;
-    }
+    if (next.origin === window.location.origin) captureScroll();
   }}>
     {isDemo && <div className="demo-banner"><span>面试体验 · 已配置演示模型 · 工作区与对话仅属于当前访客，闲置 7 天后清理</span><a href="/projects/paper-search/">返回作品集 ↗</a></div>}
     <a href="#main" className="skip-link">跳到主要内容</a>

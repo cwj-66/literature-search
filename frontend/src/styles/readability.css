@@ -1,0 +1,44 @@
+/* Light surfaces need dark body text and a usable type size, not pale blue copy.
+   WCAG 1.4.3: at least 4.5:1 for normal text; body copy here targets 7:1. */
+.scholar-frame { --ink:#17243b; --text:#263445; --muted:#475569; --faint:#526174; font-size:15px; }
+.scholar-frame .ws-nav a { color:#334155; font-size:15px; }
+.scholar-frame .scholar-brand small,.scholar-frame .scholar-side-card p,
+.scholar-frame .ws-count,.scholar-frame .scholar-user { color:#475569; font-size:13px; }
+.scholar-frame .ws-page-head p,.scholar-frame .paper-abstract,
+.scholar-frame .paper-byline,.scholar-frame .paper-facts { color:#475569; font-size:14px; line-height:1.8; }
+.scholar-frame .ws-page h1,.scholar-frame .fields-page-head h1 {
+  font-family:var(--font-read); font-size:30px!important; font-weight:700; color:#17243b; line-height:1.4;
+}
+.scholar-frame .fields-page { color:#263445; }
+.scholar-frame .fields-page-head p,.scholar-frame .fields-browser-heading small,
+.scholar-frame .field-card-en,.scholar-frame .field-card-bottom,
+.scholar-frame .field-report-head p,.scholar-frame .field-members > span,
+.scholar-frame .field-members a,.scholar-frame .field-report-meta,
+.scholar-frame .field-milestone-top small,.scholar-frame .field-observation > small {
+  color:#475569; font-size:14px; line-height:1.75; font-weight:400;
+}
+.scholar-frame .field-card > b { color:#23344d; font-size:17px; font-weight:600; }
+.scholar-frame .field-report-head h2 { font-family:var(--font-read); color:#17243b; font-size:28px; font-weight:700; }
+.scholar-frame .field-summary,.scholar-frame .field-milestone > p,
+.scholar-frame .field-observation > p,.scholar-frame .field-start p,
+.scholar-frame .field-evidence blockquote,.scholar-frame .field-significance,
+.scholar-frame .field-uncertainty p { color:#334155; font-size:15px; line-height:1.85; font-weight:400; }
+.scholar-frame .field-milestone h3,.scholar-frame .field-observation h3 { color:#23344d; font-size:17px; font-weight:600; }
+.scholar-frame .field-significance b,.scholar-frame .field-uncertainty b,
+.scholar-frame .field-coverage,.scholar-frame .field-coverage summary,
+.scholar-frame .field-view-tabs button,.scholar-frame .field-start > div:last-child {
+  color:#475569; font-size:14px; line-height:1.7;
+}
+.scholar-frame .field-evidence summary { color:#1d4ed8; font-size:14px; }
+.scholar-frame .field-view-tabs button[aria-pressed=true] { color:#1d4ed8; }
+.scholar-frame .assistant-bubble,.scholar-frame .answer-text { font-size:16px; line-height:1.85; }
+.scholar-frame .is-assistant .assistant-bubble { color:#263445; }
+.scholar-frame .assistant-msg-meta,.scholar-frame .research-chat-list { font-size:13px; color:#475569; }
+@media(max-width:640px) {
+  .scholar-frame .ws-nav a { font-size:14px; }
+  .scholar-frame .fields-page-head h1 { font-size:25px!important; }
+  .scholar-frame .field-report-head h2 { font-size:24px; }
+  .scholar-frame .field-members a { max-width:100%; }
+  .scholar-frame .field-milestone-top { flex-wrap:wrap; }
+  .scholar-frame .field-milestone-top small { white-space:normal; text-align:left; }
+}

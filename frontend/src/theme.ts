@@ -64,8 +64,8 @@ export const tokens = {
   vizTeal: "#0f7c74",
 
   fonts: {
-    ui: '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
-    read: 'Georgia, "Iowan Old Style", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "Microsoft YaHei", serif',
+    ui: '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, -apple-system, sans-serif',
+    read: 'Georgia, "Iowan Old Style", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif',
     mono: '"Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
   },
 
@@ -189,9 +189,9 @@ export const antdTheme: ThemeConfig = {
     colorFillQuaternary: tokens.surfaceMuted,
     colorFillAlter: tokens.subtle,
     fontFamily: tokens.fonts.ui,
-    fontSize: 14,
-    fontSizeSM: 13,
-    fontSizeLG: 15,
+    fontSize: 15,
+    fontSizeSM: 14,
+    fontSizeLG: 16,
     borderRadius: tokens.radius.md,
     borderRadiusXS: tokens.radius.xs,
     borderRadiusSM: tokens.radius.sm,

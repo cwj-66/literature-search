@@ -9,13 +9,12 @@ import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { paperKey } from "../../types";
 import { ResearchPaperResults } from "../../components/ResearchPaperResults";
 import { researchHasActivity, researchHistory, researchSummary } from "../../researchPresentation";
-import { isDemo } from "../../demo";
 import { paperLocation } from "../../workspace";
 import { useWorkspaceProject } from "./shared";
 
 
 
-const WELCOME = ["你好！我是检索助手。", "告诉我研究主题和要求，我可以帮你搜索、筛选学术论文，也可以回答一般问题。针对已收录论文提问，请到智能问答并勾选论文。"];
+const WELCOME = ["你好！我是检索助手。", "告诉我想找的研究方向、年份和筛选要求，我会寻找并推荐相关论文。针对已收录论文的内容提问，请使用智能问答。"];
 const RESEARCH_STEP: Record<string, string> = {
   route: "理解研究目标", plan: "制定研究计划", prepare: "理解论文需求", search: "寻找相关论文",
   finding: "判断下一步检索方向", detail: "查看候选论文详情",
@@ -222,7 +221,6 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
   }
 
   return <div className="assistant">
-    {isDemo && chat.id.startsWith("demo-reviewed-") ? <p className="demo-example-notice">预置演示 · 内容依据公开论文摘要核对，非真实用户记录或现场模型输出。可展开引用依据；继续提问将使用正常研究流程。</p> : null}
     {messageContext}
     <div className="assistant-body">
       <div className="assistant-main">

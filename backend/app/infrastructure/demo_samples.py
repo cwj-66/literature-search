@@ -7,7 +7,7 @@ Only the two original demo workspaces and their existing papers are eligible.
 import json
 from datetime import datetime, timezone
 
-VERSION = "reviewed-abstracts-20261022-v1"
+VERSION = "discovery-examples-20261022-v2"
 NOTICE = "预置演示：依据公开论文摘要整理，非真实用户记录或现场模型输出。未核对全文实验数字；继续提问将使用正常研究流程。"
 
 SOURCES = {
@@ -60,6 +60,7 @@ def install():
     from app.assistant_chats import ensure
     from app.schemas import ResearchField
     from app.services.research_fields import store
+    from app.infrastructure import demo_discovery
     stamp = datetime.now(timezone.utc).isoformat()
     millis = int(datetime.now(timezone.utc).timestamp() * 1000)
     with connection() as db, db:
@@ -83,22 +84,11 @@ def install():
                     payload.update({'demo_provenance':{'kind':'reviewed_abstract','url':'https://arxiv.org/abs/'+ref.split(':',1)[1], 'quote':source['quote']}})
                     fid=store.register(ResearchField(name=label,canonical_name=canonical))
                     db.execute('INSERT OR IGNORE INTO paper_fields VALUES(?,?,?)',(members[ref]['local_id'],fid,json.dumps(payload,ensure_ascii=False)))
+            demo_discovery.install(db, workspace_id, examples is RAG, members, examples, millis, stamp)
             for index, (start, count) in enumerate(((0,1),(1,3),(4,5))):
                 title=f'示例 · {("阅读起点","方法解读","证据边界")[index]} · {count} 轮'
                 selected=list(dict.fromkeys(members[e[0]]['local_id'] for e in examples[start:start+count]))
                 cid=f'demo-reviewed-{index+1}'
-                turns=[]
-                for offset, (ref, question, answer) in enumerate(examples[start:start+count]):
-                    quote=SOURCES[ref]['quote']; url='https://arxiv.org/abs/'+ref.split(':',1)[1]
-                    answer=f'{answer}\n\n依据：{SOURCES[ref]["name"]}，公开摘要。{url}'
-                    turns.append({'id':millis+index*100+offset,'answeredAt':millis+index*100+offset+1,'question':question,
-                                  'task':{'task_id':f'{cid}-{offset}','status':'done','answer':answer,'events':[],
-                                          'evidence':[{'evidence_id':'E0001','paper_id':ref,'quote':quote,'material':'abstract'}],
-                                          'referenced_evidence_ids':['E0001']},
-                                  'demo_example':True})
-                chat={'id':cid,'title':title,'titleEdited':True,'createdAt':millis-index,'updatedAt':millis-index,
-                      'selectedIds':selected,'turns':turns,'demo_example':True}
-                db.execute('INSERT OR IGNORE INTO assistant_chats VALUES(?,?,?,?,0,?)',(workspace_id,cid,json.dumps(chat,ensure_ascii=False),1,stamp))
                 db.execute('INSERT OR IGNORE INTO research_conversations VALUES(?,?,?,?,?,?)',(cid+'-'+workspace_id,workspace_id,title,json.dumps(selected),stamp,stamp))
                 for offset,(ref,question,answer) in enumerate(examples[start:start+count]):
                     paper=members[ref]; mid=f'{cid}-{offset}'

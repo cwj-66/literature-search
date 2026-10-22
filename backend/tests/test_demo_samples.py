@@ -40,9 +40,14 @@ class DemoSampleTests(unittest.TestCase):
                     self.assertTrue(chat['title'].startswith('示例'))
                     for turn in chat['turns']:
                         self.assertFalse(turn['task']['events']) # no fabricated search/model execution
-                        ev=turn['task']['evidence'][0]
-                        self.assertEqual(ev['material'],'abstract')
-                        self.assertEqual(ev['quote'],samples.SOURCES[ev['paper_id']]['quote'])
+                        self.assertEqual(chat['selectedIds'],[])
+                        recommended=turn['task']['recommended']
+                        self.assertEqual(len(recommended),1)
+                        paper=recommended[0]
+                        self.assertTrue(paper['authors'])
+                        self.assertTrue(paper['abstract'])
+                        self.assertEqual(paper['url'],'https://arxiv.org/abs/'+paper['id'].split(':')[1])
+                        self.assertFalse(db.execute('SELECT 1 FROM papers WHERE local_id=?',(paper['id'],)).fetchone())
                 counts=[r[0] for r in db.execute('SELECT count(*) FROM research_conversations c JOIN research_messages m ON m.conversation_id=c.id WHERE workspace_id=? GROUP BY c.id ORDER BY c.id',(wid,))]
                 self.assertEqual(counts,[1,3,5])
 
@@ -80,3 +85,21 @@ class DemoSampleTests(unittest.TestCase):
         samples.install()
         with demo.scope('b'*32), connection() as db:
             self.assertEqual(db.execute('SELECT count(*) FROM research_conversations').fetchone()[0],0)
+
+    def test_upgrade_replaces_only_untouched_old_research_examples(self):
+        from app.assistant_chats import ensure
+        wid='pmvcf313hr4xt'
+        with connection() as db,db:
+            ensure(db)
+            old={'id':'demo-reviewed-1','title':'示例 · 阅读起点 · 1 轮','turns':[
+                {'demo_example':True,'question':samples.RAG[0][1],'task':{'answer':samples.RAG[0][2]}}]}
+            db.execute('INSERT INTO assistant_chats VALUES(?,?,?,?,0,?)',(wid,'demo-reviewed-1',json.dumps(old),1,'old'))
+            custom={'id':'demo-reviewed-2','title':'我的检索','turns':[{'question':'我的新问题'}]}
+            db.execute('INSERT INTO assistant_chats VALUES(?,?,?,?,0,?)',(wid,'demo-reviewed-2',json.dumps(custom),3,'old'))
+        samples.install()
+        with connection() as db:
+            updated=db.execute('SELECT payload,version FROM assistant_chats WHERE workspace_id=? AND id=?',(wid,'demo-reviewed-1')).fetchone()
+            self.assertIn('主题检索',json.loads(updated['payload'])['title'])
+            self.assertEqual(updated['version'],2)
+            preserved=json.loads(db.execute('SELECT payload FROM assistant_chats WHERE workspace_id=? AND id=?',(wid,'demo-reviewed-2')).fetchone()[0])
+            self.assertEqual(preserved,custom)
