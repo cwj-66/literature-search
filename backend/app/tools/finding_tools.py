@@ -41,7 +41,7 @@ class DetailArgs(BaseModel):
 class SubmittedPaper(BaseModel):
     model_config = ConfigDict(extra="forbid")
     paper_id: str = Field(min_length=1, max_length=500)
-    reason: str = Field(min_length=1, max_length=1800, description="根据实际标题摘要，说明如何符合用户条件")
+    reason: str = Field(min_length=1, max_length=1800, description="逐篇中文推荐理由：摘要充分时用2—4句说明需求匹配、摘要中的具体机制、阅读价值或限制，通常100—180字；信息不足则明确依据有限，不凑字数、不编造全文细节")
 
     @field_validator("reason")
     @classmethod

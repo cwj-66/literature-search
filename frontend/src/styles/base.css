@@ -520,9 +520,9 @@
   .paper-facts { font-size: var(--fs-xs); }
 }
 /* The shared portfolio session applies to all demo pages. */
-.demo-banner { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; padding: 9px 20px; background: #eaf1ff; color: #264677; font-size: 12px; line-height: 1.6; }
-.demo-banner a { white-space: nowrap; color: inherit; }
+.demo-banner { grid-column: 1 / -1; display: flex; justify-content: center; align-items: center; height: 38px; box-sizing: border-box; padding: 0 20px; background: #eaf1ff; color: #173d7a; font-size: 13px; line-height: 1.6; }
+.demo-banner a { white-space: nowrap; color: #173d7a; font-weight: 650; }
 .app:has(> .demo-banner) { padding-top: 38px; }
 .app > .demo-banner { position: fixed; inset: 0 0 auto; z-index: 100; }
 .app:has(> .demo-banner) .shell-side { top: 38px; height: calc(100dvh - 38px); }
-@media (max-width: 600px) { .demo-banner { padding: 8px 12px; } .app:has(> .demo-banner) { padding-top: 58px; } }
+@media (max-width: 600px) { .demo-banner { padding-inline: 12px; } }

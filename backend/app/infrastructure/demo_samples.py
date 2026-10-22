@@ -7,7 +7,7 @@ Only the two original demo workspaces and their existing papers are eligible.
 import json
 from datetime import datetime, timezone
 
-VERSION = "discovery-examples-20261022-v2"
+VERSION = "discovery-examples-20261022-v3"
 NOTICE = "预置演示：依据公开论文摘要整理，非真实用户记录或现场模型输出。未核对全文实验数字；继续提问将使用正常研究流程。"
 
 SOURCES = {

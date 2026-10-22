@@ -1,11 +1,11 @@
 import { pageTitle, formatMessageTime } from "../presentation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Alert, Button, Checkbox, Empty, Input, Modal, Popconfirm, Skeleton } from "antd";
+import { Alert, Button, Checkbox, Empty, Input, Modal, Popconfirm, Skeleton, message as notification } from "antd";
 import { DeleteOutlined, DoubleLeftOutlined, DoubleRightOutlined, EditOutlined, ExportOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { askConversation, createConversation, deleteConversation, fetchConversation, listConversations, prepareWorkspace, updateConversation } from "../api";
 import { Answer } from "../components/studio/AskView";
-import { isDemo } from "../demo";
+import { AssistantBubble, UserBubble } from "../components/ChatMessages";
 import { useCollapsed } from "../hooks";
 import type { Project } from "../projects";
 import type { Conversation, ConversationSummary } from "../types";
@@ -114,7 +114,7 @@ function Studio({ project }: { project: Project }) {
         {error ? <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => { setError(""); setRetry(v => v + 1); }}>重试</Button>} /> : null}
         <div className="studio-chat-empty">{(!ready && !error) || (Boolean(currentId) && !error && thread?.id !== currentId) ? <Skeleton active /> : currentId ? null : <Empty description="新建一个对话，在右侧勾选论文后开始提问"><Button type="primary" onClick={create} loading={creating} disabled={!ready}>开始第一个对话</Button></Empty>}</div>
       </section>
-      <PaperRail locked picked={[]} disabled entries={Object.entries(project.papers)} filter="" onFilter={() => undefined} onToggle={() => undefined} note="打开或新建对话后，在这里勾选论文。回答只会使用勾选的论文。" />
+      <PaperRail locked picked={[]} disabled entries={Object.entries(project.papers)} filter="" onFilter={() => undefined} onToggle={() => undefined} onSelectMany={() => undefined} note="打开或新建对话后，在这里勾选论文。回答只会使用勾选的论文。" />
     </>}
   </div>;
 }
@@ -128,6 +128,8 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
   const [title, setTitle] = useState(thread.title);
   const controller = useRef<AbortController | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const followBottom = useRef(true);
+  const [messageApi, messageContext] = notification.useMessage();
   const location = useLocation();
   const here = location.pathname + location.search;
   const entries = Object.entries(project.papers);
@@ -148,7 +150,7 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
   }, [project.id, thread.id, pending]);
   useLayoutEffect(() => {
     const node = logRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
+    if (node && followBottom.current) node.scrollTop = node.scrollHeight;
   }, [thread.messages, busy]);
 
   async function save(changes: { title?: string; paper_ids?: string[] }) {
@@ -161,6 +163,7 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
   async function ask() {
     const text = question.trim();
     if (!text || disabled || !picked.length) return;
+    followBottom.current = true;
     const abort = new AbortController(); controller.current = abort;
     setBusy(true); setError("");
     try {
@@ -179,7 +182,12 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
     const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `${thread.title.replace(/[<>:"/\\|?*]/g, "_").slice(0, 50)}.md`; a.click(); URL.revokeObjectURL(url);
   }
+  async function copy(text: string) {
+    try { await navigator.clipboard.writeText(text); messageApi.success("已复制"); }
+    catch { messageApi.error("复制失败，请选择文字后复制"); }
+  }
   return <div className="studio-thread">
+    {messageContext}
     <section className="studio-chat" aria-label="研究对话">
       <header className="conversation-head"><div><h2>{thread.title}</h2><span className="small-print">{disabled ? pending ? "回答生成中，完成后自动保存" : "正在提交…" : "已自动保存"}</span></div><div className="conversation-actions">
         <Button icon={<EditOutlined />} disabled={disabled} onClick={() => { setTitle(thread.title); setRenaming(true); }}>重命名</Button>
@@ -187,15 +195,24 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
       </div></header>
       <Modal title="重命名对话" open={renaming} onCancel={() => setRenaming(false)} onOk={() => save({ title: title.trim() })} okText="保存" cancelText="取消" confirmLoading={busy} okButtonProps={{ disabled: !title.trim() }}><Input autoFocus aria-label="对话名称" value={title} maxLength={120} onChange={event => setTitle(event.target.value)} /></Modal>
       {error ? <Alert type="error" showIcon message={error} /> : null}
-      <div className="studio-log" ref={logRef}>
-        {isDemo && thread.id.startsWith("demo-reviewed-") ? <p className="demo-example-notice">预置演示 · 依据公开论文摘要整理，非真实用户记录或现场模型输出。右侧展示逐字摘要依据，不代表全文分析。</p> : null}
-        <div className="studio-log-inner">
-          {!thread.messages.length ? <p className="muted">可以解读单篇论文，也可以比较多篇论文的研究方法、实验和局限。回答只使用右侧勾选的论文。</p> : null}
+      <div className="studio-log" ref={logRef} onScroll={event => {
+        const node = event.currentTarget;
+        followBottom.current = node.scrollHeight - node.clientHeight - node.scrollTop < 64;
+      }}>
+        <div className="studio-log-inner assistant-thread">
+          {!thread.messages.length ? <AssistantBubble time={thread.created_at}><p>你好！我是论文问答助手。</p><p>选择论文后，可以询问研究方法、实验与局限，也可以比较多篇论文。我会依据可检索到的论文内容回答，并附上引用来源。</p></AssistantBubble> : null}
           {thread.messages.map(message => {
             const titles = new Map(message.papers.map(paper => [paper.paper_id, paper.title]));
             const paths = new Map(message.papers.map(paper => [paper.paper_id, workspacePaperPath(project.id, paper.id, here)]));
-            return <article key={message.id} className="qa-turn"><header><time className="small-print" dateTime={message.created_at}>{formatMessageTime(message.created_at)}</time><h3 className="qa-question">{message.question}</h3><p className="small-print">本次范围：{message.papers.map(p => p.title).join("；")}</p></header>
-              {message.status === "pending" ? <p className="pending">正在检索所选论文并生成回答，可离开页面后再回来查看。</p> : message.error ? <Alert type="error" showIcon message={message.error} /> : message.response ? <Answer turn={{ id: message.id, question: message.question, scope: "", response: message.response }} titles={titles} paths={paths} from={here} /> : null}
+            return <article key={message.id} className="qa-turn assistant-pair">
+              <UserBubble time={message.created_at} onCopy={() => void copy(message.question)}>{message.question}</UserBubble>
+              <AssistantBubble time={message.created_at} thinking={message.status === "pending"} onCopy={message.response ? () => void copy(message.response!.answer.replace(/\[(E\d+)\]/g, (_match, id) => {
+                const index = message.response!.evidence.findIndex(item => item.evidence_id === id);
+                return index < 0 ? "" : `〔来源 ${index + 1}〕`;
+              })) : undefined}>
+                <details className="qa-answer-scope"><summary>本次依据 {message.papers.length} 篇论文</summary><ul>{message.papers.map(paper => <li key={paper.id}>{paper.title}</li>)}</ul></details>
+                {message.status === "pending" ? <p className="pending" role="status">正在检索所选论文并生成回答，可离开页面后再回来查看。</p> : message.error ? <Alert type="error" showIcon message={message.error} /> : message.response ? <Answer turn={{ id: message.id, question: message.question, scope: "", response: message.response }} titles={titles} paths={paths} from={here} /> : null}
+              </AssistantBubble>
             </article>;
           })}
           {busy && !pending ? <p className="pending" role="status">正在提交，生成回答后会自动保存…</p> : null}
@@ -204,22 +221,28 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
       <form className="studio-composer" onSubmit={event => { event.preventDefault(); void ask(); }}>
         <div className="studio-composer-inner">
           <p className="field-help">{picked.length ? `只检索所选 ${picked.length} 篇论文，不使用未勾选论文，也不联网补充。` : "先在右侧选择一篇或多篇论文，再开始提问。"}</p>
-          <Input.TextArea aria-label="问题" value={question} disabled={disabled || !picked.length} maxLength={2000} autoSize={{ minRows: 2, maxRows: 6 }} placeholder={picked.length ? "输入问题，或继续追问…" : "请先在右侧选择论文"} onChange={event => setQuestion(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void ask(); } }} />
-          <div className="studio-composer-actions"><span className="muted">Ctrl + Enter 发送</span><Button type="primary" htmlType="submit" loading={busy} disabled={disabled || !question.trim() || !picked.length}>发送问题</Button></div>
+          <div className="assistant-composer qa-input-box">
+            <textarea aria-label="问题" value={question} disabled={disabled || !picked.length} maxLength={2000} rows={1} placeholder={picked.length ? "输入问题，或继续追问…" : "请先在右侧选择论文"} onChange={event => setQuestion(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void ask(); } }} />
+            <button className="assistant-send" type="submit" disabled={disabled || !question.trim() || !picked.length} aria-label="发送问题" title="Enter 发送，Shift + Enter 换行">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6.5 18.5 12 13 17.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
         </div>
       </form>
     </section>
-    <PaperRail picked={picked} disabled={disabled} entries={entries} filter={filter} onFilter={setFilter} note="" missing={thread.paper_ids.length !== picked.length} onToggle={id => save({ paper_ids: picked.includes(id) ? picked.filter(ref => ref !== id) : [...picked, id] })} />
+    <PaperRail picked={picked} disabled={disabled} entries={entries} filter={filter} onFilter={setFilter} note="" missing={thread.paper_ids.length !== picked.length} onSelectMany={ids => save({ paper_ids: ids })} onToggle={id => save({ paper_ids: picked.includes(id) ? picked.filter(ref => ref !== id) : [...picked, id] })} />
   </div>;
 }
 
-function PaperRail({ picked, disabled, locked, entries, filter, onFilter, onToggle, note, missing }: {
+function PaperRail({ picked, disabled, locked, entries, filter, onFilter, onToggle, onSelectMany, note, missing }: {
   picked: string[]; disabled: boolean; locked?: boolean; entries: [string, Project["papers"][string]][]; filter: string; onFilter: (value: string) => void;
-  onToggle: (id: string) => void; note: string; missing?: boolean;
+  onToggle: (id: string) => void; onSelectMany: (ids: string[]) => void; note: string; missing?: boolean;
 }) {
   const [collapsed, toggle] = useCollapsed("sg-studio-papers");
   const frozen = disabled || locked;
   const visible = entries.filter(([, item]) => `${item.paper.title} ${item.paper.year ?? ""}`.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()));
+  const allIds = entries.slice(0, LIMIT).map(([id]) => id);
+  const allPicked = allIds.length > 0 && allIds.every(id => picked.includes(id));
   return <aside className={`studio-papers${collapsed ? " is-collapsed" : ""}`} aria-label="回答所用论文">
     <div className="rail-head">
       {collapsed ? null : <div><strong>回答范围</strong><span>已选 {picked.length} 篇</span></div>}
@@ -229,6 +252,7 @@ function PaperRail({ picked, disabled, locked, entries, filter, onFilter, onTogg
       <p>{note || "勾选后，这次对话只能检索这些论文。"}</p>
       {!entries.length ? <p>当前工作区还没有论文。<Link to="../library">先添加论文</Link></p> : <>
         <Input allowClear prefix={<SearchOutlined aria-hidden />} aria-label="查找对话可选论文" placeholder="查找标题或年份" value={filter} disabled={locked} onChange={event => onFilter(event.target.value)} />
+        <Checkbox checked={allPicked} indeterminate={!allPicked && picked.length > 0} disabled={frozen || !allIds.length} onChange={() => onSelectMany(allPicked ? [] : allIds)}>{entries.length > LIMIT ? `全选前 ${LIMIT} 篇` : "全选"}</Checkbox>
         <ul className="studio-paper-list">{visible.map(([id, item]) => <li key={id} className={picked.includes(id) ? "is-picked" : ""}><Checkbox checked={picked.includes(id)} disabled={frozen || (!picked.includes(id) && picked.length >= LIMIT)} onChange={() => onToggle(id)}>{item.paper.title}</Checkbox></li>)}</ul>
         {!visible.length ? <p className="muted">没有匹配的论文。</p> : null}
         <p className="small-print">最多选择 {LIMIT} 篇。未勾选的论文不会进入检索。</p>

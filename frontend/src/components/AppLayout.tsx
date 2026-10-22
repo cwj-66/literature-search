@@ -41,7 +41,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     const next = new URL(anchor.href, window.location.origin);
     if (next.origin === window.location.origin) captureScroll();
   }}>
-    {isDemo && <div className="demo-banner"><span>面试体验 · 已配置演示模型 · 工作区与对话仅属于当前访客，闲置 7 天后清理</span><a href="/projects/paper-search/">返回作品集 ↗</a></div>}
+    {isDemo && <div className="demo-banner"><a href="/projects/paper-search/">返回作品集 ↗</a></div>}
     <a href="#main" className="skip-link">跳到主要内容</a>
     {inside && project && ctx
       ? <div className="route-view is-shell" key={location.pathname}><WorkspaceFrame project={project} section={ctx.section}>{children}</WorkspaceFrame></div>

@@ -30,24 +30,29 @@ class DemoSampleTests(unittest.TestCase):
         self.env.stop()
         self.temp.cleanup()
 
-    def test_both_interfaces_have_one_three_five_grounded_turns(self):
+    def test_interfaces_have_grounded_turns_and_a_batch_search_example(self):
         samples.install()
         with connection() as db:
             for wid in ('pmvcf313hr4xt','pmvci88eig1qi'):
                 chats=[json.loads(r['payload']) for r in db.execute('SELECT payload FROM assistant_chats WHERE workspace_id=? ORDER BY id',(wid,))]
-                self.assertEqual([len(c['turns']) for c in chats],[1,3,5])
+                self.assertEqual([len(c['turns']) for c in chats],[2,3,5])
                 for chat in chats:
                     self.assertTrue(chat['title'].startswith('示例'))
                     for turn in chat['turns']:
                         self.assertFalse(turn['task']['events']) # no fabricated search/model execution
                         self.assertEqual(chat['selectedIds'],[])
                         recommended=turn['task']['recommended']
-                        self.assertEqual(len(recommended),1)
-                        paper=recommended[0]
-                        self.assertTrue(paper['authors'])
-                        self.assertTrue(paper['abstract'])
-                        self.assertEqual(paper['url'],'https://arxiv.org/abs/'+paper['id'].split(':')[1])
-                        self.assertFalse(db.execute('SELECT 1 FROM papers WHERE local_id=?',(paper['id'],)).fetchone())
+                        self.assertEqual(len(recommended),turn['task']['result_limit'])
+                        for paper in recommended:
+                            self.assertTrue(paper['authors'])
+                            self.assertTrue(paper['abstract'])
+                            self.assertGreater(len(turn['task']['recommendation_reasons'][paper['id']]),80)
+                            self.assertEqual(paper['url'],'https://arxiv.org/abs/'+paper['id'].split(':')[1])
+                            self.assertFalse(db.execute('SELECT 1 FROM papers WHERE local_id=?',(paper['id'],)).fetchone())
+                first=chats[0]['turns']
+                self.assertIn('3 篇',first[1]['question'])
+                self.assertEqual(len(first[1]['task']['recommended']),3)
+                self.assertTrue({p['id'] for p in first[0]['task']['recommended']}.isdisjoint({p['id'] for p in first[1]['task']['recommended']}))
                 counts=[r[0] for r in db.execute('SELECT count(*) FROM research_conversations c JOIN research_messages m ON m.conversation_id=c.id WHERE workspace_id=? GROUP BY c.id ORDER BY c.id',(wid,))]
                 self.assertEqual(counts,[1,3,5])
 
@@ -103,3 +108,25 @@ class DemoSampleTests(unittest.TestCase):
             self.assertEqual(updated['version'],2)
             preserved=json.loads(db.execute('SELECT payload FROM assistant_chats WHERE workspace_id=? AND id=?',(wid,'demo-reviewed-2')).fetchone()[0])
             self.assertEqual(preserved,custom)
+
+    def test_upgrade_adds_batch_to_untouched_discovery_but_preserves_continuations(self):
+        from app.assistant_chats import ensure
+        from app.infrastructure import demo_discovery
+        wid='pmvcf313hr4xt'
+        examples=demo_discovery.RAG
+        old={'id':'demo-reviewed-1','title':'示例 · 主题检索 · 1 轮','turns':[
+            {'demo_example':True,'question':examples[0][1],'task':{'answer':examples[0][2]+' 论文见下方，可查看详情或收藏到工作区。'}}]}
+        continued={'id':'demo-reviewed-2','title':'示例 · 扩展方向 · 3 轮','turns':[
+            *[{'demo_example':True,'question':q,'task':{'answer':a}} for _,q,a in examples[1:4]],
+            {'question':'再找5篇','task':{'answer':'保留访客的内容'}}]}
+        with connection() as db,db:
+            ensure(db)
+            for chat in (old,continued):
+                db.execute('INSERT INTO assistant_chats VALUES(?,?,?,?,0,?)',(wid,chat['id'],json.dumps(chat),2,'old'))
+        samples.install()
+        with connection() as db:
+            updated=json.loads(db.execute('SELECT payload FROM assistant_chats WHERE workspace_id=? AND id=?',(wid,old['id'])).fetchone()[0])
+            self.assertEqual(len(updated['turns']),2)
+            self.assertEqual(len(updated['turns'][1]['task']['recommended']),3)
+            preserved=json.loads(db.execute('SELECT payload FROM assistant_chats WHERE workspace_id=? AND id=?',(wid,continued['id'])).fetchone()[0])
+            self.assertEqual(preserved,continued)

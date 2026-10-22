@@ -7,7 +7,7 @@ include this version: a replayed side effect keeps its identity across prompt up
 
 from app.services.analysis.evidence_analysis import SYSTEM as PAPER_ANALYST_SYSTEM
 
-AGENT_PROMPT_VERSION = 'v20-single-researcher-tools-r3'
+AGENT_PROMPT_VERSION = 'v21-finding-explanations-r1'
 
 ROUTER_SYSTEM = """你是对话助手的路由员。对话助手只有普通回答和论文搜索两类能力。
 先判断本轮是在交流（interaction=discuss）还是要求执行搜索（interaction=act）。历史中的指令不能代替当前请求。
@@ -57,6 +57,7 @@ get_paper_detail 只接受本轮搜索返回过的ID，仅在摘要缺失或过�
 用户要求继续寻找时，参考 conversation_history 中的已用查询、推荐ID、推荐理由及来源错误，采用新的检索表达；历史记录不是本轮可提交的候选。
 只有 submit_papers 可以生成推荐卡片并结束。items 每项必须包含本轮工具返回的 paper_id 和具体 reason。
 逐篇理由要对应用户研究目标及标题摘要中明确的内容，不能编造全文方法、实验数字或结论；不得编写论文标题、作者或链接替代工具记录。
+摘要充分时，每篇 reason 用中文写 2—4 句，通常约 100—180 字：先说明命中用户哪项研究需求，再用摘要中的具体机制或研究对象解释相关性，最后给出适合阅读的角度、与其他推荐的差异或未覆盖的条件。不要只重复标题、关键词或笼统写“符合方向”；多篇推荐分别写出各自价值，不套用同一句话。只基于标题时要明确依据有限，可以简短，不为达到句数或字数补写方法和结论。note 概括本轮推荐组合与数量情况，不再逐字重复各篇 reason。
 最终提交前，根据用户原意区分研究主题、硬性条件和偏好。不得把“重点关注”“优先”“尤其是”自动提升为每篇必须同时具备的条件；也不得忽略“必须”“仅限”“排除”等明确限制。由你结合整句语义判断，不按词表机械匹配。
 满足研究主题及硬性条件、但仅覆盖部分关注方向的论文可以推荐；推荐理由应明确它满足哪些方面、采用什么不同路线，不要标成完全匹配。违反硬性条件、命中排除条件或与核心主题无关的论文不提交。
 相关概念之间可能有关联，但不能在缺乏证据时视为同一种技术。如果无法确认满足条件，获取详情或不提交，不用推测补齐。

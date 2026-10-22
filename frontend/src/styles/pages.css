@@ -1957,7 +1957,7 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
 .is-user time { text-align: right; }
 .assistant-spark, .assistant-avatar { display: grid; place-items: center; flex: none; border-radius: 50%; }
 .assistant-spark { width: 42px; height: 42px; background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(36, 71, 158, .3); }
-.assistant-spark svg { width: 22px; height: 22px; }
+.assistant-spark svg { width: 32px; height: 32px; }
 .assistant-avatar { width: 32px; height: 32px; margin-top: 5px; background: var(--subtle); color: var(--muted); }
 .assistant-avatar svg { width: 17px; height: 17px; }
 .assistant-spark.is-thinking { animation: assistant-breathe 1.8s var(--ease-in-out) infinite; }
@@ -2500,4 +2500,29 @@ button.ws-card { color: var(--ink); font: inherit; text-align: left; cursor: poi
   .studio-chats, .studio-papers, .studio-layout .studio-chats.is-collapsed, .studio-layout .studio-papers.is-collapsed { width: 100%; max-height: 260px; }
   .studio-layout .studio-chats.is-collapsed, .studio-layout .studio-papers.is-collapsed { max-height: 64px; flex-direction: row; }
   .studio-chat { min-height: 520px; }
+}
+
+/* Search and paper QA share the same message components. */
+.studio-log .assistant-thread { gap:24px; }
+.studio-log .qa-turn { margin:0; border:0; padding:0; }
+.studio-log .assistant-msg { max-width:min(94%,800px); }
+.studio-log .assistant-msg.is-user { align-self:flex-end; flex-direction:row; }
+.studio-log .assistant-msg.is-user .assistant-bubble { white-space:pre-wrap; overflow-wrap:anywhere; }
+.studio-log .assistant-msg-body { max-width:100%; }
+.studio-log .is-assistant .assistant-msg-body { max-width:calc(100% - 52px); }
+.studio-log .answer-layout { margin:0; gap:18px; }
+.studio-log .answer-evidence { min-width:0; }
+.studio-log .evidence-item { margin-inline:0; overflow-wrap:anywhere; }
+.studio-log .qa-answer-scope { margin:0 0 12px; color:var(--muted); font-size:12px; }
+.studio-log .qa-answer-scope summary { cursor:pointer; }
+.studio-log .qa-answer-scope ul { padding-left:18px; margin:8px 0; }
+.studio-composer .qa-input-box { margin:0; width:100%; box-sizing:border-box; }
+.studio-composer .qa-input-box textarea { min-height:32px; max-height:144px; resize:vertical; }
+@media (max-width:600px) {
+ .studio-log { padding:16px 10px; }
+ .studio-log .assistant-msg { max-width:100%; }
+ .studio-log .assistant-msg.is-user { max-width:94%; }
+ .studio-log .assistant-bubble { padding:10px 12px; }
+ .studio-composer { padding:10px; }
+ .studio-chat>.conversation-head { flex-wrap:wrap; padding:12px; gap:10px; }
 }

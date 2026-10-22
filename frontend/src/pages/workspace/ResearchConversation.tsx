@@ -1,10 +1,11 @@
-import { formatMessageTime, evidenceLabels } from "../../presentation";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { AssistantBubble, UserBubble } from "../../components/ChatMessages";
+import { evidenceLabels } from "../../presentation";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { prepareWorkspace, researchDecision, startResearch, uploadPaper, workspacePapers, fetchResearchTask, cancelResearchTask } from "../../api";
 import { projects, useProjects } from "../../projects";
 import type { ResearchChat, ResearchTurn as Turn } from "../../researchChats";
-import { CopyOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
+import { ReloadOutlined, StopOutlined } from "@ant-design/icons";
 import { Button, message } from "antd";
 import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { paperKey } from "../../types";
@@ -15,7 +16,7 @@ import { useWorkspaceProject } from "./shared";
 
 
 
-const WELCOME = ["你好！我是检索助手。", "告诉我想找的研究方向、年份和筛选要求，我会寻找并推荐相关论文。针对已收录论文的内容提问，请使用智能问答。"];
+const WELCOME = ["你好！我是检索助手。", "告诉我想找的研究方向、年份和筛选要求，我会寻找并推荐相关论文。"];
 const RESEARCH_STEP: Record<string, string> = {
   route: "理解研究目标", plan: "制定研究计划", prepare: "理解论文需求", search: "寻找相关论文",
   finding: "判断下一步检索方向", detail: "查看候选论文详情",
@@ -24,10 +25,6 @@ const RESEARCH_STEP: Record<string, string> = {
   finalize: "完成复核", stop: "研究结束",
 };
 
-
-function Spark({ thinking }: { thinking?: boolean }) {
-  return <span className={`assistant-spark${thinking ? " is-thinking" : ""}`} aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.4c.5 3.6 1.8 5.2 5.6 5.8-3.8.6-5.1 2.2-5.6 5.8-.5-3.6-1.8-5.2-5.6-5.8 3.8-.6 5.1-2.2 5.6-5.8Z" /><path fill="currentColor" d="M17.4 13.2c.2 1.5.8 2.2 2.3 2.4-1.5.2-2.1.8-2.3 2.3-.2-1.5-.8-2.1-2.3-2.3 1.5-.2 2.1-.9 2.3-2.4Z" /></svg></span>;
-}
 
 function AssistantArt() {
   return <svg className="assistant-art" viewBox="0 0 360 200" aria-hidden="true">
@@ -52,29 +49,6 @@ function AssistantArt() {
       <path fill="#8eb0ff" d="M30 16c.3 2.2 1.1 3.2 3.4 3.6-2.3.4-3.1 1.4-3.4 3.6-.3-2.2-1.1-3.2-3.4-3.6 2.3-.4 3.1-1.4 3.4-3.6Z" />
     </g>
   </svg>;
-}
-
-function MessageMeta({ time, onCopy, copyLabel, actions }: { time: number; onCopy?: () => void; copyLabel?: string; actions?: ReactNode }) {
-  return <div className="assistant-msg-meta">
-    <time dateTime={new Date(time).toISOString()}>{formatMessageTime(time)}</time>
-    {onCopy ? <Button type="text" size="small" className="assistant-copy" aria-label={copyLabel} title={copyLabel} icon={<CopyOutlined />} onClick={onCopy} /> : null}
-    {actions}
-  </div>;
-}
-function AssistantBubble({ time, thinking, children, onCopy, actions }: {
-  time: number; thinking?: boolean; children: ReactNode; onCopy?: () => void; actions?: ReactNode;
-}) {
-  return <div className="assistant-msg is-assistant">
-    <Spark thinking={thinking} />
-    <div className="assistant-msg-body"><div className="assistant-bubble">{children}</div>
-      <MessageMeta time={time} onCopy={onCopy} copyLabel="复制回答" actions={actions} />
-    </div>
-  </div>;
-}
-function UserBubble({ time, children, onCopy }: { time: number; children: ReactNode; onCopy: () => void }) {
-  return <div className="assistant-msg is-user"><div className="assistant-msg-body">
-    <div className="assistant-bubble">{children}</div><MessageMeta time={time} onCopy={onCopy} copyLabel="复制问题" />
-  </div></div>;
 }
 
 export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
