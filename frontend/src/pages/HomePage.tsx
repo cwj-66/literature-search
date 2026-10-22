@@ -1,3 +1,4 @@
+import { pageTitle } from "../presentation";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Dropdown, Input, Modal, Select } from "antd";
 import { ClockCircleOutlined, EllipsisOutlined, FileTextOutlined, SearchOutlined } from "@ant-design/icons";
@@ -139,7 +140,7 @@ export default function HomePage() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [renameId, setRenameId] = useState<string | null>(null);
-  useEffect(() => { document.title = "研究工作区 - 文献研究助手"; }, []);
+  useEffect(() => { document.title = pageTitle("研究工作区 - 文献检索"); }, []);
 
   const shown = [...list].sort((a, b) => {
     if (sort === "created") return b.createdAt.localeCompare(a.createdAt);

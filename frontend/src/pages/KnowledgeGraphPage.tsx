@@ -1,3 +1,4 @@
+import { pageTitle } from "../presentation";
 import { useEffect, useMemo } from "react";
 import { Alert, Button, Skeleton } from "antd";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
@@ -16,7 +17,7 @@ export default function KnowledgeGraphPage() {
   const data = useMemo(() => raw && inProject && project ? withWorkspaceMetadata(raw, project) : raw, [raw, inProject, project]);
   const here = location.pathname + location.search;
   const from = safeReturn(params.get("from"), "/library");
-  useEffect(() => { document.title = "知识图谱 - 文献研读"; }, []);
+  useEffect(() => { document.title = pageTitle("知识图谱 - 文献检索"); }, []);
   return <main className="page page-wide kg-page">
     <Link to={from} className="back-link">← 返回研究</Link>
     <header className="page-head"><div><h1 className="page-title">知识图谱</h1><p className="muted">{inProject ? `工作区「${project!.name}」` : "本地文献库"}</p></div></header>

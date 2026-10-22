@@ -1,6 +1,9 @@
 /* Light surfaces need dark body text and a usable type size, not pale blue copy.
    WCAG 1.4.3: at least 4.5:1 for normal text; body copy here targets 7:1. */
 .scholar-frame { --ink:#17243b; --text:#263445; --muted:#475569; --faint:#526174; font-size:15px; }
+.scholar-frame .scholar-side-footer { margin-top:auto; justify-content:flex-end; }
+.relation-scope-note { padding:12px 16px; }
+.relation-scope-note summary { cursor:pointer; }
 .scholar-frame .ws-nav a { color:#334155; font-size:15px; }
 .scholar-frame .scholar-brand small,.scholar-frame .scholar-side-card p,
 .scholar-frame .ws-count,.scholar-frame .scholar-user { color:#475569; font-size:13px; }

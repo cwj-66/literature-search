@@ -152,7 +152,8 @@ def workspace_fields(workspace_id):
             WHERE wp.workspace_id=? ORDER BY pf.field_id''', (workspace_id,)).fetchall()
         missing = db.execute('''SELECT p.local_id, fi.status FROM workspace_papers wp JOIN papers p ON p.local_id=wp.local_id
             LEFT JOIN field_identifications fi ON fi.local_id=p.local_id
-            WHERE wp.workspace_id=? AND (fi.local_id IS NULL OR fi.status!='completed')''', (workspace_id,)).fetchall()
+            WHERE wp.workspace_id=? AND (fi.local_id IS NULL OR fi.status!='completed')
+            AND NOT EXISTS (SELECT 1 FROM paper_fields pf WHERE pf.local_id=p.local_id)''', (workspace_id,)).fetchall()
         pending_analysis = db.execute("SELECT COUNT(DISTINCT a.local_id) FROM analysis_tasks a JOIN workspace_papers wp ON wp.local_id=a.local_id WHERE wp.workspace_id=? AND a.status IN ('pending','preparing','analyzing')", (workspace_id,)).fetchone()[0]
         analyzed = {r[0] for r in db.execute('SELECT DISTINCT local_id FROM analysis_results')}
     groups = {}
@@ -182,7 +183,8 @@ def queue_legacy(workspace_id):
     with connection() as db, db:
         ids = db.execute('''SELECT DISTINCT a.local_id FROM analysis_results a JOIN workspace_papers wp ON wp.local_id=a.local_id
             LEFT JOIN field_identifications f ON f.local_id=a.local_id
-            WHERE wp.workspace_id=? AND (f.local_id IS NULL OR f.status='failed')''', (workspace_id,)).fetchall()
+            WHERE wp.workspace_id=? AND (f.local_id IS NULL OR f.status='failed')
+            AND NOT EXISTS (SELECT 1 FROM paper_fields pf WHERE pf.local_id=a.local_id)''', (workspace_id,)).fetchall()
         for r in ids:
             db.execute('''INSERT INTO field_identifications VALUES(?,'queued',NULL,?) ON CONFLICT(local_id)
                 DO UPDATE SET status='queued',error=NULL,updated_at=excluded.updated_at''', (r[0], now()))

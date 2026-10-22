@@ -1,3 +1,4 @@
+import { pageTitle } from "../presentation";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Empty, Skeleton, Tabs } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
@@ -121,7 +122,7 @@ export default function RecommendPage() {
   const openPaper = useCallback((paperId: string) => { navigate(paperLocation(paperId, current)); }, [current, navigate]);
 
   useEffect(() => {
-    document.title = recommendations ? `${recommendations.paper_title} - 论文相似度搜索 - 文献研读` : "论文相似度搜索 - 文献研读";
+    document.title = pageTitle(recommendations ? `${recommendations.paper_title} - 论文相似度搜索 - 文献检索` : "论文相似度搜索 - 文献检索");
   }, [recommendations]);
 
   useEffect(() => {
@@ -196,7 +197,7 @@ export default function RecommendPage() {
             <p>{recommendations.note}</p>
             {recommendations.search_plan ? <p>主题检索：{recommendations.search_plan.semantic.join(" / ")}；关键词检索：{recommendations.search_plan.keyword.join(" / ")}</p> : null}
             {recommendations.source_status?.map((source, index) => <p className="muted" key={index}>{source.source} · {source.query ?? "引用查询"}：{source.status === "completed" ? `${source.count} 篇` : source.message || "暂不可用"}</p>)}
-            <p className="muted">算法 {recommendations.algorithm_version} · 计算于 {new Date(recommendations.computed_at).toLocaleString("zh-CN")}。结果会保存以便再次查看，推荐论文不会自动进入论文库。</p>
+            <p className="muted">算法 {recommendations.algorithm_version} · 计算于 {new Date(recommendations.computed_at).toLocaleString("zh-CN")}。结果会保存以便再次查看，推荐论文不会自动进入文献库。</p>
           </details> : null}
           {loading && !recommendations ? <div className="row-skeletons">{[0, 1, 2].map(i => <Skeleton key={i} active paragraph={{ rows: 2 }} />)}</div> : null}
           {recommendations && !items.length ? <Empty description={selectedGroup?.status === "unavailable" ? "本类数据暂不可用，可查看其他关系类型" : "本次候选中没有符合该类别的论文"} /> : null}

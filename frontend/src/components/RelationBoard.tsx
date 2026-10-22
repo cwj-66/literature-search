@@ -140,7 +140,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
       <h2>{node.title}</h2>
       <p className="space-panel-meta">{node.year ?? "年份未知"} · {(node.center?.authors ?? node.item?.authors ?? []).slice(0, 3).join("，") || "作者未知"}</p>
       {!node.center && node.item ? <div className="space-actions">
-        <Button type="primary" loading={saving} disabled={busy || saved} onClick={() => void onSave(node.item!)}>{saved ? "已在论文库" : "加入论文库"}</Button>
+        <Button type="primary" loading={saving} disabled={busy || saved} onClick={() => void onSave(node.item!)}>{saved ? "已在文献库" : "加入文献库"}</Button>
       </div> : <Button className="space-collapse" onClick={() => onRemove(node.id)} disabled={busy || saving}>收起这篇主论文</Button>}
       {error ? <p className="space-action-error" role="alert">{error}</p> : null}
       {relations.length ? <><h3>关联依据</h3><div className="space-evidence">{relations.map(edge => {

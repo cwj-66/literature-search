@@ -1,3 +1,4 @@
+import { pageTitle } from "../../presentation";
 import { useEffect, useMemo } from "react";
 import { Alert, Button, Skeleton } from "antd";
 import { useLocation } from "react-router-dom";
@@ -14,7 +15,7 @@ export default function GraphPage() {
   const { data: raw, error, refresh } = useKnowledgeGraph(references);
   const data = useMemo(() => raw && project ? withWorkspaceMetadata(raw, project) : null, [raw, project]);
   const here = location.pathname + location.search;
-  useEffect(() => { document.title = project ? `${project.name} - 知识图谱` : "工作区"; }, [project]);
+  useEffect(() => { document.title = pageTitle(project ? `${project.name} - 知识图谱` : "工作区"); }, [project]);
   if (!project) return <MissingWorkspace />;
   const count = Object.keys(project.papers).length;
   const snapshots = data?.nodes.filter(n => n.kind === "paper" && n.provenance === "workspace_metadata").length ?? 0;

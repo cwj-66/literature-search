@@ -1,3 +1,4 @@
+import { pageTitle } from "../presentation";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Select, Skeleton } from "antd";
 import { CloseOutlined } from "@ant-design/icons";
@@ -55,7 +56,7 @@ export default function PaperPage() {
     }).catch(() => undefined);
   }, [id]);
 
-  useEffect(() => { document.title = paper ? `${paper.title} - 文献研读` : "论文 - 文献研读"; }, [paper]);
+  useEffect(() => { document.title = pageTitle(paper ? `${paper.title} - 文献检索` : "论文 - 文献检索"); }, [paper]);
   useEffect(() => {
     if (paper && location.hash === "#analysis") document.getElementById("analysis")?.scrollIntoView({ block: "start" });
   }, [paper, location.hash]);

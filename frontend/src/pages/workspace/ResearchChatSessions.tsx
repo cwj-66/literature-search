@@ -1,3 +1,4 @@
+import { pageTitle } from "../../presentation";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Dropdown, Empty, Input, Modal, Segmented, message } from "antd";
 import { CopyOutlined, DeleteOutlined, EllipsisOutlined, ExportOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, PushpinFilled, SearchOutlined } from "@ant-design/icons";
@@ -33,7 +34,7 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
   useEffect(() => {
     if (store.ready && params.get("papers") && !seeded.current) { seeded.current = true; create(undefined, params.get("papers")!.split(",").filter(Boolean)); }
   }, [store.ready]);
-  useEffect(() => { document.title = `${active?.title ?? "检索助手"} - ${name}`; }, [active?.title, name]);
+  useEffect(() => { document.title = pageTitle(`${active?.title ?? "检索助手"} - ${name}`); }, [active?.title, name]);
   function patch(chat: ResearchChat, changes: Partial<ResearchChat>) { store.patch(chat.id, changes); }
   function remove(chat: ResearchChat) {
     Modal.confirm({ title: `删除对话「${chat.title}」？`, content: "删除聊天记录和本对话的资料选择。工作区中的论文会保留。此操作无法撤销。",

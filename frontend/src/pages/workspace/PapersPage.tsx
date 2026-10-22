@@ -1,3 +1,4 @@
+import { pageTitle } from "../../presentation";
 import { useEffect, useState } from "react";
 import { Alert, Button, Empty, Input, Popconfirm, Select, Upload } from "antd";
 import { ArrowRightOutlined, DeleteOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
@@ -41,7 +42,7 @@ export default function PapersPage() {
       setUploading(false);
     }
   }
-  useEffect(() => { document.title = project ? `${project.name} - 论文库` : "工作区"; }, [project]);
+  useEffect(() => { document.title = pageTitle(project ? `${project.name} - 文献库` : "工作区"); }, [project]);
   if (!project) return <MissingWorkspace />;
   // 默认按加入时间排序；打开论文只影响阅读状态，不改变列表顺序。
   const entries = Object.entries(project.papers).sort((a, b) => {
@@ -56,7 +57,7 @@ export default function PapersPage() {
   return <main className="ws-page ws-library">
     <header className="ws-page-head lib-head">
       <div>
-        <h1>论文库</h1>
+        <h1>文献库</h1>
         <p>在当前工作区中添加的论文，可以进行精读、分析，并用于 AI 问答。</p>
       </div>
       {entries.length ? <Link className="lib-search-link" to="/search">去搜索论文<ArrowRightOutlined aria-hidden /></Link> : null}

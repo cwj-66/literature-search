@@ -1,3 +1,4 @@
+import { pageTitle } from "../../presentation";
 import { useEffect, useRef, useState } from "react";
 import { Button, Empty, Input, Spin, message } from "antd";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
@@ -20,6 +21,7 @@ export default function ComparePage() {
   const [preparing, setPreparing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [partialCount, setPartialCount] = useState(0);
   const [saveError, setSaveError] = useState("");
   const [request, setRequest] = useState({ seq: 0, refresh: false });
   const cache = useRef(new Map<string, RelateResponse>());
@@ -29,9 +31,9 @@ export default function ComparePage() {
   const selection = selected.join(",");
   const here = `/w/${id}/compare?${new URLSearchParams({ seeds: selection })}`;
 
-  useEffect(() => { document.title = `${project?.name ?? "工作区"} - 论文关系`; }, [project?.name]);
+  useEffect(() => { document.title = pageTitle(`${project?.name ?? "工作区"} - 论文关系`); }, [project?.name]);
   useEffect(() => {
-    if (!selection) { setData(null); setError(""); setLoading(false); setPreparing(false); return; }
+    if (!selection) { setData(null); setError(""); setPartialCount(0); setLoading(false); setPreparing(false); return; }
     const controller = new AbortController();
     const keys = selection.split(",");
     const snapshots = new Map(keys.map(key => [key, cache.current.get(`${id}:${key}`)
@@ -40,7 +42,7 @@ export default function ComparePage() {
       if (!controller.signal.aborted) setData(mergeRelationSnapshots(keys.map(key => snapshots.get(key)!)));
     };
     publish();
-    setError("");
+    setError(""); setPartialCount(0);
     let timer: ReturnType<typeof setTimeout> | undefined;
     setLoading(!keys.every(key => cache.current.has(`${id}:${key}`)));
     const load = async (refresh = false) => {
@@ -57,7 +59,8 @@ export default function ComparePage() {
         publish();
         const pending = Boolean(result.pending_ids?.length);
         setPreparing(pending); setLoading(false);
-        setError(result.precompute?.some(p => p.status === "failed" || p.status === "partial") ? "部分关系尚未准备好，可重试。" : "");
+        setError("");
+        setPartialCount(result.precompute?.filter(p => p.status === "failed" || p.status === "partial").length ?? 0);
         if (pending) timer = setTimeout(() => void load(), 2500);
       } catch {
         if (controller.signal.aborted) return;
@@ -102,7 +105,7 @@ export default function ComparePage() {
       // Persist workspace membership before updating local selection or expanding the graph.
       await prepareWorkspace(id, project!.name, [saved.local_id ?? saved.id]);
       projects.select(id); projects.add(saved);
-      message.success("已加入论文库，分析和相似论文将在后台自动准备");
+      message.success("已加入文献库，分析和相似论文将在后台自动准备");
     } catch (err) { setSaveError(err instanceof Error ? err.message : "保存失败，请重试"); }
     finally { setSaving(false); }
   }
@@ -130,6 +133,7 @@ export default function ComparePage() {
           <div className="relations-loading" role="status">{loading ? <Spin /> : null}<h2>{loading ? "正在构建论文关系空间" : selected.length ? "关系还没有取到" : "选择一篇或多篇主论文"}</h2>
             {loading ? <p>正在查找引用、主题与关键词三类关联</p> : null}{error ? <Button onClick={refresh}>重试</Button> : null}</div>}
         {error ? <div className="relations-retry" role="status">{error}<button disabled={loading} onClick={refresh}>重试</button></div> : null}
+        {partialCount > 0 && !error ? <details className="relation-scope-note small-print"><summary>关系检索说明</summary><p>图谱展示已获取的关系。还有 {partialCount} 篇主论文的部分关联未能获取；这不影响浏览现有关系，也不代表这些论文没有关联。</p><Button size="small" disabled={loading} onClick={refresh}>补充检索</Button></details> : null}
       </div>
     </>}
   </main>;

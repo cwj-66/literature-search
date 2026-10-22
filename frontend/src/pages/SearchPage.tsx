@@ -1,3 +1,4 @@
+import { pageTitle } from "../presentation";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Empty, Input, InputNumber, Pagination, Segmented, Select, Skeleton } from "antd";
 import { LoadingOutlined, SearchOutlined } from "@ant-design/icons";
@@ -10,7 +11,7 @@ import { useSessionState } from "../hooks";
 import type { SearchResponse } from "../types";
 import { SOURCE_LABEL } from "../types";
 
-const SAMPLES = ["检索增强生成", "知识图谱", "大模型幻觉", "retrieval augmented generation", "knowledge graph", "large language model"];
+const SAMPLES = ["检索增强生成", "知识图谱", "大模型幻觉"];
 
 function SourceRetry({ seconds, loading, onRetry }: { seconds: number; loading: boolean; onRetry: () => void }) {
   const [left, setLeft] = useState(seconds);
@@ -60,7 +61,7 @@ export default function SearchPage() {
     });
     return () => controller.abort();
   }, []);
-  useEffect(() => { document.title = q ? `${q} - 检索 - 文献研读` : "检索 - 文献研读"; }, [q]);
+  useEffect(() => { document.title = pageTitle(q ? `${q} · 论文搜索` : "论文搜索"); }, [q]);
   useEffect(() => {
     if (source === "arxiv" || source === "semantic_scholar") setHomeSource(source);
   }, [source]);
@@ -200,7 +201,7 @@ export default function SearchPage() {
     return <main className="page search-home">
       <div className="search-hero">
         <div className="search-hero-copy">
-          <h1>检索论文</h1>
+          <h1>论文搜索</h1>
           <div className="source-pills" role="group" aria-label="数据源">
             <button type="button" className={homeSource === "arxiv" ? "source-pill is-on" : "source-pill"} aria-pressed={homeSource === "arxiv"} onClick={() => setHomeSource("arxiv")}>
               <ArxivMark />arXiv

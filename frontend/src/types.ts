@@ -21,7 +21,7 @@ export interface Paper {
 }
 
 export function ccfLabel(paper: Paper): string | null {
-  if (paper.ccf_status === "pending") return "CCF 待核验";
+  if (paper.ccf_status === "pending") return null;
   if (paper.ccf_rank) return `CCF ${paper.ccf_rank}`;
   return null;
 }

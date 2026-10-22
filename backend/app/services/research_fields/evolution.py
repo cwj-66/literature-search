@@ -172,13 +172,13 @@ async def discover(field, job=None):
     oldest=min(p.year for p in balanced)
     # Describe observable retrieval limits; do not publish unchecked model claims
     # about field coverage, publication status or causal inheritance as caveats.
-    limitations=['依据公开API摘要片段进行归纳，未对入选论文逐篇阅读全文；模型核对仍可能有误，请结合原文判断。']
+    limitations=['依据公开 API 摘要片段进行归纳，未对入选论文逐篇阅读全文；模型核对仍可能有误，请结合原文判断。']
     limitations.append('基于本次API检索样本归纳；时间线不表示直接引用、技术继承或完整领域历史。')
     if errors:limitations.append('部分检索未完整返回；已保存查到且有摘要依据的结果。')
     if not any(p.year>=end-2 for p in balanced):limitations.append('本次没有近三年样本，不输出近期热点或未来方向。')
     rejected=len(rows)-len(accepted)
     if rejected:limitations.append(f'{rejected}项候选论断未通过证据核对，已省略。')
-    return {'field_id':field['id'],'field_name':field['name'],'summary':f'本次基于公开API文献样本，核对了{len(milestones)}个代表性论文时间点。按发表年份展示演进脉络，近期热点为样本观察，潜在方向为研究假设。',
+    return {'field_id':field['id'],'field_name':field['name'],'summary':f'本次基于公开 API 文献样本，核对了 {len(milestones)} 个代表性论文时间点。按发表年份展示演进脉络，近期热点为样本观察，潜在方向为研究假设。',
         'milestones':milestones,'hotspots':[r for r in accepted if r['section']=='hotspots'],
         'directions':[r for r in accepted if r['section']=='directions'],
         'papers':[p.model_dump(mode='json') for p in balanced if p.id in used],

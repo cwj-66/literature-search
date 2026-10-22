@@ -1,3 +1,4 @@
+import { pageTitle } from "../../presentation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Alert, Button, Checkbox } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
@@ -21,7 +22,7 @@ export default function ComparePage() {
   const seen = useRef<string | null>(null);
   const here = `/w/${id}/compare/table`;
   const signature = picked.join("|");
-  useEffect(() => { document.title = project ? `${project.name} - 论文对比` : "工作区"; }, [project]);
+  useEffect(() => { document.title = pageTitle(project ? `${project.name} - 论文对比` : "工作区"); }, [project]);
   useEffect(() => {
     if (seen.current === null) { seen.current = signature; return; }
     if (seen.current === signature) return;

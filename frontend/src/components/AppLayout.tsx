@@ -48,9 +48,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
       : <>
         <aside className={`shell-side${shellCollapsed ? " is-collapsed" : ""}`}>
           <button type="button" className="side-collapse" aria-expanded={!shellCollapsed} aria-label={shellCollapsed ? "展开导航" : "收起导航"} title={shellCollapsed ? "展开导航" : "收起导航"} onClick={toggleShell}>{shellCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}</button>
-          <Link to="/" className="shell-brand" aria-label="文献研究助手，返回工作区">
+          <Link to="/" className="shell-brand" aria-label="文献检索，返回工作区">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.2c.4 0 .8.2 1.1.5l2.2 2.2c.3.3.5.7.5 1.1V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V6A1.5 1.5 0 0 1 5 4.5Z" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M8 4.5V8h8" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
-            <span className="shell-label">文献研究助手</span>
+            <span className="shell-label">文献检索</span>
           </Link>
           <nav className="shell-nav" aria-label="主要导航">
             {navigation.map(item => <Link key={item.key} to={item.href} title={item.label} aria-current={active === item.key ? "page" : undefined}>{item.icon}<span className="shell-label">{item.label}</span></Link>)}

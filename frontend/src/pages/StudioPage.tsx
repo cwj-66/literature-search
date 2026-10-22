@@ -1,3 +1,4 @@
+import { pageTitle, formatMessageTime } from "../presentation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Modal, Popconfirm, Skeleton } from "antd";
 import { DeleteOutlined, DoubleLeftOutlined, DoubleRightOutlined, EditOutlined, ExportOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
@@ -36,7 +37,7 @@ function Studio({ project }: { project: Project }) {
   const open = (chat: string) => setParams(chat ? { chat } : {});
   const papersKey = Object.keys(project.papers).sort().join("|");
   const viewing = Boolean(currentId && thread?.id === currentId);
-  useEffect(() => { document.title = `${project.name} - 智能问答`; }, [project.name]);
+  useEffect(() => { document.title = pageTitle(`${project.name} - 智能问答`); }, [project.name]);
   useEffect(() => {
     const controller = new AbortController();
     let alive = true;
@@ -103,7 +104,7 @@ function Studio({ project }: { project: Project }) {
         {!ready && !error ? <Skeleton active /> : null}
         {ready && !items.length ? <p className="muted">还没有对话。新建一个，在右侧勾选论文后提问。</p> : null}
         {items.map(item => <div key={item.id} className={`conversation-row${item.id === currentId ? " is-active" : ""}`}>
-          <button type="button" className="conversation-open" aria-current={item.id === currentId ? "true" : undefined} onClick={() => open(item.id)}><strong>{item.title}</strong><small>{item.paper_ids.length} 篇论文 · {new Date(item.updated_at).toLocaleDateString("zh-CN")}</small></button>
+          <button type="button" className="conversation-open" aria-current={item.id === currentId ? "true" : undefined} onClick={() => open(item.id)}><strong>{item.title}</strong><small>{item.paper_ids.length} 篇论文 · {formatMessageTime(item.updated_at)}</small></button>
           <Popconfirm title="删除这个对话及其问答记录？" okText="删除" cancelText="取消" onConfirm={() => remove(item)}><Button type="text" size="small" icon={<DeleteOutlined />} aria-label={`删除对话：${item.title}`} /></Popconfirm>
         </div>)}
       </div>}
@@ -193,7 +194,7 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
           {thread.messages.map(message => {
             const titles = new Map(message.papers.map(paper => [paper.paper_id, paper.title]));
             const paths = new Map(message.papers.map(paper => [paper.paper_id, workspacePaperPath(project.id, paper.id, here)]));
-            return <article key={message.id} className="qa-turn"><header><h3 className="qa-question">{message.question}</h3><p className="small-print">本次范围：{message.papers.map(p => p.title).join("；")}</p></header>
+            return <article key={message.id} className="qa-turn"><header><time className="small-print" dateTime={message.created_at}>{formatMessageTime(message.created_at)}</time><h3 className="qa-question">{message.question}</h3><p className="small-print">本次范围：{message.papers.map(p => p.title).join("；")}</p></header>
               {message.status === "pending" ? <p className="pending">正在检索所选论文并生成回答，可离开页面后再回来查看。</p> : message.error ? <Alert type="error" showIcon message={message.error} /> : message.response ? <Answer turn={{ id: message.id, question: message.question, scope: "", response: message.response }} titles={titles} paths={paths} from={here} /> : null}
             </article>;
           })}

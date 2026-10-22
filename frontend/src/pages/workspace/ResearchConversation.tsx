@@ -1,3 +1,4 @@
+import { formatMessageTime, evidenceLabels } from "../../presentation";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { prepareWorkspace, researchDecision, startResearch, uploadPaper, workspacePapers, fetchResearchTask, cancelResearchTask } from "../../api";
@@ -23,9 +24,6 @@ const RESEARCH_STEP: Record<string, string> = {
   finalize: "完成复核", stop: "研究结束",
 };
 
-function formatClock(time: number) {
-  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).format(time);
-}
 
 function Spark({ thinking }: { thinking?: boolean }) {
   return <span className={`assistant-spark${thinking ? " is-thinking" : ""}`} aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.4c.5 3.6 1.8 5.2 5.6 5.8-3.8.6-5.1 2.2-5.6 5.8-.5-3.6-1.8-5.2-5.6-5.8 3.8-.6 5.1-2.2 5.6-5.8Z" /><path fill="currentColor" d="M17.4 13.2c.2 1.5.8 2.2 2.3 2.4-1.5.2-2.1.8-2.3 2.3-.2-1.5-.8-2.1-2.3-2.3 1.5-.2 2.1-.9 2.3-2.4Z" /></svg></span>;
@@ -58,7 +56,7 @@ function AssistantArt() {
 
 function MessageMeta({ time, onCopy, copyLabel, actions }: { time: number; onCopy?: () => void; copyLabel?: string; actions?: ReactNode }) {
   return <div className="assistant-msg-meta">
-    <time dateTime={new Date(time).toISOString()}>{formatClock(time)}</time>
+    <time dateTime={new Date(time).toISOString()}>{formatMessageTime(time)}</time>
     {onCopy ? <Button type="text" size="small" className="assistant-copy" aria-label={copyLabel} title={copyLabel} icon={<CopyOutlined />} onClick={onCopy} /> : null}
     {actions}
   </div>;
@@ -212,7 +210,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
       projects.select(id);
       projects.add(result.paper);
       setSelectedIds(ids => [...new Set([...ids, paperKey(result.paper)])]);
-      setAttachNote(result.index.status === "completed" ? `已加入论文库：${result.paper.title}` : (result.index.message || "已加入论文库，但向量入库失败"));
+      setAttachNote(result.index.status === "completed" ? `已加入文献库：${result.paper.title}` : (result.index.message || "已加入文献库，但向量入库失败"));
     } catch (err) {
       setAttachNote(err instanceof Error ? err.message : "上传失败");
     } finally {
@@ -238,7 +236,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                 actions={!turn.pending && (turn.error || turn.note || turn.task?.status === "failed" || turn.task?.stop_reason?.includes("取消"))
                   ? <Button size="small" icon={<ReloadOutlined />} aria-label="重试原问题" disabled={busy || disabled} onClick={() => void send(turn)}>重试原问题</Button> : null}>
                 {turn.pending ? <p className="pending">{RESEARCH_STEP[turn.task?.events?.at(-1)?.step ?? ""] ?? "正在回复"}…</p> : null}
-                {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer}</p> : null}
+                {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer.replace(/\[(E\d+)\]/g, (_match, id) => evidenceLabels(turn.task?.evidence ?? []).get(id) ?? "")}</p> : null}
                 <ResearchPaperResults turn={turn} from={here} />
                 {turn.task && researchHasActivity(turn) ? <details className="research-evidence">
                   <summary>{researchSummary(turn)} · 查看研究过程</summary>
@@ -257,7 +255,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                 {(() => {
                   const referencedIds = turn.task?.referenced_evidence_ids ?? (turn.task?.answer?.match(/E\d{4,}/g) ?? []);
                   const evidence = (turn.task?.evidence ?? []).filter(e => referencedIds.includes(e.evidence_id) && e.material !== "metadata" && !e.quote.startsWith('{"id":'));
-                  return evidence.length ? <details className="research-evidence"><summary>查看引用依据 · {evidence.length} 条</summary>{evidence.map(e => <p key={e.evidence_id}><strong>[{e.evidence_id}]</strong> {e.paper_id ? <Link to={paperLocation(e.paper_id, here)}>查看论文</Link> : null}<br />{e.quote}</p>)}</details> : null;
+                  return evidence.length ? <details className="research-evidence"><summary>查看引用依据 · {evidence.length} 条</summary>{evidence.map(e => <p key={e.evidence_id}><strong>{evidenceLabels(turn.task?.evidence ?? []).get(e.evidence_id)}</strong> {e.paper_id ? <Link to={paperLocation(e.paper_id, here)}>查看论文</Link> : null}<br />{e.quote}</p>)}</details> : null;
                 })()}
                 {turn.task?.status === "waiting" ? <div>
                   <p>{turn.task.interrupt?.hint || "请确认本次操作后继续。"}</p>

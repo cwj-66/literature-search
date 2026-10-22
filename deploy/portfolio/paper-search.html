@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#1E3A8A">
+  <title>文献检索 · 陈卫健的作品集</title>
+  <link rel="icon" href="/portfolio-assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/portfolio-assets/style.css">
+  <link rel="stylesheet" href="/portfolio-assets/agent.css?v=20261004b">
+  <link rel="stylesheet" href="/portfolio-assets/controls.css?v=20261005b">
+  <link rel="stylesheet" href="/portfolio-assets/motion-fix.css?v=20261005c">
+  <link rel="stylesheet" href="/portfolio-assets/paper-search.css?v=20261021a">
+  <link rel="stylesheet" href="/portfolio-assets/project-desktop.css?v=20261010b">
+  <script defer src="/portfolio-assets/app.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<div class="shell">
+  <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">✳</span><span>陈卫健的作品集<small>CHEN WEIJIAN / PORTFOLIO</small></span></a><div class="header-right"><span class="access-badge"><i class="dot"></i>已验证访问</span><button class="text-button logout-button" data-logout>退出登录</button></div></header>
+  <main id="main" class="agent-case paper-case">
+    <a class="breadcrumb" href="/#paper-search">← 返回全部作品</a>
+    <section class="agent-hero">
+      <div><div class="eyebrow">03 / 文献检索</div><h1>提出一个问题，<br>让 Agent 把论文找对。</h1><p class="intro">文献检索是一款基于大模型的研究工具：把问题拆解、多源检索、相关性重排序串成一条 Agent 工作流。候选论文只是待筛选材料，最终推荐附带评分与理由；数量不足时如实说明，不用无关论文凑数。</p><div class="tags"><span>Python / TypeScript</span><span>FastAPI / LangGraph</span><span>React / G6 / ECharts</span></div><div class="agent-actions"><a class="button primary-cta" href="/demo/paper-search/" rel="noopener noreferrer"><span aria-hidden="true">⌕</span>体验文献检索<span aria-hidden="true">↗</span></a><a class="button secondary" href="#architecture">了解实现方式 ↓</a></div><p class="demo-invitation">进入后可直接用自然语言描述研究方向，观察 Agent 拆解问题、多源检索与重排序的完整过程，也可以在文献库与知识图谱中继续探索。</p><p class="hero-note">arXiv / Semantic Scholar 双数据源 · 评分与推荐理由 · 文献库 · 知识图谱</p></div>
+      <div class="demo-window search-preview" aria-label="文献检索 Agent 工作流程示意"><div class="demo-bar"><b>⌕ 文献检索 · Agent 工作流</b><span>流程示意 / 实际结果以线上为准</span></div><div class="search-preview-body"><div class="search-preview-query"><small>用户的检索需求</small><h3><span>找 5 篇</span> <span>文本向量模型的论文</span></h3><p>拆解结果：核心主题为文本向量模型，目标 5 篇，生成多条同主题检索式；未指定的条件不自行添加。</p><div class="source-lines" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="search-preview-result"><small>推荐结果 · 含评分与理由</small><dl><div><dt>相关性评分</dt><dd>针对完整检索目标打分</dd></div><div><dt>推荐理由</dt><dd>标明依据标题还是摘要</dd></div><div><dt>数据来源</dt><dd>arXiv / Semantic Scholar 合并去重</dd></div><div><dt>不足说明</dt><dd>只有 2 篇合格就返回 2 篇</dd></div></dl><span class="status-note">诚实返回，不凑数</span></div></div><div class="demo-steps"><span>拆解问题</span><span>多源检索</span><span>重排序筛选</span><span>展示推荐</span></div></div>
+    </section>
+    <div class="agent-summary"><div><small>产品功能</small><strong>自然语言检索 + 文献库 + 知识图谱</strong></div><div><small>系统架构</small><strong>LangGraph Agent / 可独立调用的工具</strong></div><div><small>部署方式</small><strong>Docker Compose / HTTPS / 云端模型</strong></div></div>
+
+    <section class="agent-section" id="features"><div class="eyebrow">01 / 产品功能</div><h2>从一句话需求，走到有理由的推荐。</h2><p class="lead">Agent 负责理解问题、收集候选与筛选排序，把判断依据展示出来。推荐列表、助手回答与界面卡片始终使用同一份结果。</p><div class="feature-list">
+      <article class="feature-item"><span class="feature-number">01 / 需求拆解</span><h3>问题拆解</h3><p>把自然语言需求转成可执行的检索目标：消解指代、翻译术语、生成检索式，只从用户要求中提取年份等条件。</p></article>
+      <article class="feature-item"><span class="feature-number">02 / 多源检索</span><h3>多源论文检索</h3><p>从 arXiv 与 Semantic Scholar 取得候选，统一字段、超时重试、跨来源去重；一个来源失败时保留另一个来源的结果。</p></article>
+      <article class="feature-item"><span class="feature-number">03 / 结果筛选</span><h3>重排序与筛选</h3><p>大模型根据标题与摘要，针对完整检索目标评分排序并给出理由；只有少量合格候选时如实返回，不拿无关论文凑数。</p></article>
+      <article class="feature-item"><span class="feature-number">04 / 多轮检索</span><h3>多轮追问与补搜</h3><p>“是找不到吗”根据已有结果直接解释；“继续找”恢复原主题，换检索式或翻页再筛选，默认最多补搜两次。</p></article>
+      <article class="feature-item"><span class="feature-number">05 / 文献库</span><h3>文献库与阅读</h3><p>把推荐论文加入个人工作区，支持全文解析、证据分析与单篇深入阅读，检索与分析在同一条链路里完成。</p></article>
+      <article class="feature-item"><span class="feature-number">06 / 知识图谱</span><h3>知识图谱与主题</h3><p>基于论文关系预计算生成知识图谱与主题视图，用 G6 与 ECharts 可视化领域结构，帮助发现研究方向之间的联系。</p></article>
+    </div></section>
+
+    <section class="agent-section" id="architecture"><div class="eyebrow">02 / Agent 工作流</div><h2>拆解、检索与排序，是可以独立验证的工具。</h2><p class="lead">三个核心工具分别注册、提供清晰描述和参数，Agent 根据请求与工具返回决定下一步。工具可以单独调用、单独验证，而不是不可复用的固定步骤。</p><div class="react-diagram" role="img" aria-label="用户提问后，Agent 依次调用问题拆解、论文搜索与重排序工具，候选不足时换同主题检索式补搜，最终生成附带理由的回答"><div class="react-steps"><div class="react-step"><em>01</em><b>用户提问</b><small>自然语言需求<br>可含数量与条件</small></div><div class="react-step"><em>02</em><b>拆解问题</b><small>主题 / 数量 / 条件<br>生成检索式</small></div><div class="react-step"><em>03</em><b>多源检索</b><small>arXiv / Semantic Scholar<br>统一字段与去重</small></div><div class="react-step"><em>04</em><b>重排序筛选</b><small>按完整目标评分<br>给出推荐理由</small></div><div class="react-step"><em>05</em><b>展示推荐</b><small>展示推荐与理由<br>不足时如实说明</small></div></div><div class="react-loop">结果不足且仍有合理方向时，换同主题检索式或翻页补搜，默认最多 2 次；达到上限后如实返回现有结果。</div></div><div class="split-section"><article class="explain-panel"><h3>候选不等于推荐</h3><p>检索工具只负责取得候选材料；是否相关由重排序工具围绕完整用户目标判断，不能因为标题命中一个词就当作相关。</p></article><article class="explain-panel"><h3>把模型计算放在云端</h3><p>大模型经 DashScope 兼容接口调用，服务器负责检索、去重、排序编排与页面服务，不常驻加载模型权重。</p></article></div></section>
+
+    <section class="agent-section" id="stack"><div class="eyebrow">03 / 编程语言与技术栈</div><h2>前端、业务与模型服务，各司其职。</h2><div class="tech-wrap"><table class="tech-table"><thead><tr><th>层级</th><th>语言与技术</th><th>承担的职责</th></tr></thead><tbody>
+      <tr><td>API 与业务</td><td>Python · FastAPI · Pydantic v2</td><td>会话与对话接口、文献库管理、分析任务与 Schema 校验。</td></tr>
+      <tr><td>Agent 编排</td><td>LangGraph · SQLite Checkpoint</td><td>工具注册与调用决策、多轮对话状态、追问上下文恢复。</td></tr>
+      <tr><td>检索与排序</td><td>arXiv / Semantic Scholar API · FAISS · NumPy</td><td>多源候选获取、超时重试、去重合并与相似度计算。</td></tr>
+      <tr><td>模型服务</td><td>DashScope · OpenAI 兼容接口</td><td>问题拆解、相关性评分排序、推荐理由与内容分析。</td></tr>
+      <tr><td>前端</td><td>TypeScript · React · Vite · Ant Design · G6 · ECharts</td><td>检索对话、推荐卡片、文献库、知识图谱与主题可视化。</td></tr>
+      <tr><td>部署</td><td>Docker Compose · Nginx · Let's Encrypt</td><td>作品集内的登录演示入口、HTTPS 与健康检查。</td></tr>
+    </tbody></table></div></section>
+
+    <section class="agent-section" id="reliability">
+      <div class="eyebrow">04 / 检索质量与诚实性</div>
+      <h2>找不到就如实说，不拿无关论文凑数。</h2>
+      <p class="lead">检索链路的每一环都区分“失败”和“没有结果”，评分始终针对用户的完整目标。推荐数量、助手回答与界面卡片来自同一份结果。</p>
+      <div class="capacity-numbers">
+        <article><b>2<small>个</small></b><span>论文数据源，跨来源合并去重</span></article>
+        <article><b>3<small>个</small></b><span>可独立调用验证的核心工具</span></article>
+        <article><b>5<small>篇</small></b><span>未指定数量时的默认推荐目标</span></article>
+        <article><b>2<small>次</small></b><span>结果不足时的默认补搜上限</span></article>
+      </div>
+      <div class="queue-example">用户要 5 篇，有足够相关结果时返回 5 篇；只有 2 篇合格就返回 2 篇并说明不足原因，不用无关论文凑数。</div>
+      <div class="protection-grid">
+        <article><h3>区分失败与无结果</h3><p>请求失败、超时与“请求成功但没有结果”分别标记；一个数据源故障时，保留另一来源已取得的候选，失败信息不被包装成搜索成功。</p></article>
+        <article><h3>评分针对完整目标</h3><p>重排序围绕拆解后的完整检索目标打分，而不是某次改写后的宽泛检索式；没有摘要时如实标记，不编造论文内容。</p></article>
+        <article><h3>推荐理由可核对</h3><p>每篇推荐说明它与用户需求的联系，并标明依据是标题还是摘要；未入选候选默认折叠保留，方便回看筛选过程。</p></article>
+        <article><h3>追问不重启搜索</h3><p>“是找不到吗”“为什么只有两篇”根据上一轮结果与来源状态直接解释；只有明确要求继续找或换条件时才再次检索。</p></article>
+        <article><h3>主题不漂移</h3><p>补搜检索式可以换表述，但必须围绕同一个原始主题；“继续找”从对话上下文恢复原主题，歧义影响结果时先澄清。</p></article>
+        <article><h3>结果一致性</h3><p>工具的最终推荐、助手自然语言回答与前端论文卡片使用同一份推荐列表，数量与内容不会出现三种说法。</p></article>
+      </div>
+    </section>
+
+    <section class="agent-section" id="try"><div class="eyebrow">05 / 在线体验指南</div><h2>用几分钟，走过一次完整的检索。</h2><div class="try-path"><article><b>01</b><h3>描述研究方向</h3><p>点击上方“体验文献检索”，进入检索助手，用自然语言提出需求，例如“帮我找 5 篇关于文本向量模型的论文”。</p></article><article><b>02</b><h3>观察 Agent 工作流</h3><p>查看问题拆解出的主题、数量与检索式，跟踪多源检索与重排序过程，每篇推荐都带评分和理由。</p></article><article><b>03</b><h3>追问与继续找</h3><p>试试“是找不到吗”这类追问，Agent 会基于已有结果解释；再说“继续找”，主题保持不变、换检索式补搜。</p></article><article><b>04</b><h3>探索文献库与图谱</h3><p>把感兴趣的论文加入工作区，阅读全文解析与证据分析，在知识图谱与主题视图里发现方向之间的联系。</p></article></div><div class="agent-actions"><a class="button primary-cta" href="/demo/paper-search/" rel="noopener noreferrer">⌕ 体验文献检索 ↗</a></div></section>
+    <div class="agent-bottom"><div><h3>继续了解 Agent 的业务应用。</h3><p>从学术检索，到知识问答、业务查询与人工协作。</p></div><a class="button secondary" href="/projects/game-support/">查看游戏客服 Agent ↗</a></div>
+  </main>
+  <footer class="footer"><span>© 2026 陈卫健 · 个人作品集</span><span>从问题，到真正相关的论文。</span></footer>
+</div>
+
+</body>
+</html>

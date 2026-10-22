@@ -1,9 +1,9 @@
+import { pageTitle } from "../presentation";
 import { useEffect, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Pagination, Skeleton } from "antd";
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { fetchLibrary } from "../api";
-import { isDemo, demoInfo } from "../demo";
 import { AnalysisBadge, useAnalysisStates } from "../components/AnalysisBadge";
 import { ImportPanel } from "../components/ImportPaper";
 import { PaperRow } from "../components/PaperRow";
@@ -32,7 +32,7 @@ export default function LibraryPage() {
   const picked = useSelection();
   const ids = data?.papers.map(paperKey) ?? [];
   const states = useAnalysisStates(ids);
-  useEffect(() => { document.title = "文献库 - 文献研读"; }, []);
+  useEffect(() => { document.title = pageTitle("文献库 - 文献检索"); }, []);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError("");
@@ -52,8 +52,7 @@ export default function LibraryPage() {
     <header className="page-head">
       <div>
         <h1 className="page-title">文献库</h1>
-        <p className="page-sub">{data ? `共 ${data.total.toLocaleString("zh-CN")} 篇 · 按导入时间排列` : "已收藏的论文"}</p>
-        {isDemo ? <p className="small-print">这里汇总所有工作区及未分组文献，不是当前工作区的篇数。{demoInfo?.seed_paper_count != null ? `演示初始预置 ${demoInfo.seed_paper_count} 篇，其中 ${demoInfo.seed_grouped_count} 篇已分入示例工作区。你后续导入或删除会改变总数。` : ""}</p> : null}
+        <p className="page-sub">{data ? `共 ${data.total.toLocaleString("zh-CN")} 篇论文 · 全部工作区及未分组 · 按导入时间排列` : "已收藏的论文"}</p>
       </div>
       <div className="page-actions">
         <Link to={graphLocation(here)} className="quiet-link">集合图谱</Link>
@@ -66,12 +65,12 @@ export default function LibraryPage() {
     {empty ? <Empty description={<>文献库为空。<Link to="/search">检索论文</Link>后点“加入文献库”，或用上方输入框导入。</>} /> : null}
     {data && data.papers.length ? <section className="library-surface" aria-label="文献列表" aria-busy={loading}>
       <div className="library-tools">
-        <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选本页文献" placeholder="筛选本页标题、作者或年份" />
-        <span className="small-print">{needle ? `匹配 ${visible.length} / ${data.papers.length} 篇` : `本页 ${data.papers.length} 篇`}</span>
+        <Input allowClear prefix={<SearchOutlined aria-hidden />} value={filter} onChange={event => setFilter(event.target.value)} aria-label="筛选本页论文" placeholder="筛选本页标题、作者或年份" />
+        {needle || data.total > data.papers.length ? <span className="small-print">{needle ? `本页匹配 ${visible.length} / ${data.papers.length} 篇` : `本页 ${data.papers.length} 篇`}</span> : null}
       </div>
       <div className="list-toolbar">
         <Checkbox disabled={!pageItems.length} checked={pageItems.length > 0 && pickedOnPage === pageItems.length} indeterminate={pickedOnPage > 0 && pickedOnPage < pageItems.length}
-          onChange={event => selection.setMany(pageItems, event.target.checked)}>{needle ? "选择匹配文献" : "选择本页"}</Checkbox>
+          onChange={event => selection.setMany(pageItems, event.target.checked)}>{needle ? "选择匹配论文" : "选择本页"}</Checkbox>
         {picked.length ? <span className="list-toolbar-hint">已选 {picked.length} 篇，跨页保留</span> : null}
       </div>
       <div className="paper-list library-list">
@@ -81,7 +80,7 @@ export default function LibraryPage() {
             leading={<Checkbox aria-label={`选择：${paper.title}`} checked={picked.some(p => p.id === id)} onChange={() => selection.toggle({ id, title: paper.title })} />}
             side={<><Link className="analysis-status-link" aria-label={`查看分析：${paper.title}`} to={`${paperLocation(id, here)}#analysis`}><AnalysisBadge state={states[id]} /></Link><Link className="quiet-link" to={recommendLocation(id, here)}>相关推荐</Link></>} />;
         })}
-        {!visible.length ? <div className="center-pad"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本页没有匹配文献"><Button onClick={() => setFilter("")}>清除筛选</Button></Empty></div> : null}
+        {!visible.length ? <div className="center-pad"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本页没有匹配论文"><Button onClick={() => setFilter("")}>清除筛选</Button></Empty></div> : null}
       </div>
       {data.total > 20 ? <div className="pager"><Pagination current={page} pageSize={20} total={data.total} showSizeChanger={false} onChange={value => { setFilter(""); patch({ page: value === 1 ? null : String(value) }); }} /></div> : null}
     </section> : null}

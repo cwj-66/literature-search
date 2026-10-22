@@ -1,3 +1,4 @@
+import { pageTitle } from "../../presentation";
 import { useEffect, useState } from "react";
 import { Alert, Button } from "antd";
 import type { ReactNode } from "react";
@@ -56,7 +57,7 @@ export default function PaperReadPage() {
   const connectionError = useAnalysisPolling(key, repoll, setState);
   const [tab, setTab] = useState<"analysis" | "source">("analysis");
   const [open, setOpen] = useState("");
-  useEffect(() => { document.title = paper ? `${paper.title} - 论文详情` : "论文详情"; }, [paper]);
+  useEffect(() => { document.title = pageTitle(paper ? `${paper.title} - 论文详情` : "论文详情"); }, [paper]);
   useEffect(() => { if (stored) { projects.select(id); projects.open(stored.paper); } }, [id, key]);
   useEffect(() => {
     if (!key) return;
@@ -66,7 +67,7 @@ export default function PaperReadPage() {
   }, [key]);
 
   if (!project) return <MissingWorkspace />;
-  if (!stored || !paper) return <main className="page page-medium"><h1 className="page-title">这篇论文不在当前工作区</h1><Link to={`/w/${id}/library`}>返回论文库</Link></main>;
+  if (!stored || !paper) return <main className="page page-medium"><h1 className="page-title">这篇论文不在当前工作区</h1><Link to={`/w/${id}/library`}>返回文献库</Link></main>;
 
   const result = state?.result ?? null;
   const running = Boolean(state?.task && ACTIVE.has(state.task.status));
@@ -113,8 +114,8 @@ export default function PaperReadPage() {
   return <div className="read-page">
     <main className="read-main">
       <div className="read-navigation">
-        <Link className="back-link" to={back}><ArrowLeftOutlined aria-hidden />{back === parent ? "返回论文库" : "返回上一级"}</Link>
-        <p className="read-crumb"><Link to={`/w/${id}`}>{project.name}</Link><span>/</span><Link to={parent}>论文库</Link><span>/</span>论文详情</p>
+        <Link className="back-link" to={back}><ArrowLeftOutlined aria-hidden />{back === parent ? "返回文献库" : "返回上一级"}</Link>
+        <p className="read-crumb"><Link to={`/w/${id}`}>{project.name}</Link><span>/</span><Link to={parent}>文献库</Link><span>/</span>论文详情</p>
       </div>
       <header className="read-hero">
         <div className="read-thumb" aria-hidden><i /><i /><i /><i /><i /><b>{sources[0] ?? "PDF"}</b></div>
