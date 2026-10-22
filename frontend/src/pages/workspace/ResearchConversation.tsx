@@ -9,6 +9,7 @@ import { AnalyzeResult } from "../../components/AnalyzeResult";
 import { paperKey } from "../../types";
 import { ResearchPaperResults } from "../../components/ResearchPaperResults";
 import { researchHasActivity, researchHistory, researchSummary } from "../../researchPresentation";
+import { isDemo } from "../../demo";
 import { paperLocation } from "../../workspace";
 import { useWorkspaceProject } from "./shared";
 
@@ -221,6 +222,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
   }
 
   return <div className="assistant">
+    {isDemo && chat.id.startsWith("demo-reviewed-") ? <p className="demo-example-notice">预置演示 · 内容依据公开论文摘要核对，非真实用户记录或现场模型输出。可展开引用依据；继续提问将使用正常研究流程。</p> : null}
     {messageContext}
     <div className="assistant-body">
       <div className="assistant-main">

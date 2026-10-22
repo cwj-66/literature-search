@@ -86,6 +86,12 @@ def initialize(ident):
             (temporary / "activity").touch()
             temporary.rename(target)
         (target / "activity").touch()
+        from app.infrastructure import demo_samples
+        marker = target / demo_samples.VERSION
+        if not marker.exists():
+            with scope(ident):
+                demo_samples.install()
+            marker.touch()
 
 
 def bootstrap():
@@ -103,7 +109,12 @@ def bootstrap():
                           "createdAt": row["created_at"], "cover": "graph" if not items else "notes", "papers": papers})
     from app.infrastructure.llm import model_name
     generation = (database_path().parent / "generation").read_text(encoding="ascii")
+    seed = base_path().parent / "demo-seed" / "papers.sqlite3"
+    with closing(sqlite3.connect(seed.resolve().as_uri() + "?mode=ro", uri=True)) as seed_db:
+        seed_count = seed_db.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+        grouped_count = seed_db.execute("SELECT COUNT(DISTINCT local_id) FROM workspace_papers").fetchone()[0]
     return {"visitor": visitor.get(), "generation": generation, "projects": items, "model": model_name(),
+            "seed_paper_count": seed_count, "seed_grouped_count": grouped_count,
             "model_configured": bool(os.getenv("DASHSCOPE_API_KEY", "").strip()), "retention_days": 7}
 
 

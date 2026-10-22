@@ -6,6 +6,7 @@ import { prepareWorkspace } from "../../api";
 import { fetchWorkspaceFields, fieldActive, identifyExistingFields, startFieldAnalysis, type FieldEvidence, type FieldObservation, type FieldReport, type ResearchFieldItem, type WorkspaceFields } from "../../researchFields";
 import { MissingWorkspace, useWorkspaceProject } from "./shared";
 import "../../styles/research-fields.css";
+import { isDemo } from "../../demo";
 
 export default function ResearchFieldsPage() {
   const { id, project } = useWorkspaceProject();
@@ -54,6 +55,7 @@ export default function ResearchFieldsPage() {
   return <main className="ws-page fields-page">
     <header className="fields-page-head"><div><span className="fields-eyebrow"><FundProjectionScreenOutlined /> RESEARCH INTELLIGENCE</span><h1>从一篇论文，看见一个领域。</h1><p>自动发现研究领域，按需探索演进脉络、近期热点与潜在方向。</p></div><Button icon={<ReloadOutlined />} onClick={() => setRevision(r => r + 1)}>刷新列表</Button></header>
     {error ? <Alert type="error" message={error} showIcon action={<Button size="small" onClick={() => setRevision(r => r + 1)}>重试</Button>} /> : null}
+    {isDemo ? <p className="demo-example-notice">部分示例领域已依据公开摘要核对并预置。一篇论文可属于多个领域；列表只汇总当前工作区已保存的标签，不代表系统只能识别这些领域。新领域报告需点击“开始分析”生成。</p> : null}
     {data?.legacy_count ? <div className="fields-legacy"><span>{data.legacy_count} 篇已有分析尚未标注领域，可复用标题、摘要和已有材料进行轻量识别。</span><Button loading={busy} onClick={() => void identify()}>识别已有论文领域</Button></div> : null}
     {data?.pending_analysis_count || data?.identifying_count ? <p className="fields-pending" role="status"><span className="fields-pulse" />正在准备领域标签，完成后会自动更新。</p> : null}
     {!data && !error ? <Skeleton active paragraph={{ rows: 10 }} /> : !data?.fields.length ? <div className="fields-empty"><FundProjectionScreenOutlined /><h2>让研究从这里展开</h2><p>论文完成分析后，这里会自动汇总它们所属的 1–3 个研究领域。<br />领域演进仅在你点击“开始分析”时生成。</p><Link to={`/w/${id}/library`}>前往文献管理 <ArrowRightOutlined /></Link></div> : <div className="fields-layout">

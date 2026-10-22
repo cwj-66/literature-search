@@ -1,7 +1,7 @@
 /** Demo bootstraps before importing stores, so no personal/browser data leaks in. */
 export const DEMO_BASE = "/demo/paper-search/";
 export const isDemo = window.location.pathname.startsWith(DEMO_BASE);
-export interface DemoInfo { visitor: string; generation: string; model: string; model_configured: boolean; retention_days: number; projects: unknown[] }
+export interface DemoInfo { visitor: string; generation: string; model: string; model_configured: boolean; retention_days: number; projects: unknown[]; seed_paper_count?: number; seed_grouped_count?: number }
 export let demoInfo: DemoInfo | null = null;
 
 export async function initializeDemo() {

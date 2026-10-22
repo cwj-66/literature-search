@@ -3,6 +3,7 @@ import { Alert, Button, Checkbox, Empty, Input, Pagination, Skeleton } from "ant
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { fetchLibrary } from "../api";
+import { isDemo, demoInfo } from "../demo";
 import { AnalysisBadge, useAnalysisStates } from "../components/AnalysisBadge";
 import { ImportPanel } from "../components/ImportPaper";
 import { PaperRow } from "../components/PaperRow";
@@ -52,6 +53,7 @@ export default function LibraryPage() {
       <div>
         <h1 className="page-title">文献库</h1>
         <p className="page-sub">{data ? `共 ${data.total.toLocaleString("zh-CN")} 篇 · 按导入时间排列` : "已收藏的论文"}</p>
+        {isDemo ? <p className="small-print">这里汇总所有工作区及未分组文献，不是当前工作区的篇数。{demoInfo?.seed_paper_count != null ? `演示初始预置 ${demoInfo.seed_paper_count} 篇，其中 ${demoInfo.seed_grouped_count} 篇已分入示例工作区。你后续导入或删除会改变总数。` : ""}</p> : null}
       </div>
       <div className="page-actions">
         <Link to={graphLocation(here)} className="quiet-link">集合图谱</Link>

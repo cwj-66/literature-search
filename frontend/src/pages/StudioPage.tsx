@@ -4,6 +4,7 @@ import { DeleteOutlined, DoubleLeftOutlined, DoubleRightOutlined, EditOutlined, 
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { askConversation, createConversation, deleteConversation, fetchConversation, listConversations, prepareWorkspace, updateConversation } from "../api";
 import { Answer } from "../components/studio/AskView";
+import { isDemo } from "../demo";
 import { useCollapsed } from "../hooks";
 import type { Project } from "../projects";
 import type { Conversation, ConversationSummary } from "../types";
@@ -186,6 +187,7 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
       <Modal title="重命名对话" open={renaming} onCancel={() => setRenaming(false)} onOk={() => save({ title: title.trim() })} okText="保存" cancelText="取消" confirmLoading={busy} okButtonProps={{ disabled: !title.trim() }}><Input autoFocus aria-label="对话名称" value={title} maxLength={120} onChange={event => setTitle(event.target.value)} /></Modal>
       {error ? <Alert type="error" showIcon message={error} /> : null}
       <div className="studio-log" ref={logRef}>
+        {isDemo && thread.id.startsWith("demo-reviewed-") ? <p className="demo-example-notice">预置演示 · 依据公开论文摘要整理，非真实用户记录或现场模型输出。右侧展示逐字摘要依据，不代表全文分析。</p> : null}
         <div className="studio-log-inner">
           {!thread.messages.length ? <p className="muted">可以解读单篇论文，也可以比较多篇论文的研究方法、实验和局限。回答只使用右侧勾选的论文。</p> : null}
           {thread.messages.map(message => {
