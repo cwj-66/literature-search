@@ -17,7 +17,8 @@ class RecordedDemoTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.env = patch.dict(os.environ, {"PAPER_DB_PATH": str(self.root / "papers.sqlite3")})
+        self.env = patch.dict(os.environ, {"PAPER_DB_PATH": str(self.root / "papers.sqlite3"),
+                                          "PAPER_DEMO_RECORDING_UPGRADE_VISITOR": "a" * 32})
         self.env.start()
         self.wid = "pmvcf313hr4xt"
         workspaces.register(self.wid, "RAG研究")
@@ -84,6 +85,14 @@ class RecordedDemoTests(unittest.TestCase):
             for i, count in enumerate((1, 3, 5), 1):
                 write(self.wid, Chat(id=f"author-{i}", title="Renamed", turns=[
                     {"task": {"task_id": f"recorded-{i}-{j}"}} for j in range(count)]))
-        demo.initialize(author)
+        with patch.dict(os.environ, {"PAPER_DEMO_RECORDING_UPGRADE_VISITOR": author}):
+            demo.initialize(author)
         with demo.scope(author):
             self.assertEqual(len(read_all(self.wid)["chats"]), 3)
+
+    def test_unselected_existing_visitor_is_not_migrated(self):
+        ident = "b" * 32
+        self.old_visitor(ident)
+        demo.initialize(ident)
+        with demo.scope(ident):
+            self.assertEqual(read_all(self.wid)["chats"], [])

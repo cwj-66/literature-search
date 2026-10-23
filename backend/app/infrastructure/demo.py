@@ -94,7 +94,7 @@ def initialize(ident):
             marker.touch()
         from app.infrastructure import demo_recordings
         recording_marker = target / demo_recordings.VERSION
-        if not recording_marker.exists():
+        if ident == os.getenv("PAPER_DEMO_RECORDING_UPGRADE_VISITOR", "") and not recording_marker.exists():
             with scope(ident):
                 if demo_recordings.install():
                     recording_marker.touch()
