@@ -92,6 +92,12 @@ def initialize(ident):
             with scope(ident):
                 demo_samples.install()
             marker.touch()
+        from app.infrastructure import demo_recordings
+        recording_marker = target / demo_recordings.VERSION
+        if not recording_marker.exists():
+            with scope(ident):
+                if demo_recordings.install():
+                    recording_marker.touch()
 
 
 def bootstrap():
