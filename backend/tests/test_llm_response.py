@@ -39,6 +39,21 @@ class ModelResponseTests(unittest.IsolatedAsyncioTestCase):
         _, payload = await self.request({"choices": [{"message": {"content": "{}"}}]}, "https://example.test/v1")
         self.assertNotIn("enable_thinking", payload)
 
+    async def test_workspace_endpoint_keeps_dashscope_answer_budget(self):
+        _, payload = await self.request({"choices": [{"message": {"content": "{}"}}]},
+                                        "https://llm-synthetic.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
+        self.assertIs(payload["enable_thinking"], False)
+
+    async def test_lookalike_workspace_domain_does_not_receive_dashscope_option(self):
+        _, payload = await self.request({"choices": [{"message": {"content": "{}"}}]},
+                                        "https://llm-synthetic.maas.aliyuncs.com.example.test/v1")
+        self.assertNotIn("enable_thinking", payload)
+
+    def test_free_tier_rejection_is_not_reported_as_an_invalid_key(self):
+        error = llm._response_error(httpx.Response(403, json={"error": {"code": "AllocationQuota.FreeTierOnly"}}))
+        self.assertIn("接入地址", error.message)
+        self.assertNotIn("密钥无效", error.message)
+
     async def test_reasoning_only_truncation_has_specific_error(self):
         with self.assertRaisesRegex(llm.AnalysisError, "长度上限"):
             await self.request({"choices": [{"finish_reason": "length", "message": {"content": "", "reasoning_content": "synthetic reasoning"}}], "usage": {"completion_tokens": 8192}})

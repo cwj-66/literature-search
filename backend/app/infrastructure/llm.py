@@ -128,6 +128,8 @@ def _response_error(response: httpx.Response) -> AnalysisError:
     if response.status_code == 400 and any(word in code + " " + message for word in (
         "context_length", "context length", "maximum context", "max context", "input length", "input tokens")):
         return ContextLimitError("论文材料超过模型上下文上限，请缩小分析范围")
+    if response.status_code == 403 and code == "allocationquota.freetieronly":
+        return AnalysisError("模型服务拒绝使用免费额度，请核对接入地址、模型额度和账号状态")
     if response.status_code in (401, 403):
         return AnalysisError("模型密钥无效或没有访问权限，请检查服务配置")
     if response.status_code == 429:
@@ -220,7 +222,8 @@ async def _chat_completion(messages: list[dict], tools: list[dict] | None = None
         payload.update(tools=tools, tool_choice="auto", parallel_tool_calls=False)
     # DashScope counts hidden reasoning against max_tokens. These bounded JSON
     # tasks need that budget for the structured answer, not a thinking trace.
-    if urlparse(base).hostname in {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"}:
+    host = urlparse(base).hostname or ""
+    if host in {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"} or host.endswith(".maas.aliyuncs.com"):
         payload["enable_thinking"] = False
     timeout = httpx.Timeout(90.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
