@@ -58,7 +58,7 @@ export default function PapersPage() {
     <header className="ws-page-head lib-head">
       <div>
         <h1>文献库</h1>
-        <p>在当前工作区中添加的论文，可以进行精读、分析，并用于 AI 问答。</p>
+        <p>点击论文可查看 AI 分析。</p>
       </div>
       {entries.length ? <Link className="lib-search-link" to="/search">去搜索论文<ArrowRightOutlined aria-hidden /></Link> : null}
     </header>

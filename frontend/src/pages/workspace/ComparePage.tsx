@@ -21,7 +21,7 @@ export default function ComparePage() {
   const [preparing, setPreparing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [partialCount, setPartialCount] = useState(0);
+  const [, setPartialCount] = useState(0);
   const [saveError, setSaveError] = useState("");
   const [request, setRequest] = useState({ seq: 0, refresh: false });
   const cache = useRef(new Map<string, RelateResponse>());
@@ -31,7 +31,7 @@ export default function ComparePage() {
   const selection = selected.join(",");
   const here = `/w/${id}/compare?${new URLSearchParams({ seeds: selection })}`;
 
-  useEffect(() => { document.title = pageTitle(`${project?.name ?? "工作区"} - 论文关系`); }, [project?.name]);
+  useEffect(() => { document.title = pageTitle(`${project?.name ?? "工作区"} - 论文推荐`); }, [project?.name]);
   useEffect(() => {
     if (!selection) { setData(null); setError(""); setPartialCount(0); setLoading(false); setPreparing(false); return; }
     const controller = new AbortController();
@@ -115,7 +115,7 @@ export default function ComparePage() {
   }
   const visible = entries.filter(([, item]) => `${item.paper.title} ${item.paper.authors.join(" ")} ${item.paper.year ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   return <main className="ws-page relations-page">
-    <header className="relations-top"><h1>论文关系</h1>
+    <header className="relations-top"><h1>论文推荐</h1>
       <Button icon={<ReloadOutlined />} loading={loading} disabled={!selected.length || loading || saving} onClick={refresh}>刷新关系</Button></header>
     {!entries.length ? <div className="relations-empty"><Empty description="先加入一篇论文，开始探索它的关系网络。" /><Link to="/search">去搜索论文</Link></div> : <>
       <section className="relations-chips" aria-label="选择主论文">
@@ -133,7 +133,6 @@ export default function ComparePage() {
           <div className="relations-loading" role="status">{loading ? <Spin /> : null}<h2>{loading ? "正在构建论文关系空间" : selected.length ? "关系还没有取到" : "选择一篇或多篇主论文"}</h2>
             {loading ? <p>正在查找引用、主题与关键词三类关联</p> : null}{error ? <Button onClick={refresh}>重试</Button> : null}</div>}
         {error ? <div className="relations-retry" role="status">{error}<button disabled={loading} onClick={refresh}>重试</button></div> : null}
-        {partialCount > 0 && !error ? <details className="relation-scope-note small-print"><summary>关系检索说明</summary><p>图谱展示已获取的关系。还有 {partialCount} 篇主论文的部分关联未能获取；这不影响浏览现有关系，也不代表这些论文没有关联。</p><Button size="small" disabled={loading} onClick={refresh}>补充检索</Button></details> : null}
       </div>
     </>}
   </main>;

@@ -39,9 +39,11 @@ def save_in_transaction(db, local_id: str, paper_id: str, text: str, filename: s
             structure = excluded.structure""",
         (local_id, paper_id, filename, text, stamp, json.dumps(structure, ensure_ascii=False) if structure else None),
     )
+    from app.services.retrieval import qa_index
+    qa_index.enqueue_in_transaction(db, local_id, paper_id, text, structure)
 
 
-def get_text(*ids: str | None) -> str | None:
+def get_text(*ids: str | None, preserve_whitespace: bool = False) -> str | None:
     keys = [item.strip() for item in ids if item and item.strip()]
     if not keys:
         return None
@@ -54,8 +56,8 @@ def get_text(*ids: str | None) -> str | None:
         ).fetchone()
     if row is None:
         return None
-    text = (row["text"] or "").strip()
-    return text or None
+    text = row["text"] or ""
+    return (text if preserve_whitespace else text.strip()) if text.strip() else None
 
 
 def get_structure(local_id: str) -> dict | None:

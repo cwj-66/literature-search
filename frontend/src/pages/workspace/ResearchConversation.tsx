@@ -1,4 +1,6 @@
 import { AssistantBubble, UserBubble } from "../../components/ChatMessages";
+import { AnswerMarkdown } from "../../components/AnswerMarkdown";
+import { isDemoDiscoveryTurn } from "../../demoRecordings";
 import { evidenceLabels } from "../../presentation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -202,15 +204,15 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
           followBottom.current = node.scrollHeight - node.clientHeight - node.scrollTop < 64;
         }}>
           <div className="assistant-thread">
-            <AssistantBubble time={greetAt}>{WELCOME.map(line => <p key={line}>{line}</p>)}</AssistantBubble>
+            <AssistantBubble time={greetAt} hideTime>{WELCOME.map(line => <p key={line}>{line}</p>)}</AssistantBubble>
             {turns.map(turn => <div className="assistant-pair" key={turn.id}>
-              <UserBubble time={turn.id} onCopy={() => void copy(turn.question)}>{turn.question}</UserBubble>
-              <AssistantBubble time={turn.answeredAt ?? turn.id} thinking={turn.pending}
+              <UserBubble time={turn.id} hideTime={isDemoDiscoveryTurn(turn)} onCopy={() => void copy(turn.question)}>{turn.question}</UserBubble>
+              <AssistantBubble time={turn.answeredAt ?? turn.id} hideTime={isDemoDiscoveryTurn(turn)} thinking={turn.pending}
                 onCopy={turn.task?.answer ? () => void copy(turn.task!.answer!) : undefined}
                 actions={!turn.pending && (turn.error || turn.note || turn.task?.status === "failed" || turn.task?.stop_reason?.includes("取消"))
                   ? <Button size="small" icon={<ReloadOutlined />} aria-label="重试原问题" disabled={busy || disabled} onClick={() => void send(turn)}>重试原问题</Button> : null}>
                 {turn.pending ? <p className="pending">{RESEARCH_STEP[turn.task?.events?.at(-1)?.step ?? ""] ?? "正在回复"}…</p> : null}
-                {turn.task?.answer ? <p style={{ whiteSpace: "pre-wrap" }}>{turn.task.answer.replace(/\[(E\d+)\]/g, (_match, id) => evidenceLabels(turn.task?.evidence ?? []).get(id) ?? "")}</p> : null}
+                {turn.task?.answer ? <AnswerMarkdown text={turn.task.answer} evidence={turn.task.evidence ?? []} titles={new Map((turn.task.recommended ?? turn.papers ?? []).map(paper => [paper.id, paper.title]))} from={here} /> : null}
                 <ResearchPaperResults turn={turn} from={here} />
                 {turn.task && researchHasActivity(turn) ? <details className="research-evidence">
                   <summary>{researchSummary(turn)} · 查看研究过程</summary>
@@ -235,7 +237,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
                   <p>{turn.task.interrupt?.hint || "请确认本次操作后继续。"}</p>
                   {turn.task.interrupt?.queries?.map(query => <p key={query}>{query}</p>)}
                   {turn.task.interrupt?.paper_ids?.map(ref => <p key={ref}>{project?.papers[ref]?.paper.title || ref}</p>)}
-                  {turn.task.interrupt?.type === "clarify" ? <p className="small-print">可上传 PDF，或到智能问答勾选论文后再提问。</p> : null}
+                  {turn.task.interrupt?.type === "clarify" ? <p className="small-print">可上传 PDF，或到论文研究助手勾选论文后继续讨论。</p> : null}
                   <button type="button" disabled={busy || disabled} onClick={() => void decide(turn, true)}>确认并继续</button>{" "}
                   <button type="button" disabled={busy || disabled} onClick={() => void decide(turn, false)}>拒绝本次操作</button>
                 </div> : null}
@@ -250,7 +252,7 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
         </div>
         {pollError ? <p className="assistant-attach-note" role="status">{pollError}</p> : null}
         {attachNote ? <p className="assistant-attach-note" role="status">{attachNote}</p> : null}
-        <p className="research-access-hint">{selectedIds.length ? <>本对话还留有 {selectedIds.length} 篇已选资料。<button type="button" className="link-button" disabled={busy || disabled} onClick={() => setSelectedIds([])}>清除</button> 按论文提问请到智能问答勾选范围。</> : "可以直接输入需求，搜索和筛选论文。"}</p>
+        {selectedIds.length ? <p className="research-access-hint">本对话还留有 {selectedIds.length} 篇已选资料。<button type="button" className="link-button" disabled={busy || disabled} onClick={() => setSelectedIds([])}>清除</button></p> : null}
         <form className="assistant-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
           <button type="button" className="assistant-clip" aria-label="上传 PDF" disabled={attaching || busy || disabled} onClick={() => fileRef.current?.click()}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 12.2 14.6 6a3.2 3.2 0 0 1 4.5 4.5l-8.2 8.2a4.4 4.4 0 0 1-6.2-6.2l7.6-7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>

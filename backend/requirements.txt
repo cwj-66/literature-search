@@ -14,3 +14,5 @@ aiosqlite>=0.20
 faiss-cpu>=1.9
 numpy>=1.26
 networkx>=3.3
+tokenizers>=0.21,<1
+json-repair>=0.30,<1

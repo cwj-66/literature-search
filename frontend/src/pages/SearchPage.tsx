@@ -11,7 +11,7 @@ import { useSessionState } from "../hooks";
 import type { SearchResponse } from "../types";
 import { SOURCE_LABEL } from "../types";
 
-const SAMPLES = ["检索增强生成", "知识图谱", "大模型幻觉"];
+const SAMPLES = ["检索增强生成", "知识图谱", "深度学习", "Large Language Models", "Graph Neural Networks", "Diffusion Models"];
 
 function SourceRetry({ seconds, loading, onRetry }: { seconds: number; loading: boolean; onRetry: () => void }) {
   const [left, setLeft] = useState(seconds);
@@ -156,7 +156,7 @@ export default function SearchPage() {
     value={draft}
     onChange={event => setDraft(event.target.value)}
     onSearch={submit}
-    placeholder="输入研究问题、关键词或论文标题，例如：降低 RAG 回答幻觉的方法"
+    placeholder="输入研究问题、关键词或论文标题"
     aria-label="论文关键词"
     enterButton={<><SearchOutlined aria-hidden />检索</>}
     size="large"
@@ -212,7 +212,7 @@ export default function SearchPage() {
           </div>
           <form className="search-hero-bar" role="search" onSubmit={event => { event.preventDefault(); startSearch(draft); }}>
             <SearchOutlined aria-hidden />
-            <input ref={heroInput} value={draft} maxLength={300} aria-label="论文关键词" placeholder="输入研究问题、关键词或论文标题，例如：降低 RAG 回答幻觉的方法" onChange={event => setDraft(event.target.value)} />
+            <input ref={heroInput} value={draft} maxLength={300} aria-label="论文关键词" placeholder="输入研究问题、关键词或论文标题" onChange={event => setDraft(event.target.value)} />
             <button type="submit">搜索</button>
           </form>
           <div className="search-topics">

@@ -54,6 +54,17 @@ class ModelResponseTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("接入地址", error.message)
         self.assertNotIn("密钥无效", error.message)
 
+    def test_403_insufficient_quota_is_not_reported_as_invalid_key(self):
+        error = llm._response_error(httpx.Response(403, json={"error": {"code": "insufficient_quota"}}))
+        self.assertIn("额度不足", error.message)
+        self.assertNotIn("密钥无效", error.message)
+
+    async def test_qwen_required_thinking_mode(self):
+        with patch.dict(os.environ, {"LLM_MODEL": "qwen3.8-2.4t-a95b"}):
+            _, payload = await self.request({"choices": [{"message": {"content": "{}"}}]})
+        self.assertIs(payload["enable_thinking"], True)
+        self.assertEqual(payload["thinking_budget"], 1024)
+
     async def test_reasoning_only_truncation_has_specific_error(self):
         with self.assertRaisesRegex(llm.AnalysisError, "长度上限"):
             await self.request({"choices": [{"finish_reason": "length", "message": {"content": "", "reasoning_content": "synthetic reasoning"}}], "usage": {"completion_tokens": 8192}})

@@ -1,4 +1,9 @@
 .env
+.env.*
+!.env.example
+backend/.qa*/
+frontend/.qa*/
+frontend/.qa-*
 REQUIREMENTS.md
 .venv/
 __pycache__/

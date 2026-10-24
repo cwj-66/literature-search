@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { AnalyzePaperResult, Paper, ResearchTask } from "./types";
 import { prepareWorkspace } from "./api";
 import { researchResults } from "./researchPresentation";
+import { reconcileChats } from "./chatSync";
 
 export interface ResearchTurn {
-  id: number; question: string; answeredAt?: number; pending?: boolean; error?: string;
+  id: number; question: string; answeredAt?: number; pending?: boolean; error?: string; demo_example?: boolean;
   papers?: Paper[]; total?: number; analysis?: AnalyzePaperResult; task?: ResearchTask; note?: string;
   request?: { selectedIds: string[]; history: string };
 }
@@ -25,12 +26,13 @@ export function cachedChats(id: string): ResearchChat[] {
   return old.map(chat => ({ ...chat, turns: parse(`ws-ask:${id}:${chat.id}`, chat.id === "first" ? parse(`ws-ask:${id}`, []) : []),
     selectedIds: parse(`research-sources:${id}:${chat.id}`, []), createdAt: Date.now(), updatedAt: Date.now(), version: 0 }));
 }
+class SyncError extends Error { constructor(message: string, public status: number) { super(message); } }
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, body === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) {
     let message = `保存失败（${response.status}）`;
     try { const data = await response.json(); if (typeof data.detail === "string") message = data.detail; } catch { /* use status */ }
-    throw new Error(message);
+    throw new SyncError(message, response.status);
   }
   return response.json();
 }
@@ -52,19 +54,17 @@ export function useResearchChats(workspaceId: string, workspaceName: string) {
         await prepareWorkspace(workspaceId, workspaceName, []);
         // Import is create-only, including tombstones: an old browser cannot resurrect deleted chats.
         const local = cachedChats(workspaceId);
-        const result = await request<{ chats: ResearchChat[]; deleted_ids: string[] }>(`${base}/import`, { chats: local });
-        if (!alive) return;
-        const merged = result.chats.map(remote => {
-          versions.current.set(remote.id, remote.version ?? 0);
-          const cached = local.find(chat => chat.id === remote.id);
-          if (cached?.dirty) {
-            if (!cached.version) cached.version = remote.version;
-            dirty.current.set(cached.id, cached);
-            return cached;
-          }
-          return remote;
+        const result = await request<{ chats: ResearchChat[]; deleted_ids: string[] }>(`${base}/import`, {
+          // Import creates missing rows only; a previous server version cannot
+          // be a precondition when that row does not exist on this server.
+          chats: local.map(chat => ({ ...chat, version: 0 })),
         });
-        latest.current = merged; setChats(merged); setReady(true); setError("");
+        if (!alive) return;
+        const merged = reconcileChats(local, result.chats);
+        versions.current.clear(); dirty.current.clear();
+        for (const chat of merged.chats) versions.current.set(chat.id, chat.version ?? 0);
+        for (const chat of merged.pending) dirty.current.set(chat.id, chat);
+        latest.current = merged.chats; setChats(merged.chats); setPending(merged.pending.length > 0); setReady(true); setError("");
       } catch (err) { if (alive) setError(err instanceof Error ? err.message : "对话同步失败"); }
     })();
     return () => { alive = false; };
@@ -98,6 +98,11 @@ export function useResearchChats(workspaceId: string, workspaceName: string) {
         }
         setChats(latest.current); setError("");
       } catch (err) {
+        if (err instanceof SyncError && err.status === 409) {
+          // Refresh versions and reconcile the cached edits instead of retrying
+          // the same obsolete version forever.
+          setReady(false); setError(""); setReload(n => n + 1); return;
+        }
         setError(err instanceof Error ? err.message : "同步失败，记录已保留在浏览器");
         throw err;
       } finally { setPending(dirty.current.size > 0); }

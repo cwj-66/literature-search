@@ -2,7 +2,7 @@ import { pageTitle } from "../../presentation";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Dropdown, Empty, Input, Modal, Segmented, message } from "antd";
 import { CopyOutlined, DeleteOutlined, EllipsisOutlined, ExportOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, PushpinFilled, SearchOutlined } from "@ant-design/icons";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { RenameDialog } from "../../components/RenameDialog";
 import { exportChat, useResearchChats, type ResearchChat } from "../../researchChats";
 import { ResearchConversation } from "./ResearchConversation";
@@ -58,7 +58,6 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
       {collapsed ? null : <><Input allowClear prefix={<SearchOutlined />} aria-label="搜索研究对话" placeholder="搜索名称或聊天内容" value={query} onChange={e => setQuery(e.target.value)} />
       <Segmented className="research-chat-filter" disabled={busy} block value={archived ? "archived" : "active"} onChange={value => { setArchived(value === "archived"); setParams({}); }}
         options={[{ label: "对话", value: "active" }, { label: `归档 ${store.chats.filter(c => c.archived).length}`, value: "archived" }]} />
-      <p className="research-sync-state" role="status">{!store.ready ? "正在读取已保存对话…" : store.error ? "同步失败，浏览器副本已保留" : store.pending ? "正在保存到服务器…" : "已保存到服务器"}</p>
       <div className="research-chat-list">{visible.map(chat => <div className={`research-chat-row${active?.id === chat.id ? " is-active" : ""}`} key={chat.id}>
         <button type="button" className="research-chat-open" disabled={busy} aria-current={active?.id === chat.id ? "true" : undefined} title={chat.title} onClick={() => setParams({ conversation: chat.id })}>
           {chat.pinned ? <PushpinFilled className="research-pin" aria-label="已置顶" /> : null}{chat.title}
@@ -75,7 +74,7 @@ export function ResearchChatSessions({ id, name }: { id: string; name: string })
           <button type="button" className="research-chat-more" aria-label={`对话操作：${chat.title}`} title="对话操作"><EllipsisOutlined /></button>
         </Dropdown>
       </div>)}{!visible.length && store.ready ? <p className="small-print">{query ? "没有匹配的对话" : archived ? "还没有归档对话" : "新建一个对话开始研究"}</p> : null}</div>
-      <Link to={`/w/${id}/studio`}>打开智能问答</Link></>}
+      </>}
     </aside>
     <section className="research-conversation-main">
       {store.error ? <Alert type="warning" showIcon message={store.error} action={<Button size="small" onClick={store.retry}>重试同步</Button>} /> : null}

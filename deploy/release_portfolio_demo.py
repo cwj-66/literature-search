@@ -84,20 +84,8 @@ assert marker in text
 text = text.replace(marker, '    include /etc/nginx/snippets/portfolio-paper-demo.conf;\n\n' + marker, 1)
 portfolio_nginx.write_text(text)
 paper_nginx = Path('/etc/nginx/sites-available/paper-search')
-paper_nginx.write_text('''server {
-    listen 80;
-    server_name papers.chenwj.click;
-    location ^~ /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
-    location / { return 302 https://chenwj.click/demo/paper-search/; }
-}
-server {
-    listen 443 ssl http2;
-    server_name papers.chenwj.click;
-    ssl_certificate /etc/letsencrypt/live/papers.chenwj.click/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/papers.chenwj.click/privkey.pem;
-    location / { return 302 https://chenwj.click/demo/paper-search/; }
-}
-''')
+# The standalone papers domain is managed independently; never redirect it to the portfolio demo.
+
 try:
     run(['nginx', '-t'])
 except Exception:

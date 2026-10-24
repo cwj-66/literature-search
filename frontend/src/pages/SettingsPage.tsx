@@ -1,12 +1,10 @@
 import { pageTitle } from "../presentation";
 import { useEffect, useState } from "react";
-import { Alert, Button, Input, Switch } from "antd";
-import { ApiOutlined, PlusOutlined } from "@ant-design/icons";
+import { Alert, Button, Input } from "antd";
 import { fetchSources, saveSemanticKey } from "../api";
-import { providers, useProviders, type ProviderConn, type ProviderModel } from "../providers";
 import { isDemo, demoInfo } from "../demo";
 
-const SECTIONS = [{ key: "providers", label: "模型提供商" }, { key: "sources", label: "检索数据源" }, { key: "about", label: "说明" }] as const;
+const SECTIONS = [{ key: "providers", label: "模型配置" }, { key: "sources", label: "检索数据源" }, { key: "about", label: "说明" }] as const;
 
 function SemanticKeyCard() {
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -52,87 +50,44 @@ function SemanticKeyCard() {
   </section>;
 }
 
-function blank(): Omit<ProviderConn, "id"> {
-  return { name: "", baseUrl: "https://api.openai.com/v1", apiKey: "", enabled: true, models: [{ id: "", economy: true, strong: false }] };
-}
+type Runtime = { mode: string; model: string; llm_configured: boolean; embedding_configured: boolean; parser_configured: boolean };
 
-function Editor({ initial, onSave, onCancel }: { initial: Omit<ProviderConn, "id">; onSave: (value: Omit<ProviderConn, "id">) => void; onCancel: () => void }) {
-  const [draft, setDraft] = useState(initial);
-  const models = draft.models.length ? draft.models : [{ id: "", economy: true, strong: false }];
-  const setModel = (index: number, patch: Partial<ProviderModel>) => setDraft(value => ({ ...value, models: models.map((item, i) => i === index ? { ...item, ...patch } : item) }));
-  return <div className="provider-edit">
-    <label className="field-label">名称</label>
-    <Input value={draft.name} maxLength={40} placeholder="例如：硅基流动" onChange={e => setDraft(v => ({ ...v, name: e.target.value }))} />
-    <label className="field-label">BASE URL</label>
-    <Input value={draft.baseUrl} maxLength={200} onChange={e => setDraft(v => ({ ...v, baseUrl: e.target.value }))} />
-    <label className="field-label">API KEY</label>
-    <Input.Password value={draft.apiKey} maxLength={200} placeholder="只保存在这台浏览器" onChange={e => setDraft(v => ({ ...v, apiKey: e.target.value }))} />
-    <p className="field-label">模型</p>
-    {models.map((model, index) => <div className="provider-model" key={index}>
-      <Input value={model.id} maxLength={80} placeholder="模型标识，例如 qwen-plus" onChange={e => setModel(index, { id: e.target.value })} />
-      <label><Switch size="small" checked={model.economy} onChange={economy => setModel(index, { economy })} /> 经济</label>
-      <label><Switch size="small" checked={model.strong} onChange={strong => setModel(index, { strong })} /> 强能力</label>
-      <Button type="text" disabled={models.length <= 1} onClick={() => setDraft(v => ({ ...v, models: models.filter((_, i) => i !== index) }))}>移除</Button>
-    </div>)}
-    <Button type="text" icon={<PlusOutlined />} onClick={() => setDraft(v => ({ ...v, models: [...models, { id: "", economy: false, strong: false }] }))}>添加模型</Button>
-    <div className="provider-edit-actions">
-      <Button onClick={onCancel}>取消</Button>
-      <Button type="primary" disabled={!draft.name.trim() || !draft.baseUrl.trim()} onClick={() => onSave({ ...draft, name: draft.name.trim(), models: models.filter(model => model.id.trim()).map(model => ({ ...model, id: model.id.trim() })) })}>保存</Button>
-    </div>
+function ServerSettings() {
+  const [section, setSection] = useState<(typeof SECTIONS)[number]["key"]>("providers");
+  const [runtime, setRuntime] = useState<Runtime | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/runtime", { signal: controller.signal }).then(async response => {
+      if (!response.ok) throw new Error("无法读取服务配置状态，请稍后刷新。");
+      setRuntime(await response.json());
+    }).catch(err => { if (!controller.signal.aborted) setError(err.message); });
+    return () => controller.abort();
+  }, []);
+  const preview = runtime?.mode === "public_preview";
+  return <div className="settings-page">
+    <nav className="settings-nav" aria-label="设置分区">{SECTIONS.map(item => <button type="button" key={item.key} aria-current={section === item.key ? "page" : undefined} onClick={() => setSection(item.key)}>{item.label}</button>)}</nav>
+    <main className="settings-main">
+      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {preview ? <Alert type="info" showIcon message="开源版公开预览" description="此站不提供作者的模型密钥，也不加载作品集演示数据。启用 AI 能力请克隆项目、自行部署并配置服务。" /> : null}
+      {section === "sources" ? preview ? <section className="provider-card"><h1 className="page-title">检索数据源</h1><p>arXiv 与 Semantic Scholar 可使用公开接口，可能受到上游限流。</p><p>公开预览不接收或保存个人 API Key。自行部署后，可在服务端配置可选的 Semantic Scholar 密钥。</p></section> : runtime ? <SemanticKeyCard /> : null
+      : section === "about" ? <section className="provider-card"><h1 className="page-title">部署说明</h1><p>普通部署从空工作区开始，模型、向量服务与全文解析均使用部署者自己的服务配置。</p><p>本地配置文件为 backend/.env，Docker Compose 默认配置文件为 deploy/.env。修改环境变量后需重新启动后端；仅在浏览器保存连接信息不会改变服务端调用。</p><p>单人自部署版不包含多用户权限系统。公开部署前应另行配置认证和用户数据隔离。</p><a href="https://github.com/cwj-66/literature-search#快速开始" target="_blank" rel="noreferrer">查看项目 README →</a></section>
+      : <section className="provider-card"><h1 className="page-title">模型配置</h1>
+        {!runtime && !error ? <p>正在读取服务配置…</p> : null}
+        {runtime ? <><p>大模型：{runtime.llm_configured ? `已配置（${runtime.model}）` : "未配置"}</p><p>向量与重排：{runtime.embedding_configured ? "已配置" : "未配置"}</p><p>MinerU 全文解析：{runtime.parser_configured ? "已配置" : "未配置"}</p></> : null}
+        <p>密钥由部署者在服务端配置，不会返回浏览器。论文搜索可使用公开接口；研究问答、向量检索和全文解析需要相应服务。</p>
+        <a href="https://github.com/cwj-66/literature-search#配置服务" target="_blank" rel="noreferrer">查看配置方法 →</a>
+      </section>}
+    </main>
   </div>;
 }
 
 export default function SettingsPage() {
-  const list = useProviders();
-  const [section, setSection] = useState<(typeof SECTIONS)[number]["key"]>("providers");
-  const [open, setOpen] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  useEffect(() => { document.title = pageTitle("设置 - 文献检索"); }, []);
+  useEffect(() => { document.title = pageTitle("设置"); }, []);
   if (isDemo) return <main className="settings-main">
     <h1 className="page-title">演示配置</h1>
-    <section className="provider-card"><h2>演示模型</h2>
-      <p>{demoInfo?.model_configured ? "已配置，可直接在检索助手中提问。" : "模型暂不可用，请联系作者。"}</p>
-      <p>当前模型：{demoInfo?.model}</p>
-      <p>模型和检索服务由作者配置，无需填写 API Key。</p>
-    </section>
-    <section className="provider-card"><h2>体验数据</h2><p>每位访客有独立的示例工作区。新建工作区、增删论文与对话不会改变其他访客的体验。</p>
-      <p>每天最多发起 30 次研究或处理请求。</p>
-    </section>
+    <section className="provider-card"><h2>演示模型</h2><p>{demoInfo?.model_configured ? "已配置，可直接在检索助手中提问。" : "模型暂不可用，请联系作者。"}</p><p>当前模型：{demoInfo?.model}</p><p>模型和检索服务由作者配置，无需填写 API Key。</p></section>
+    <section className="provider-card"><h2>体验数据</h2><p>每位访客有独立的示例工作区。新建工作区、增删论文与对话不会改变其他访客的体验。</p><p>每天最多发起 30 次研究或处理请求。</p></section>
   </main>;
-  return <div className="settings-page">
-    <nav className="settings-nav" aria-label="设置分区">
-      {SECTIONS.map(item => <button type="button" key={item.key} aria-current={section === item.key ? "page" : undefined} onClick={() => setSection(item.key)}>{item.label}</button>)}
-    </nav>
-    <main className="settings-main">
-      {section === "about" ? <section>
-        <h1 className="page-title">说明</h1>
-        <p className="page-sub">模型连接和密钥只保存在当前浏览器，不会发送到后端，也不参与检索与分析。更换浏览器或清除站点数据后需要重新填写。</p>
-      </section> : section === "sources" ? <>
-        <h1 className="page-title">检索数据源</h1>
-        <SemanticKeyCard />
-      </> : <>
-        <h1 className="page-title">模型提供商</h1>
-        <section className="provider-card" aria-label="已连接的提供商">
-          <h2>已连接的提供商</h2>
-          {!list.length && !creating ? <p className="empty-hint">还没有提供商，添加连接后才能在提问时选择模型。</p> : null}
-          {list.map(item => {
-            const shown = open === item.id;
-            return <article key={item.id} className="provider-row">
-              <div className="provider-row-head">
-                <ApiOutlined aria-hidden />
-                <strong>{item.name}</strong>
-                <button type="button" className="link-button" onClick={() => setOpen(shown ? null : item.id)}>{shown ? "收起" : "显示"}</button>
-                <button type="button" className={`provider-enabled${item.enabled ? " is-on" : ""}`} onClick={() => providers.update(item.id, { enabled: !item.enabled })}>{item.enabled ? "已启用" : "已停用"}</button>
-              </div>
-              {shown ? <>
-                <Editor key={item.id} initial={item} onCancel={() => setOpen(null)} onSave={value => { providers.update(item.id, value); setOpen(null); }} />
-                <Button danger type="text" onClick={() => providers.remove(item.id)}>断开连接</Button>
-              </> : null}
-            </article>;
-          })}
-          {creating ? <Editor initial={blank()} onCancel={() => setCreating(false)} onSave={value => { providers.add(value); setCreating(false); }} /> : <Button icon={<PlusOutlined />} onClick={() => { setCreating(true); setOpen(null); }}>添加提供商</Button>}
-        </section>
-      </>}
-    </main>
-  </div>;
+  return <ServerSettings />;
 }

@@ -54,6 +54,10 @@ class ContextLimitError(AnalysisError):
     pass
 
 
+class QuotaError(AnalysisError):
+    pass
+
+
 @dataclass
 class UsageMeter:
     """Accumulates prompt/completion tokens for the LLM calls made while it is attached."""
@@ -129,13 +133,17 @@ def _response_error(response: httpx.Response) -> AnalysisError:
         "context_length", "context length", "maximum context", "max context", "input length", "input tokens")):
         return ContextLimitError("论文材料超过模型上下文上限，请缩小分析范围")
     if response.status_code == 403 and code == "allocationquota.freetieronly":
-        return AnalysisError("模型服务拒绝使用免费额度，请核对接入地址、模型额度和账号状态")
+        return QuotaError("模型服务拒绝使用免费额度，请核对接入地址、模型额度和账号状态")
+    if response.status_code in (400, 403, 429) and any(word in code for word in (
+        "insufficient_quota", "allocationquota", "quotaexhausted")):
+        return QuotaError("模型额度不足，请检查账户余额或配额")
+    if response.status_code in (403, 429) and any(word in code for word in (
+        "insufficient_quota", "insufficient_balance", "insufficientbalance",
+        "balanceinsufficient", "arrear", "billing", "allocationquota", "quotaexhausted")):
+        return AnalysisError("模型额度不足，请检查账户余额或配额")
     if response.status_code in (401, 403):
         return AnalysisError("模型密钥无效或没有访问权限，请检查服务配置")
     if response.status_code == 429:
-        if any(word in code for word in ("insufficient_quota", "insufficient_balance", "insufficientbalance",
-                                         "balanceinsufficient", "arrear", "billing", "allocationquota", "quotaexhausted")):
-            return AnalysisError("模型额度不足，请检查账户余额或配额")
         return AnalysisError("模型服务限流，稍后可重试；已完成分段会尽量复用")
     if response.status_code >= 500:
         return AnalysisError("模型服务暂时不可用，自动重试后仍未恢复，请稍后重试")
@@ -143,7 +151,8 @@ def _response_error(response: httpx.Response) -> AnalysisError:
 
 
 def model_name() -> str:
-    return os.getenv("LLM_MODEL", "qwen3.7-flash-2026-07-15").strip() or "qwen3.7-flash-2026-07-15"
+    from app.infrastructure.model_fallback import current
+    return current()
 
 
 def build_messages(paper: PaperOut, prepared: PreparedText) -> list[dict]:
@@ -205,13 +214,28 @@ def ground(fields: AnalysisFields, paper: PaperOut, prepared: PreparedText) -> A
 
 
 async def _chat_completion(messages: list[dict], tools: list[dict] | None = None) -> dict:
+    from app.infrastructure.model_fallback import after_quota, models
+    selected = model_name()
+    for _ in models():
+        try:
+            return await _request_completion(messages, tools, selected)
+        except QuotaError:
+            replacement = after_quota(selected)
+            if not replacement or replacement == selected:
+                raise
+            log.warning('model quota fallback: %s -> %s', selected, replacement)
+            selected = replacement
+    raise AnalysisError('配置的模型额度均已耗尽')
+
+
+async def _request_completion(messages: list[dict], tools: list[dict] | None, selected: str) -> dict:
     """Share credentials, retries, concurrency and metering across JSON and tools."""
     key = os.getenv("DASHSCOPE_API_KEY", "").strip()
     if not key:
         raise AnalysisError("未配置大模型密钥，无法分析")
     base = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")
     payload = {
-        "model": model_name(),
+        "model": selected,
         "temperature": 0.1,
         "max_tokens": 8192,
         "messages": messages,
@@ -224,8 +248,12 @@ async def _chat_completion(messages: list[dict], tools: list[dict] | None = None
     # tasks need that budget for the structured answer, not a thinking trace.
     host = urlparse(base).hostname or ""
     if host in {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"} or host.endswith(".maas.aliyuncs.com"):
-        payload["enable_thinking"] = False
-    timeout = httpx.Timeout(90.0, connect=10.0)
+        # This model's provider contract requires thinking mode; other models
+        # retain the existing bounded non-thinking behavior.
+        payload["enable_thinking"] = selected == "qwen3.8-2.4t-a95b"
+        if payload["enable_thinking"]:
+            payload["thinking_budget"] = 1024
+    timeout = httpx.Timeout(180.0 if payload.get("enable_thinking") else 90.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
         for attempt in range(3):
             try:

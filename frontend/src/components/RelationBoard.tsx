@@ -6,6 +6,7 @@ import { buildSpaceGraph, citationPairs, edgeMainPaperId, type SpaceEdge, type S
 import { CATEGORY_ORDER, metricText, type RelationCategory } from "../relationLayout";
 import type { RecommendationItem, RelateResponse } from "../types";
 import { paperLocation, workspacePaperPath } from "../workspace";
+import { useCanvasGestures } from "../useCanvasGestures";
 
 const META: Record<RelationCategory, { name: string; color: string; dash: number[] }> = {
   citation: { name: "引用关联", color: "#3867e8", dash: [] },
@@ -51,8 +52,8 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
   const canvasRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
-  const drag = useRef<{ x: number; y: number; cx: number; cy: number; moved: boolean } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const gesture = useCanvasGestures(camera, setCamera, { min: 0.03, max: 2, onInteract: () => setSettling(0), onDragging: setDragging, onBackgroundTap: () => selectNode(null) });
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
@@ -183,7 +184,6 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
     </div>;
   };
 
-  const graphIssues = data.satellites.filter(g => g.status === "unavailable");
   const hoverNode = graph.nodes.find(n => n.id === hovered);
   const tooltipX = hoverNode ? Math.max(12, Math.min(size.width - Math.min(350, size.width - 24) - 12, hoverNode.x * k + camera.x + 22)) : 12;
   const tooltipY = hoverNode ? Math.max(52, Math.min(size.height - 150, hoverNode.y * k + camera.y - 30)) : 52;
@@ -200,19 +200,7 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
     </div>
     <div ref={canvasRef} className={`space-canvas${dragging ? " is-dragging" : ""}`} aria-label="拖动画布探索论文，滚轮缩放"
       style={{ backgroundSize: `${28 * k}px ${28 * k}px`, backgroundPosition: `${camera.x}px ${camera.y}px` }}
-      onPointerDown={e => {
-        if ((e.target as Element).closest("[data-node], .space-edge-hit")) return;
-        setSettling(0);
-        drag.current = { x: e.clientX, y: e.clientY, cx: camera.x, cy: camera.y, moved: false };
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }}
-      onPointerMove={e => {
-        const start = drag.current; if (!start) return;
-        if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) { start.moved = true; setDragging(true); }
-        if (start.moved) setCamera(c => ({ ...c, x: start.cx + e.clientX - start.x, y: start.cy + e.clientY - start.y }));
-      }}
-      onPointerUp={() => { if (drag.current && !drag.current.moved) selectNode(null); drag.current = null; setDragging(false); }}
-      onPointerCancel={() => { drag.current = null; setDragging(false); }}>
+      {...gesture.handlers}>
       <div className="space-world" style={{ width: graph.width, height: graph.height,
         transform: `translate(${camera.x}px, ${camera.y}px) scale(${k})`, "--inv": inv, "--grow": grow } as CSSProperties}>
         <svg className="space-lines" width={graph.width} height={graph.height} aria-label="论文之间的真实关系">
@@ -259,7 +247,6 @@ export function RelationBoard({ data, workspaceId, from, busy, preparing, saving
     <div className="space-legend" aria-label="筛选关系类型">{CATEGORY_ORDER.map(key => <button key={key} aria-pressed={categories.includes(key)} onClick={() => setCategories(current => current.includes(key) ? current.filter(c => c !== key) : [...current, key])}>
       <svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke={META[key].color} strokeWidth="2" strokeLinecap="round" strokeDasharray={META[key].dash.join(" ") || undefined} /></svg>{META[key].name}</button>)}
       <span>箭头指向被引用论文 · 每篇主论文每类取 1 篇</span></div>
-    {graphIssues.length ? <div className="space-hint" role="status">部分关系仍待获取，可刷新重试</div> : null}
     {shown ? <aside className={`space-panel${panel ? "" : " is-leaving"}`} aria-label="论文关系详情" aria-hidden={panel ? undefined : true}>
       <button className="space-panel-close" aria-label="关闭详情" onClick={() => selectNode(null)}><CloseOutlined /></button>
       {renderPanel(shown)}

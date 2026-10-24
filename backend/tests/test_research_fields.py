@@ -109,6 +109,24 @@ class FieldTests(unittest.IsolatedAsyncioTestCase):
         with store.global_db() as db,db:db.execute('UPDATE field_reports SET started_at=0')
         self.assertIsNotNone(store.claim_report())
 
+    async def test_adding_reused_analysis_backfills_fields_once_without_retrying_failures(self):
+        task=analysis_store.create_task(self.paper.local_id,{self.paper.id},self.paper.local_id,False,'model','version').task_row
+        analysis_store.transition(task['task_id'],'pending','preparing');analysis_store.transition(task['task_id'],'preparing','analyzing')
+        result=AnalysisFields(research_fields=[],research_problem='Problem',main_content='Content',technical_method='Method',innovations=['Contribution'],experimental_results='Unknown',limitations='Unknown',keywords=['retrieval'],analysis_basis='abstract')
+        prepared=SimpleNamespace(degradation_reason=None,source_kind='abstract',source_url=None,evidence={})
+        analysis_store.save_success(task['task_id'],self.paper.local_id,result,prepared,'model','version')
+        with connection() as db,db:db.execute('DELETE FROM field_identifications')
+        workspaces.add('one',self.paper.local_id)
+        self.assertEqual(store.workspace_fields('one')['identifying_count'],1)
+        self.assertEqual(store.queue_legacy('one',retry_failed=False),0)
+        with connection() as db,db:db.execute("UPDATE field_identifications SET status='failed'")
+        workspaces.add('one',self.paper.local_id)
+        self.assertEqual(store.workspace_fields('one')['failed_count'],1)
+        self.assertEqual(store.queue_legacy('one'),1)
+        with connection() as db,db:store.save_assignments(db,self.paper.local_id,[])
+        workspaces.add('one',self.paper.local_id)
+        self.assertEqual(store.workspace_fields('one')['legacy_count'],0)
+
     async def test_existing_labels_are_not_counted_or_queued_as_unidentified(self):
         task=analysis_store.create_task(self.paper.local_id,{self.paper.id},self.paper.local_id,False,'model','version').task_row
         analysis_store.transition(task['task_id'],'pending','preparing');analysis_store.transition(task['task_id'],'preparing','analyzing')

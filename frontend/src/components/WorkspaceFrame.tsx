@@ -12,8 +12,8 @@ const NAV = [
   { section: "search", label: "论文搜索", path: "search", icon: <SearchOutlined /> },
   { section: "library", label: "文献库", path: "library", icon: <BookOutlined /> },
   { section: "graph", label: "知识图谱", path: "graph", icon: <ApartmentOutlined /> },
-  { section: "studio", label: "智能问答", path: "studio", icon: <MessageOutlined /> },
-  { section: "compare", label: "论文关系", path: "compare", icon: <ShareAltOutlined /> },
+  { section: "studio", label: "论文研究助手", path: "studio", icon: <MessageOutlined /> },
+  { section: "compare", label: "论文推荐", path: "compare", icon: <ShareAltOutlined /> },
   { section: "fields", label: "研究领域", path: "fields", icon: <FundProjectionScreenOutlined /> },
 ];
 export function WorkspaceFrame({ project, section, children }: { project: Project; section: WorkspaceSection; children: ReactNode }) {

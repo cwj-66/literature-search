@@ -9,7 +9,7 @@ export interface FieldReport {
 }
 export interface FieldAnalysis { status: string; report: FieldReport | null; error: string | null; stage: string; stale?: boolean; computed_at?: string }
 export interface ResearchFieldItem { id: string; name: string; canonical_name: string; parent?: string; papers: FieldPaper[]; analysis: FieldAnalysis }
-export interface WorkspaceFields { fields: ResearchFieldItem[]; unidentified_count: number; legacy_count: number; identifying_count: number; pending_analysis_count: number }
+export interface WorkspaceFields { fields: ResearchFieldItem[]; unidentified_count: number; legacy_count: number; failed_count?: number; identifying_count: number; pending_analysis_count: number }
 
 async function request<T>(path: string, signal?: AbortSignal, body?: unknown): Promise<T> {
   const response = await fetch(path, { signal, ...(body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });

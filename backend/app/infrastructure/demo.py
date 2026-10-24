@@ -86,13 +86,35 @@ def initialize(ident):
             (temporary / "activity").touch()
             temporary.rename(target)
         (target / "activity").touch()
+        from app.infrastructure import demo_research_recordings
+        research_marker = target / demo_research_recordings.VERSION
+        if not research_marker.exists():
+            with scope(ident):
+                demo_research_recordings.install()
+            research_marker.touch()
         from app.infrastructure import demo_samples
         marker = target / demo_samples.VERSION
         if not marker.exists():
             with scope(ident):
                 demo_samples.install()
             marker.touch()
+        from app.infrastructure import demo_research_refresh
+        refresh_marker = target / demo_research_refresh.VERSION
+        if not refresh_marker.exists():
+            with scope(ident):
+                if demo_research_refresh.install():
+                    refresh_marker.touch()
+        from app.infrastructure import demo_readable
+        readable_marker=target/demo_readable.VERSION
+        if not readable_marker.exists():
+            with scope(ident):
+                if demo_readable.install():readable_marker.touch()
         from app.infrastructure import demo_recordings
+        from app.infrastructure import demo_hallucination
+        hallucination_marker=target/demo_hallucination.VERSION
+        if not hallucination_marker.exists():
+            with scope(ident):
+                if demo_hallucination.install():hallucination_marker.touch()
         recording_marker = target / demo_recordings.VERSION
         if ident == os.getenv("PAPER_DEMO_RECORDING_UPGRADE_VISITOR", "") and not recording_marker.exists():
             with scope(ident):
@@ -211,6 +233,8 @@ async def workers():
                             if task:
                                 await analysis.run_task(task)
                         elif kind == "processing":
+                            from app.services.retrieval import qa_index
+                            await qa_index.run_one()
                             local_id = await asyncio.to_thread(processing._claim)
                             if local_id:
                                 try:

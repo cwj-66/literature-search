@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AimOutlined, BankOutlined, ExpandOutlined, FileTextOutlined, MinusOutlined, PlusOutlined, TagOutlined, UserOutlined } from "@ant-design/icons";
 import { KIND_LABEL, RELATIONS, type EntityGraph } from "../graphData";
 import { scholarLayout, type ScholarNode } from "../scholarGraphLayout";
+import { useCanvasGestures } from "../useCanvasGestures";
 const ICON = { paper: <FileTextOutlined />, keyword: <TagOutlined />, author: <UserOutlined />, venue: <BankOutlined /> };
 const cameras = new Map<string, { x:number; y:number; k:number }>();
 export function ExplorerCanvas({ data, selected, onSelect, onSelectEdge, scope, resetKey }: {
@@ -12,8 +13,8 @@ export function ExplorerCanvas({ data, selected, onSelect, onSelectEdge, scope, 
   const [size,setSize]=useState({width:900,height:680});
   const [camera,setCamera]=useState(cameras.get(scope)??{x:0,y:0,k:.8});
   const cameraRef=useRef(camera); cameraRef.current=camera;
-  const drag=useRef<{id:number;x:number;y:number;cx:number;cy:number;moved:boolean}|null>(null);
-  const suppressClick=useRef(false);
+  const gesture=useCanvasGestures(camera,setCamera,{min:.1,max:2.5});
+  const suppressClick=gesture.moved;
   const [hover,setHover]=useState("");
   const fit=()=>{ const k=Math.min(1.1,(size.width-40)/layout.width,(size.height-100)/layout.height);setCamera({x:(size.width-layout.width*k)/2,y:(size.height-layout.height*k)/2+20,k}); };
   useEffect(()=>{const el=box.current;if(!el)return;const ro=new ResizeObserver(()=>setSize({width:el.clientWidth,height:el.clientHeight}));ro.observe(el);return()=>ro.disconnect();},[]);
@@ -26,7 +27,7 @@ export function ExplorerCanvas({ data, selected, onSelect, onSelectEdge, scope, 
   const front=new Set([selected,...data.edges.filter(e=>e.source===selected||e.target===selected).flatMap(e=>[e.source,e.target])]);
   const edges=data.edges.map((edge,i)=>({edge,i,lit:Boolean(focus)&&(edge.source===focus||edge.target===focus)}));
   const zoom=(factor:number)=>{const c=camera,k=Math.max(.1,Math.min(2.5,c.k*factor));setCamera({k,x:size.width/2-(size.width/2-c.x)*k/c.k,y:size.height/2-(size.height/2-c.y)*k/c.k});};
-  return <div ref={box} className="kg-explorer-canvas scholar-canvas" aria-label="可拖动缩放的科研知识关系网络" onPointerDown={event=>{suppressClick.current=false;if((event.target as Element).closest("button,a"))return;drag.current={id:event.pointerId,x:event.clientX,y:event.clientY,cx:camera.x,cy:camera.y,moved:false};suppressClick.current=false;event.currentTarget.setPointerCapture(event.pointerId);}} onPointerMove={event=>{const d=drag.current;if(!d||event.pointerId!==d.id)return;const dx=event.clientX-d.x,dy=event.clientY-d.y;if(Math.abs(dx)+Math.abs(dy)>5)d.moved=true;if(d.moved)setCamera(c=>({...c,x:d.cx+dx,y:d.cy+dy}));}} onPointerUp={()=>{suppressClick.current=Boolean(drag.current?.moved);drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}>
+  return <div ref={box} className="kg-explorer-canvas scholar-canvas" aria-label="可拖动缩放的科研知识关系网络" {...gesture.handlers}>
     <div className="kg-canvas-tools"><button aria-label="缩小图谱" onClick={()=>zoom(1/1.2)}><MinusOutlined /></button><button aria-label="放大图谱" onClick={()=>zoom(1.2)}><PlusOutlined /></button><button onClick={fit}><ExpandOutlined /> 适应画布</button><button aria-label="定位选中节点" onClick={()=>{const n=byId.get(selected);if(n)setCamera(c=>({...c,x:size.width/2-n.x*c.k,y:size.height/2-n.y*c.k}));else fit();}}><AimOutlined /></button></div>
     <svg className="scholar-network" width={size.width} height={size.height} aria-label={`${layout.nodes.length} 个知识节点`}>
       <defs>{Object.entries(RELATIONS).map(([key,value])=><marker key={key} id={`scholar-${key}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7Z" fill={value.color}/></marker>)}</defs>

@@ -61,8 +61,13 @@ def add(workspace_id: str, local_id: str) -> bool:
         db.execute("BEGIN IMMEDIATE")
         if not db.execute("SELECT 1 FROM workspaces WHERE id = ?", (workspace_id,)).fetchone():
             raise WorkspaceNotFound("指定工作区不存在")
-        return db.execute("INSERT OR IGNORE INTO workspace_papers VALUES (?, ?, ?)",
+        added = db.execute("INSERT OR IGNORE INTO workspace_papers VALUES (?, ?, ?)",
             (workspace_id, local_id, datetime.now(timezone.utc).isoformat())).rowcount == 1
+    # Imported/reused analyses from older versions may not have field labels.
+    # Queue their one-time backfill when membership is saved, not on a UI click.
+    from app.services.research_fields import store as field_store
+    field_store.queue_legacy(workspace_id, retry_failed=False)
+    return added
 
 
 def list_papers(workspace_id: str) -> dict:

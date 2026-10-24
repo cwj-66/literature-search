@@ -236,12 +236,26 @@ async def sources():
             "message": message if enabled else "Semantic Scholar 已由管理员停用"}}
 
 
+@app.get("/api/runtime")
+async def runtime_configuration():
+    from app.infrastructure import demo
+    return {
+        "mode": "portfolio_demo" if demo.enabled() else "public_preview" if os.getenv("PAPER_PUBLIC_PREVIEW") == "1" else "self_hosted",
+        "model": llm.model_name(),
+        "llm_configured": bool(os.getenv("DASHSCOPE_API_KEY", "").strip()),
+        "embedding_configured": bool(os.getenv("SILICONFLOW_API_KEY", "").strip()),
+        "parser_configured": bool(os.getenv("MINERU_API_TOKEN", "").strip()),
+    }
+
+
 class SemanticKeyRequest(BaseModel):
     api_key: str = Field("", max_length=200)
 
 
 @app.post("/api/config/semantic-scholar")
 async def configure_semantic_key(payload: SemanticKeyRequest):
+    if os.getenv("PAPER_PUBLIC_PREVIEW") == "1":
+        raise HTTPException(403, "公开预览不接受密钥，请在自行部署的实例中配置")
     # The stored key is write-only over the API: it is never returned in any response.
     key = payload.api_key.strip()
     try:

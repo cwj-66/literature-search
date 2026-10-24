@@ -38,6 +38,10 @@ export interface EvidenceItem {
   quote: string;
   section?: string | null;
   material?: "original" | "model_summary" | "note";
+  basis?: "abstract" | "full_text" | "unknown";
+  page_start?: number | null;
+  page_end?: number | null;
+  section_path?: string[];
 }
 
 export interface QAResponse {
@@ -57,6 +61,8 @@ export interface ConversationSummary {
 }
 export interface ConversationMessage {
   id: string;
+  demo_example?: boolean;
+  recorded_demo?: { kind: string };
   question: string;
   papers: { id: string; paper_id: string; title: string }[];
   created_at: string;

@@ -1,121 +1,61 @@
-# 论文检索平台部署
+# 部署与入口隔离
 
-访问地址：https://papers.chenwj.click
+## 普通单人自部署
 
-## 本地启动
+1. 复制项目根目录 `.env.example` 为 `deploy/.env`，填写自己的服务配置；保持 `PAPER_DEMO=0`。
+2. 项目根目录执行 `docker compose -p paper-search -f deploy/compose.yml up -d --build`。
+3. 在 `frontend` 中执行 `npm ci`、`npm run build`。不要设置 `PAPER_DEMO_BUILD=1`。
+4. 用 Nginx 提供 `frontend/dist`，将 `/api/` 转发到 `127.0.0.1:15179`。参考 `nginx-https.conf` 替换域名、证书与静态目录，先 `nginx -t` 再加载。
 
-在项目根目录启动后端（已用 uv 创建 `.venv`）：
+默认命名卷 `paper-search_paper_data` 保存持久数据。更新时保留卷，不要执行 `down -v`。后台队列与上游限速按单进程设计，多实例部署需额外实现共享队列。
+
+本地开发不用 Docker 时，将 `.env.example` 保存为 **`backend/.env`**，启动后端：
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 
-另开终端启动前端：
+前端 `npm run dev` 默认将 `/api/` 转发到 8000。依赖安装、服务配置见 [README](../README.md#快速开始)。
 
-```powershell
-cd frontend
-npm ci
-npm run dev
-```
+## 两个网站同时运行
 
-打开 http://localhost:5173，前端开发服务器将 `/api` 转发到 8000 端口。
+两个入口必须独立，不把开源子域名重定向到作品集。
 
-## 服务器结构
+| 配置 | 开源子域名实例 | 作者作品集演示 |
+| --- | --- | --- |
+| 地址 | `papers.chenwj.click` | `chenwj.click/demo/paper-search/` |
+| Compose 项目 | `paper-search-opensource` | `paper-search` |
+| Compose 文件 | `compose.opensource.yml` | `compose.yml` + `compose.demo.yml` |
+| 模式 | `PAPER_DEMO=0` | `PAPER_DEMO=1` |
+| 端口 | `127.0.0.1:15180` | `127.0.0.1:15179` |
+| 数据卷 | `paper-search-opensource_opensource_data` | `paper-search_paper_data` |
+| 配置 | `deploy/.env.opensource` | `deploy/.env` |
+| 静态目录 | `/opt/paper-search-opensource/frontend/dist` | `/opt/paper-search/frontend/dist` |
+| 前端构建 | 普通路径 `/` | `PAPER_DEMO_BUILD=1`，路径 `/demo/paper-search/` |
 
-- 项目目录：`/opt/paper-search`
-- 前端：本地执行 `npm ci`、`npm run build` 后，将 `frontend/dist` 上传到同名目录，由 Nginx 提供静态文件，支持详情页刷新。
-- 后端：Docker Compose 项目名 `paper-search`，Python 3.12、uv 安装依赖，单进程运行，内存上限 256MB。
-- API 端口：仅监听 `127.0.0.1:15179`，由独立子域名下的 `/api/` 转发。
-- Nginx 配置：`/etc/nginx/sites-available/paper-search`，通过同名链接启用。
-- 证书：`/etc/letsencrypt/live/papers.chenwj.click/`，由 Certbot 管理续期。
-- 独立于主域名已有项目和 API 路由。
-
-## 配置与维护
-
-服务器 `deploy/.env` 使用 `SEMANTIC_SCHOLAR_API_KEY=` 配置可选密钥；空值时调用公开匿名接口，前端如实提示共享额度可能限流，不再直接禁用来源。也可以在设置页“检索数据源”里填写密钥，密钥写入服务器数据库（`app_config` 表）， env 里的密钥优先；界面只显示是否已配置，不回显密钥，清除后回到匿名额度。`SEMANTIC_SCHOLAR_ENABLED=false` 可由管理员临时停用来源。限流时显示来源错误与重试按钮，保留其他来源的结果。不上传本机 `.env`。
-
-上游请求使用单进程共享排队（arXiv 至少间隔 3.1 秒、Semantic Scholar 至少间隔 1.1 秒）。限流冷却与持久缓存规则见下方“检索限流与缓存”。列表元数据缓存最多 1000 条，详情优先复用；这是缓存容量，不是检索结果上限。多进程部署前需改为共享排队。
-
-前端支持六个常用中文词的精确映射，并明确提示英文检索；其他中文不自动翻译。引用量、CCF 和中科院分区缺失时按验收要求显示“未知”，不伪造等级；等级映射和筛选留在阶段二。
+独立实例的启动命令：
 
 ```sh
-cd /opt/paper-search
-docker compose -p paper-search -f deploy/compose.yml up -d --build
-docker compose -p paper-search -f deploy/compose.yml ps
-docker compose -p paper-search -f deploy/compose.yml logs --tail 100 api
-nginx -t
+# 可选：从 .env.example 复制为 deploy/.env.opensource，填写自己的配置。
+docker compose -p paper-search-opensource -f deploy/compose.opensource.yml up -d --build
 ```
 
-`nginx-http.conf` 用于证书签发前的 HTTP 路由，证书签发成功后再使用 `nginx-https.conf`。修改配置后必须先执行 `nginx -t`，再平滑加载 Nginx。不要替换主域名的配置。
+`nginx-opensource.conf` 为独立子域名的 TLS 模板，不代理演示容器，也不读取演示配置或数据。`release_portfolio_demo.py` 不再改写子域名路由，后续发布演示不会重新添加跳转。
 
-当前代码包含论文检索、详情、文献库、AI 分析、相关推荐、局部图谱及统一研究助手。`/w/:id` 和 `/w/:id/research` 打开研究助手，顶部按工作区勾选论文，支持跨工作区选择与全选当前已有论文。每个新对话的记录与资料选择自动保存到服务器 SQLite，并在浏览器保留缓存；旧浏览器记录首次打开会按工作区幂等导入，已删除记录不会被旧缓存恢复。支持置顶、搜索、归档恢复、导出、复制为新对话和带原资料范围重试。后台任务按编号轮询，刷新后可恢复查询，停止操作会通知后台。追问会带最近六轮已完成问答作为上下文。旧研究台的服务端历史对话仍通过 `/w/:id/studio` 访问，保留原有引用与导出。
+作者的公开预览设置 `PAPER_PUBLIC_PREVIEW=1`，LLM、向量、MinerU 和 Semantic Scholar 密钥均为空，不加载示例数据，也不接受个人密钥。自己的私有实例无需设置该标记。
 
-新助手请求使用 `accessible_paper_ids` 明确授予本对话可访问的本地资料范围；空列表不回退全库。论文目录、已有分析、证据检索、相邻原文和图谱统计都在后端限制范围，支持跨工作区引用且不改变成员关系。研究问答由程序保证资料读取、引文核对、覆盖度检查和回答复核等阶段，选中本地论文仍可搜索并读取新的公开候选。新候选不会因此取得其他本地全文的访问权限，也不自动收藏。每个任务最多细读 5 篇，材料不足时明确说明。具体流程及代码参考见 [研究工作流](../docs/research-workflow.md)。未传该字段的旧接口继续沿用 current / selected / workspace 范围规则。数据库表自动创建并保留已有数据。分析任务使用进程内队列，必须保持 Dockerfile 中的单进程；重启后未完成任务可重试。
+作品集演示依赖作者已有的登录服务与只读会话数据库。普通克隆没有这些私有设施，不要直接叠加 `compose.demo.yml`；使用 `nginx-portfolio-paper.conf` 前需实现自己的登录校验。
 
+## 配置、数据与更新
 
-## 安全头与静态路由
+- `/api/runtime` 只返回运行模式、模型名及配置布尔值，不返回密钥。
+- 模型、向量和 MinerU 密钥由服务端读取，修改后需重启。浏览器保存的连接信息不能改变后端配置。
+- Semantic Scholar 支持匿名检索；私有实例可在设置页保存可选密钥，公开预览禁止保存。
+- SQLite 保存论文、工作区、对话、证据与 QA 索引；相似推荐的 FAISS 索引独立维护。不要随意删除或互换。
+- QA 默认子块/重叠/父块为 350/50/1,000 tokens。更换 Embedding 模型需匹配 tokenizer、输入上限和索引版本。
+- `LLM_FALLBACK_MODELS` 配置额度耗尽时的备用模型顺序；普通限流、超时和权限失败不会触发切换。可写的 `LLM_FALLBACK_STATE` 用于跨重启保留状态。
+- 发布前备份配置与数据库，在线 SQLite 使用 backup API。先上传新 hashed assets，再替换 `index.html`，保留旧 assets。
 
-更新前端、后端以及对应的 Nginx 配置后生效。两份 Nginx 模板均限制 SPA 入口为 `/`、`/search`、`/settings`、`/w/`、`/paper`、`/library`、`/studio`、`/recommend` 和 `/graph`，其他不存在的资源返回真实 404。研究台通过 `/w/:id/studio?chat=对话ID` 打开已保存对话，刷新和直接打开链接均须返回 SPA 入口。旧 `/studio` 入口返回工作区主页。API 代理关闭缓冲，读取超时设为 300 秒，以支持渐进检索与耗时较长的调研请求；该超时不代表任务必定在此时间内完成。`/robots.txt` 为真实文件，保留现有禁止索引策略，因此不生成 sitemap，`/sitemap.xml` 明确返回 404。`/favicon.ico` 和 `/favicon.svg` 为真实图标，`/health` 代理后端 `/api/health`，返回 JSON；`/docs`、`/redoc`、`/openapi.json` 关闭并返回 404。
+发布后检查 `nginx -t`、`/api/health`、SPA 深链接刷新、静态资源路径和 `/api/runtime`。子域名不应跳往作品集；两个容器的数据卷与配置不共享。演示入口仍应保留原有认证。
 
-安全头集中在 server 级，子 location 不使用 add_header，防止覆盖继承。包含 CSP、DENY、nosniff、Referrer-Policy、Permissions-Policy，HTTPS 模板另加 HSTS。CSP 允许 Ant Design 必需的内联样式，脚本仅允许同源。
-
-本地回归：
-
-```powershell
-.\.venv\Scripts\python.exe backend/tests/run_offline.py
-npm --prefix frontend run build
-```
-
-上线时须运行 `nginx -t` 后再重新加载，并检查首页、静态资源及 404 响应的安全头；本地 Vite 开发服务器的 SPA fallback 不代表 Nginx 生产路由行为。
-
-
-## 本地分析库与导入接口
-
-使用 SQLite 保存论文元数据、摘要、外部标识、数据来源、内部 ID 和入库时间。桌面开发默认文件为 `backend/data/papers.sqlite3`（已忽略提交）；可用 `PAPER_DB_PATH` 指定其他文件。Docker 使用 `/app/data/papers.sqlite3`，挂载 `paper_data` 命名卷，容器重建后保留。更新时同时使用本次 Dockerfile 和 Compose 文件，确保目录属于 UID 10001，且不删除已有命名卷。
-
-页面 `/library` 可通过 ID / URL 导入；详情页可点击“加入本地分析库”。已入库详情优先读取数据库，网络不可用或后端重启不影响查看。按 arXiv / DOI / Semantic Scholar 外部标识去重，重复导入返回同一内部 ID，不重复新增。导入只保存元数据和摘要；全文下载和 AI 分析在详情页单独触发。
-
-| 请求 | 参数 / 结果 |
-| --- | --- |
-| `POST /api/papers/import` | JSON `{ "external_id": "arxiv:2005.11401" }`，也支持单独提供 `url`、`id`、`arxiv_id` 或 `doi`，这些字段只能选一个；可附带 `snapshot`（title 必填，authors/year/venue/abstract/url/citation_count 可选），提供时直接按快照入库，不再请求上游，外部标识仍以规范化后的参考为准 |
-| 新增成功 | HTTP 201，`{ "paper": { ...论文字段, "local_id": "内部ID", "imported_at": "UTC时间" }, "created": true }` |
-| 重复导入 | HTTP 200，`created: false`，返回已有 `local_id` |
-| `GET /api/papers/{id}` | 读取已入库论文；id 可为 local_id 或已保存的外部 ID，路径特殊字符需编码；未入库返回中文 404 |
-| `GET /api/papers?page=1&page_size=20` | 本地库分页列表，含 papers / total / page / page_size |
-| `GET /api/papers/detail?id=arxiv:...` | 保留兼容的外部详情接口 |
-
-导入先将参考标识规范化，仅向固定的官方 API 发出请求；不直接获取用户给出的任意 URL。导入本身不下载 PDF，也不调用大模型。外部请求超时、参数错误或本地库故障均返回中文错误。新增 POST 还用于创建分析任务，CORS 仍不开放 DELETE / PATCH 等方法。
-
-详情页可对已入库或尚未入库的论文执行 AI 分析。任务立即返回，页面轮询状态：准备文本、分析中、完成或失败。全文只从允许的公开站点获取（arXiv HTML/PDF，以及 OpenReview、ACL Anthology、PMLR、PMC、Europe PMC 的开放 PDF），不绕过登录或付费墙；单份文件不超过 8MB。无法取得合格全文时改用摘要，并写明原因。模型输出经 Pydantic 校验，格式错误只自动修复一次，仍失败则不保存为成功结果。重新分析失败时保留上一版成功结果。
-
-| 请求 | 参数 / 结果 |
-| --- | --- |
-| `POST /api/papers/{id}/analyze` | JSON `{ "reanalyze": false }` 可省略。新建或复用进行中任务返回 202；已有成功结果且未要求重跑时返回 200 |
-| `GET /api/papers/{id}/analysis` | 最新任务和最新成功结果。尚无任务时两者都为空 |
-
-年份筛选使用明确括号和逐关键词 AND 的 arXiv 查询，完整覆盖起止日期当天；分页前对两个来源的 year 再做闭区间检查。有年份筛选时排除年份缺失记录，缺少年份不能作为满足范围的证据。供应商统计与本地校验/去重可能不同，筛选后的总数显示估计值。
-
-
-## 检索限流与缓存（2026-10-16）
-
-Semantic Scholar 相关性检索使用官方 `/paper/search`，只请求当前页（`offset` 与页大小，单次最多 100 条）。该接口最多返回前 1000 条；超出后这一侧给出说明，arXiv 继续分页。发表时间排序仍使用 `/paper/search/bulk`：按上游日期排序，用响应中的 `token` 取当前页需要的批次，响应（包含游标）沿用持久缓存。有密钥时两个接口都携带密钥。
-
-arXiv 官方 API 暂不可用且没有相同查询的可用缓存时，可显示 Semantic Scholar 批次中具有真实 ArXiv 外部 ID 的论文；保留 Semantic Scholar 来源标记，不将其标为 arXiv API 实时结果。降级详情保留在接口状态中；有论文结果时不展示技术诊断横幅。若两个接口都失败且没有相同查询的缓存，页面显示简短的加载失败提示。
-
-上游成功响应持久保存到论文数据库同目录的 `provider-cache.sqlite3`，默认 24 小时内复用；超过 24 小时、未超过 7 天的响应仅在上游 429、5xx 或网络错误时复用；缓存时间保留在接口元数据中。不同关键词、年份和排序不混用。磁盘缓存最多 128 条、32MB，单条原文最多 8MB、压缩后最多 2MB；进程内最多 32 条、16MB。
-
-429 且没有 `Retry-After`，或等待不超过 30 秒时，本次请求按 1 秒、2 秒再试，最多 3 次。等待更长，或 3 次后仍是 429，才进入持久冷却：无响应头时 arXiv 冷却 60 秒、Semantic Scholar 冷却 120 秒，并随连续失败加倍。期限写入持久缓存，重启服务不绕过冷却。已有论文时，来源限流只留在结果摘要里，不弹倒计时警告；列表为空时显示简短错误和重试按钮，并在冷却期禁用重试。来源全部失败不显示“共 0 篇”，避免把检索失败误写成无匹配论文。
-
-
-## 首屏渐进显示与按需翻页
-
-`GET /api/papers/search?stream=true` 返回 NDJSON 快照流（每行一个完整的 SearchResponse），保留普通 JSON 请求兼容性。后端通过 httpx 流式读取上游、ijson 增量解析完整论文对象；当前页记录足够时立即发送，其他来源及同批剩余数据继续加载。完成后 `pending_sources` 为空，后续快照可更新候选排序。上游尚未返回字节时仍需等待其响应，流式传输不能消除这一等待。
-
-前端用 ReadableStream 逐行读取并直接展示卡片，已有论文可以立即进入详情；切换关键词、筛选或页码会取消旧连接及待完成的上游任务。当前请求完成后仅预取下一页，不后台下载全部结果。分页使用数字页码、跨页省略号与输入页码跳转，移除前端的 100 页和 1000 篇截断。深层未缓存页仍需读取中间游标，跳页不代表上游支持随机访问。Nginx 必须允许流式响应，保留 `X-Accel-Buffering: no`，避免将流重新缓冲为整包。
-
-参考：[Ant Design 输入框焦点 FAQ](https://ant.design/components/input/#faq)、[Semantic Scholar API](https://api.semanticscholar.org/api-docs/)、[Python SDK 游标分页实现](https://github.com/danielnsilva/semanticscholar/blob/master/semanticscholar/PaginatedResults.py)。
-
-
-首页与结果页都提供三个中文、三个英文示例词。点击只将显示文字原样填入输入框并聚焦，按检索或回车后才发出请求；中文到英文映射仍在后端进行，输入框和查询标题保留用户提交的中文。桌面上六个词保持一行，小屏自动换行。
-
-分页交互参考 [Ant Design 跳页示例](https://github.com/ant-design/ant-design/blob/master/components/pagination/demo/jump.tsx) 和 [TanStack Query 分页预取示例](https://github.com/TanStack/query/blob/main/examples/react/pagination/src/pages/index.tsx)。沿用现有缓存与下一页预取，不为这次交互调整增加新的数据请求框架。
+普通版面向单人自部署，不是完整多用户 SaaS。公开使用前需另配认证、权限、上传限制与用户数据隔离；作品集专用访客隔离不等于通用多租户支持。

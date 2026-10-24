@@ -1,6 +1,7 @@
 """Durable, idempotent background PDF import queue shared across workspaces."""
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 
 from app.infrastructure.db import connection
@@ -94,8 +95,15 @@ async def process(local_id):
 
 
 async def worker():
+    from app.services.retrieval import qa_index
     # Claims are transactional; expired leases recover after an abrupt process exit.
     while True:
+        try:
+            await qa_index.run_one()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception("QA index queue polling failed; paper processing continues")
         local_id = await asyncio.to_thread(_claim)
         if local_id is None:
             await asyncio.sleep(1)

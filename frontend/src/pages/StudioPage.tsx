@@ -1,4 +1,5 @@
 import { pageTitle, formatMessageTime } from "../presentation";
+import { isDemoResearchMessage, isUnchangedDemoConversation } from "../demoRecordings";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Modal, Popconfirm, Skeleton, message as notification } from "antd";
 import { DeleteOutlined, DoubleLeftOutlined, DoubleRightOutlined, EditOutlined, ExportOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
@@ -37,7 +38,7 @@ function Studio({ project }: { project: Project }) {
   const open = (chat: string) => setParams(chat ? { chat } : {});
   const papersKey = Object.keys(project.papers).sort().join("|");
   const viewing = Boolean(currentId && thread?.id === currentId);
-  useEffect(() => { document.title = pageTitle(`${project.name} - 智能问答`); }, [project.name]);
+  useEffect(() => { document.title = pageTitle(`${project.name} - 论文研究助手`); }, [project.name]);
   useEffect(() => {
     const controller = new AbortController();
     let alive = true;
@@ -60,7 +61,9 @@ function Studio({ project }: { project: Project }) {
         }
         setItems(list);
         setReady(true);
-        if (!activeId.current && list.length) setParams({ chat: list[0].id }, { replace: true });
+        if (!list.some(item => item.id === activeId.current)) {
+          setParams(list.length ? { chat: list[0].id } : {}, { replace: true });
+        }
       } catch (err) { if (alive) setError(errorText(err)); }
     })();
     return () => { alive = false; controller.abort(); };
@@ -96,7 +99,7 @@ function Studio({ project }: { project: Project }) {
   return <div className="studio-layout">
     <aside className={`studio-chats${chatsCollapsed ? " is-collapsed" : ""}`} aria-label="已保存的对话">
       <div className="rail-head">
-        {chatsCollapsed ? null : <h2>智能问答 <span>{items.length}</span></h2>}
+        {chatsCollapsed ? null : <h2>论文研究助手 <span>{items.length}</span></h2>}
         <button type="button" className="side-collapse" aria-expanded={!chatsCollapsed} aria-label={chatsCollapsed ? "展开对话列表" : "收起对话列表"} title={chatsCollapsed ? "展开对话列表" : "收起对话列表"} onClick={toggleChats}>{chatsCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}</button>
       </div>
       <Button type="primary" aria-label="新建对话" icon={<PlusOutlined />} block={!chatsCollapsed} disabled={!ready} loading={creating} onClick={create}>{chatsCollapsed ? null : "新建对话"}</Button>
@@ -104,7 +107,7 @@ function Studio({ project }: { project: Project }) {
         {!ready && !error ? <Skeleton active /> : null}
         {ready && !items.length ? <p className="muted">还没有对话。新建一个，在右侧勾选论文后提问。</p> : null}
         {items.map(item => <div key={item.id} className={`conversation-row${item.id === currentId ? " is-active" : ""}`}>
-          <button type="button" className="conversation-open" aria-current={item.id === currentId ? "true" : undefined} onClick={() => open(item.id)}><strong>{item.title}</strong><small>{item.paper_ids.length} 篇论文 · {formatMessageTime(item.updated_at)}</small></button>
+          <button type="button" className="conversation-open" aria-current={item.id === currentId ? "true" : undefined} onClick={() => open(item.id)}><strong>{item.title}</strong><small>{item.paper_ids.length} 篇论文{isUnchangedDemoConversation(item) ? null : ` · ${formatMessageTime(item.updated_at)}`}</small></button>
           <Popconfirm title="删除这个对话及其问答记录？" okText="删除" cancelText="取消" onConfirm={() => remove(item)}><Button type="text" size="small" icon={<DeleteOutlined />} aria-label={`删除对话：${item.title}`} /></Popconfirm>
         </div>)}
       </div>}
@@ -200,13 +203,27 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
         followBottom.current = node.scrollHeight - node.clientHeight - node.scrollTop < 64;
       }}>
         <div className="studio-log-inner assistant-thread">
-          {!thread.messages.length ? <AssistantBubble time={thread.created_at}><p>你好！我是论文问答助手。</p><p>选择论文后，可以询问研究方法、实验与局限，也可以比较多篇论文。我会依据可检索到的论文内容回答，并附上引用来源。</p></AssistantBubble> : null}
+          {!thread.messages.length ? <AssistantBubble time={thread.created_at} hideTime>
+            <p>你好！我是论文研究助手。</p>
+            <p>我们可以一起理解研究动机和方法、审视实验、比较不同观点，也可以探索后续研究。我会区分作者陈述、实验支持的结论、我的分析与待验证设想，并提供引用依据。</p>
+            <p>论文提供研究证据；结论是否可靠，还需要结合方法、条件和局限作判断。</p>
+            <div className="question-suggestions" aria-label="研究问题示例">
+              {[
+                ["研究动机", "作者为什么研究这个问题？现有方法有什么不足？"],
+                ["研究方法", "作者具体怎么做？为什么这样设计？创新点是什么？"],
+                ["实验与证据", "实验如何支持作者的观点？结果能说明什么，又不能证明什么？"],
+                ["批判性分析", "这个方法有什么潜在局限？请区分作者明确说明的局限与基于证据的分析。"],
+                ["跨论文比较", "这些论文在方法、假设和证据上有哪些共同点、差异或观点冲突？"],
+                ["延伸研究", "基于这些方法和现有边界，还有什么值得验证的研究问题？请提出设想和验证方案。"],
+              ].map(([label, prompt]) => <button key={label} type="button" disabled={disabled || !picked.length || label === "跨论文比较" && picked.length < 2} onClick={() => setQuestion(prompt)}><strong>{label}</strong><br />{prompt}</button>)}
+            </div>
+          </AssistantBubble> : null}
           {thread.messages.map(message => {
             const titles = new Map(message.papers.map(paper => [paper.paper_id, paper.title]));
             const paths = new Map(message.papers.map(paper => [paper.paper_id, workspacePaperPath(project.id, paper.id, here)]));
             return <article key={message.id} className="qa-turn assistant-pair">
-              <UserBubble time={message.created_at} onCopy={() => void copy(message.question)}>{message.question}</UserBubble>
-              <AssistantBubble time={message.created_at} thinking={message.status === "pending"} onCopy={message.response ? () => void copy(message.response!.answer.replace(/\[(E\d+)\]/g, (_match, id) => {
+              <UserBubble time={message.created_at} hideTime={isDemoResearchMessage(message)} onCopy={() => void copy(message.question)}>{message.question}</UserBubble>
+              <AssistantBubble time={message.created_at} hideTime={isDemoResearchMessage(message)} thinking={message.status === "pending"} onCopy={message.response ? () => void copy(message.response!.answer.replace(/\[(E\d+)\]/g, (_match, id) => {
                 const index = message.response!.evidence.findIndex(item => item.evidence_id === id);
                 return index < 0 ? "" : `〔来源 ${index + 1}〕`;
               })) : undefined}>
@@ -220,9 +237,8 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
       </div>
       <form className="studio-composer" onSubmit={event => { event.preventDefault(); void ask(); }}>
         <div className="studio-composer-inner">
-          <p className="field-help">{picked.length ? `只检索所选 ${picked.length} 篇论文，不使用未勾选论文，也不联网补充。` : "先在右侧选择一篇或多篇论文，再开始提问。"}</p>
           <div className="assistant-composer qa-input-box">
-            <textarea aria-label="问题" value={question} disabled={disabled || !picked.length} maxLength={2000} rows={1} placeholder={picked.length ? "输入问题，或继续追问…" : "请先在右侧选择论文"} onChange={event => setQuestion(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void ask(); } }} />
+            <textarea aria-label="问题" value={question} disabled={disabled || !picked.length} maxLength={2000} rows={1} placeholder={picked.length ? "理解研究、审视证据，或探索下一步…" : "请先在右侧选择论文"} onChange={event => setQuestion(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void ask(); } }} />
             <button className="assistant-send" type="submit" disabled={disabled || !question.trim() || !picked.length} aria-label="发送问题" title="Enter 发送，Shift + Enter 换行">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6.5 18.5 12 13 17.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>

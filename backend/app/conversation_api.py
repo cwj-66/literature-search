@@ -104,7 +104,8 @@ async def ask_conversation(workspace_id: str, conversation_id: str, payload: Con
         history = [m["question"] for m in thread["messages"] if m["status"] == "completed"
                    and {p["paper_id"] for p in m["papers"]} <= allowed][-3:]
         await asyncio.to_thread(hybrid.index_abstracts, papers)
-        response = await attribution.answer_question(payload.question, [p.id for p in papers], history=history)
+        response = await attribution.answer_question(payload.question, [p.id for p in papers], history=history,
+                                                    paper_titles={p.id:p.title for p in papers})
         return await stored(conversations.finish, workspace_id, conversation_id, message, response=response)
     except asyncio.CancelledError:
         with suppress(Exception):

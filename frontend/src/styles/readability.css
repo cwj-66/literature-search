@@ -37,6 +37,126 @@
 .scholar-frame .assistant-bubble,.scholar-frame .answer-text { font-size:16px; line-height:1.85; }
 .scholar-frame .is-assistant .assistant-bubble { color:#263445; }
 .scholar-frame .assistant-msg-meta,.scholar-frame .research-chat-list { font-size:13px; color:#475569; }
+@media(min-width:1024px) and (pointer:fine) {
+  .scholar-frame { --text:#263445; --muted:#3e5068; font-weight:500; }
+  .scholar-frame .paper-abstract,.scholar-frame .paper-byline,.scholar-frame .paper-facts,
+  .scholar-frame .ws-page-head p,.scholar-frame .is-assistant .assistant-bubble,.scholar-frame .answer-text,
+  .scholar-frame .field-summary,.scholar-frame .field-milestone > p,.scholar-frame .field-observation > p {
+    color:#30435d; font-weight:500;
+  }
+  .scholar-frame .scholar-node.is-keyword b { font-weight:550; }
+  .scholar-frame .scholar-node small { color:#3e5068; font-weight:500; }
+}
+.scholar-frame .is-user .assistant-bubble { color:#fff; }
+.scholar-frame .is-user .assistant-bubble a { color:#fff; }
+.scholar-frame .assistant-bubble,.scholar-frame .answer-text {
+  font-family:var(--font-ui); font-style:normal; letter-spacing:normal;
+}
+/* Both assistants share fluid message widths, including after rails collapse. */
+.scholar-frame :is(.research-layout,.studio-layout) .assistant-thread {
+  width:100%; max-width:none; margin-inline:0; gap:24px;
+}
+.scholar-frame :is(.research-layout,.studio-layout) .assistant-pair { width:100%; gap:14px; }
+.scholar-frame :is(.research-layout,.studio-layout) .assistant-msg.is-assistant {
+  align-self:flex-start; width:90%; max-width:90%;
+}
+.scholar-frame :is(.research-layout,.studio-layout) .is-assistant .assistant-msg-body {
+  flex:1; min-width:0; max-width:none;
+}
+.scholar-frame :is(.research-layout,.studio-layout) .assistant-msg.is-user {
+  align-self:flex-end; flex-direction:row; width:fit-content; max-width:75%;
+}
+.scholar-frame :is(.research-layout,.studio-layout) .is-user .assistant-msg-body { max-width:100%; }
+.scholar-frame :is(.research-layout,.studio-layout) .assistant-bubble {
+  width:100%; overflow-wrap:anywhere; font-size:16px; font-weight:400; line-height:1.8;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;
+}
+.scholar-frame :is(.research-layout,.studio-layout) .answer-text {
+  max-width:none; font-size:16px; font-weight:400; line-height:1.8; font-family:inherit;
+}
+.scholar-frame :is(.research-layout,.studio-layout) .is-assistant .assistant-bubble { color:#263445; }
+.scholar-frame :is(.research-layout,.studio-layout) .is-user .assistant-bubble {
+  background:#eef2f7; color:#1f2937; border:1px solid #dde4ee; box-shadow:none;
+  border-radius:14px; border-top-right-radius:6px;
+}
+.scholar-frame :is(.research-layout,.studio-layout) .is-user .assistant-bubble a { color:#1d4ed8; }
+.scholar-frame :is(.research-layout,.studio-layout) .answer-body { min-width:0; }
+.scholar-frame :is(.research-layout,.studio-layout) .assistant-bubble,
+.scholar-frame :is(.research-layout,.studio-layout) .answer-text { color:#202124; line-height:1.75; }
+.scholar-frame :is(.research-layout,.studio-layout) .is-user .assistant-bubble { color:#202124; }
+@media(min-width:1100px) {
+  .scholar-frame :is(.research-layout,.studio-layout) .assistant-bubble,
+  .scholar-frame :is(.research-layout,.studio-layout) .answer-text { font-size:18px; }
+}
+.scholar-frame :is(.research-layout,.studio-layout) .is-assistant .assistant-bubble {
+  border:0; background:transparent; box-shadow:none;
+}
+.answer-markdown { white-space:normal; overflow-wrap:anywhere; }
+.answer-markdown > :first-child { margin-top:0; }
+.answer-markdown > :last-child { margin-bottom:0; }
+.scholar-frame .answer-markdown p { margin:0 0 1em; }
+.answer-markdown :is(h1,h2,h3,h4) { margin:1.3em 0 .6em; font-family:inherit; font-weight:600; line-height:1.5; }
+.answer-markdown :is(h1,h2) { font-size:1.15em; }
+.answer-markdown :is(h3,h4) { font-size:1.05em; }
+.answer-markdown :is(ul,ol) { margin:.6em 0 1em; padding-left:1.5em; }
+.answer-markdown li { margin:.35em 0; }
+.answer-markdown blockquote { margin:1em 0; padding:.2em 1em; border-left:3px solid #cad7e7; color:#475569; }
+.answer-markdown pre { padding:14px; background:#f5f7fa; border-radius:8px; overflow:auto; }
+.answer-markdown hr { border:0; border-top:1px solid #e2e8f0; margin:1.5em 0; }
+.answer-table-scroll { max-width:100%; overflow-x:auto; margin:1em 0; border:1px solid #dce3ed; border-radius:8px; }
+.answer-table-scroll table { width:100%; border-collapse:collapse; font-size:.9em; line-height:1.65; }
+.answer-table-scroll :is(th,td) { min-width:110px; padding:10px 12px; text-align:left; vertical-align:top; border-bottom:1px solid #e2e8f0; }
+.answer-table-scroll th { background:#f3f6fa; font-weight:600; }
+.answer-table-scroll tr:last-child td { border-bottom:0; }
+.answer-markdown .katex-display { max-width:100%; overflow:auto; }
+
+.answer-markdown button.cite-mark { font-family:inherit; cursor:pointer; vertical-align:baseline; }
+.answer-markdown button.cite-mark:focus-visible { outline:2px solid #2563eb; outline-offset:3px; }
+.citation-dialog { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Arial,sans-serif; }
+.citation-excerpt { padding:16px 0 20px; color:#202124; }
+.citation-excerpt + .citation-excerpt { border-top:1px solid #dce3ed; }
+.citation-excerpt-meta { display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:13px; }
+.citation-excerpt-meta strong { color:#1d4ed8; }
+.citation-excerpt-meta span { color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:5px; }
+.citation-excerpt h3 { margin:10px 0 6px; font-size:16px; line-height:1.55; font-weight:600; overflow-wrap:anywhere; }
+.citation-excerpt-location { color:#526079; font-size:13px; margin:0 0 12px; overflow-wrap:anywhere; }
+.citation-excerpt blockquote { margin:14px 0; padding:14px 16px; border-left:3px solid #92b1e8; background:#f7f9fc; border-radius:0 8px 8px 0; font-size:15px; line-height:1.85; white-space:pre-wrap; overflow-wrap:anywhere; }
+.citation-paper-link { font-size:14px; color:#1d4ed8; }
+.citation-excerpt-missing { color:#526079; font-size:14px; line-height:1.7; }
+@media(min-width:981px) and (max-width:1200px) {
+  .scholar-frame .studio-chats:not(.is-collapsed) { width:160px; }
+  .scholar-frame .studio-papers:not(.is-collapsed) { width:190px; }
+}
+.research-recommendation-list { display:grid; gap:12px; }
+.scholar-frame .research-paper-card {
+  --card-accent:#3679eb; --card-tint:#edf4ff;
+  display:grid; grid-template-columns:76px minmax(0,1fr); min-width:0;
+  overflow:hidden; border:1px solid #dce6f3; border-left:4px solid var(--card-accent); border-radius:12px;
+  background:linear-gradient(100deg,#fff,var(--card-tint)); box-shadow:0 2px 8px #203c6805; font-family:inherit; font-weight:400;
+}
+.scholar-frame .research-paper-card:nth-child(3n+2) { --card-accent:#26864e; --card-tint:#eff9f2; }
+.scholar-frame .research-paper-card:nth-child(3n) { --card-accent:#7b5ac7; --card-tint:#f5f1fc; }
+.research-paper-rail { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:15px 10px; background:var(--card-tint); color:#475569; font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+.research-paper-number { display:grid; place-items:center; width:32px; height:32px; margin-bottom:5px; border-radius:8px; background:var(--card-accent); color:white; font-size:16px; font-weight:600; }
+.research-paper-main { min-width:0; padding:13px 16px; }
+.research-paper-meta { min-width:0; color:#526174; font-size:12px; line-height:1.5; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.scholar-frame .research-paper-card h3 { margin:5px 0 7px; font-family:inherit; font-size:16px; line-height:1.5; font-weight:600; }
+.research-paper-card h3 a { color:#17243b; overflow-wrap:anywhere; }
+.research-paper-card h3 a:hover { color:#1d4ed8; }
+.research-paper-reason p { margin:0; color:#3e5068; font-size:14px; line-height:1.7; }
+.research-paper-reason .is-clamped { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.research-paper-reason .link-button { margin-top:3px; font-size:12px; line-height:1.6; }
+.research-paper-card .research-paper-authors { margin:6px 0 8px; color:#475569; font-size:13px; line-height:1.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.research-paper-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.research-paper-actions > span { color:#526174; font-size:12px; }
+.research-paper-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 16px; }
+.research-paper-footer > .research-paper-meta { flex:1 1 130px; }
+.research-paper-open { display:inline-flex; align-items:center; min-height:28px; padding:1px 10px; border:1px solid #d5dfed; border-radius:6px; background:#fff; color:#1d4ed8; font-size:12px; font-weight:500; }
+@media(max-width:640px) {
+  .scholar-frame .research-paper-card { grid-template-columns:54px minmax(0,1fr); }
+  .research-paper-rail { padding:12px 7px; }
+  .research-paper-main { padding:11px; }
+}
 @media(max-width:640px) {
   .scholar-frame .ws-nav a { font-size:14px; }
   .scholar-frame .fields-page-head h1 { font-size:25px!important; }

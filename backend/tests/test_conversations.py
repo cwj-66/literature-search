@@ -56,7 +56,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.analysis.attribution.answer_question", new=AsyncMock(return_value=self.answer())) as model:
             result = await self.ask(refs=[self.p.id])
             self.assertEqual(result.status_code, 200)
-            model.assert_awaited_once_with("What evidence?", [self.p.id], history=[])
+            model.assert_awaited_once_with("What evidence?", [self.p.id], history=[], paper_titles={self.p.id: "Alpha"})
         saved = (await self.request("GET", self.base)).json()
         self.assertEqual(saved["messages"][0]["response"], self.answer())
         self.assertEqual(saved["paper_ids"], [self.p.local_id])

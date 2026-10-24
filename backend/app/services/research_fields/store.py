@@ -166,6 +166,7 @@ def workspace_fields(workspace_id):
         item['papers'].append({'id':r['local_id'], 'title':paper['title'], 'year':paper.get('year')})
     return {'fields': sorted(groups.values(), key=lambda f: (-len(f['papers']), f['name'])),
             'unidentified_count':len(missing), 'pending_analysis_count':pending_analysis, 'legacy_count':sum(r['local_id'] in analyzed and r['status'] not in {'queued','running'} for r in missing),
+            'failed_count':sum(r['status']=='failed' for r in missing),
             'identifying_count':sum(r['status'] in {'queued','running'} for r in missing)}
 
 def require_membership(workspace_id, fid):
@@ -177,14 +178,14 @@ def require_membership(workspace_id, fid):
     if not found:
         raise ValueError('该研究领域不属于当前工作区')
 
-def queue_legacy(workspace_id):
+def queue_legacy(workspace_id, retry_failed=True):
     from app.services.papers import workspaces
     workspaces.require(workspace_id)
     with connection() as db, db:
         ids = db.execute('''SELECT DISTINCT a.local_id FROM analysis_results a JOIN workspace_papers wp ON wp.local_id=a.local_id
             LEFT JOIN field_identifications f ON f.local_id=a.local_id
-            WHERE wp.workspace_id=? AND (f.local_id IS NULL OR f.status='failed')
-            AND NOT EXISTS (SELECT 1 FROM paper_fields pf WHERE pf.local_id=a.local_id)''', (workspace_id,)).fetchall()
+            WHERE wp.workspace_id=? AND (f.local_id IS NULL OR (? AND f.status='failed'))
+            AND NOT EXISTS (SELECT 1 FROM paper_fields pf WHERE pf.local_id=a.local_id)''', (workspace_id, int(retry_failed))).fetchall()
         for r in ids:
             db.execute('''INSERT INTO field_identifications VALUES(?,'queued',NULL,?) ON CONFLICT(local_id)
                 DO UPDATE SET status='queued',error=NULL,updated_at=excluded.updated_at''', (r[0], now()))
