@@ -1,18 +1,20 @@
 """Explicit quota-only model order, optionally persisted outside visitor data."""
 import hashlib
 import os
+from app.infrastructure.config import value as provider_value
 import sqlite3
 from contextlib import contextmanager
 
 
 def models():
-    primary = os.getenv('LLM_MODEL', '').strip() or 'qwen3.7-flash-2026-07-15'
-    return list(dict.fromkeys([primary] + [s.strip() for s in os.getenv('LLM_FALLBACK_MODELS', '').split(',') if s.strip()]))
+    primary = provider_value('LLM_MODEL', '').strip() or 'qwen3.7-flash-2026-07-15'
+    return list(dict.fromkeys([primary] + [s.strip() for s in provider_value('LLM_FALLBACK_MODELS', '').split(',') if s.strip()]))
 
 
 @contextmanager
 def state():
-    path = os.getenv('LLM_FALLBACK_STATE', '').strip()
+    from app.infrastructure.user_scope import enabled, database_path
+    path = str(database_path().parent/'model-fallback.sqlite3') if enabled() else os.getenv('LLM_FALLBACK_STATE', '').strip()
     if not path:
         yield None
         return
@@ -26,7 +28,7 @@ def state():
 
 def chain_key(chain):
     # A deliberate provider/model configuration change starts a new chain.
-    value = os.getenv('DASHSCOPE_BASE_URL', '') + '\n' + '\n'.join(chain)
+    value = provider_value('DASHSCOPE_BASE_URL', '') + '\n' + '\n'.join(chain)
     return hashlib.sha256(value.encode()).hexdigest()
 
 

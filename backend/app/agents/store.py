@@ -33,7 +33,7 @@ def _now() -> str:
 
 
 def checkpoint_path() -> Path:
-    from app.infrastructure.demo import database_path
+    from app.infrastructure.user_scope import database_path
     base = database_path()
     return base.with_name("research-checkpoints.sqlite3")
 

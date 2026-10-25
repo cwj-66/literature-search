@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import os
+from app.infrastructure.config import value as provider_value
 import random
 import re
 import time
@@ -230,10 +231,10 @@ async def _chat_completion(messages: list[dict], tools: list[dict] | None = None
 
 async def _request_completion(messages: list[dict], tools: list[dict] | None, selected: str) -> dict:
     """Share credentials, retries, concurrency and metering across JSON and tools."""
-    key = os.getenv("DASHSCOPE_API_KEY", "").strip()
+    key = provider_value("DASHSCOPE_API_KEY", "").strip()
     if not key:
         raise AnalysisError("未配置大模型密钥，无法分析")
-    base = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")
+    base = provider_value("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")
     payload = {
         "model": selected,
         "temperature": 0.1,

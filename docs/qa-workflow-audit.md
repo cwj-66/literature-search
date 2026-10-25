@@ -83,7 +83,6 @@ flowchart TD
 | `backend/app/services/analysis/attribution.py` | 接入取证流程，保留生成/Judge，修正实际正文和引用清理 |
 | `backend/app/services/papers/documents.py` | 正文落库时同事务入队 |
 | `backend/app/services/papers/processing.py` | 普通 worker 消费 QA 索引任务，队列异常不终止原处理器 |
-| `backend/app/infrastructure/demo.py` | 复用演示 processing worker，在访客 scope 内消费 QA 任务 |
 | `backend/tests/test_qa_workflow.py` | 规划、指代、公平取证、40 篇范围、一次补检、引用/Judge、真实工作区 API 集成 |
 | `backend/tests/test_qa_fulltext_index.py` | 自动 worker、MinerU 成功/失败、正文检索、幂等、缺失向量、事务回滚、取消/过期恢复、别名与模型更新、访客隔离 |
 
@@ -118,7 +117,6 @@ flowchart TD
 最终相关回归：
 
 ```powershell
-..\.venv\Scripts\python.exe -m pytest tests/test_qa_workflow.py tests/test_qa_fulltext_index.py tests/test_attribution.py tests/test_hybrid.py tests/test_qa_scope.py tests/test_conversations.py tests/test_upload_paper.py tests/test_parse_tool.py tests/test_index_tool.py tests/test_agent_native_flow.py tests/test_similarity_search.py tests/test_relate.py tests/test_relation_precompute.py tests/test_recommend.py tests/test_portfolio_demo.py -q --basetemp .qa-tmp-rag-release
 ```
 
 结果：**175 passed，5 subtests passed**。包括真实 SQLite/FTS 和 ASGI 工作区对话 API 集成；外部模型、Embedding 和 MinerU 使用受控替身。另一次禁止外网的相关回归为 182 项通过，该次包含知识图谱模块；图谱模块单独运行也曾为 13 项通过，但其旧有顺序缺陷仍见下文，不能据此宣称始终稳定。

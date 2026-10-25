@@ -1,6 +1,20 @@
 """Small server-side key/value settings stored in the paper database."""
 
 from app.infrastructure.db import connection
+import os
+
+SECRET_NAMES = {'DASHSCOPE_API_KEY','SILICONFLOW_API_KEY','MINERU_API_TOKEN','SEMANTIC_SCHOLAR_API_KEY'}
+
+
+def value(name: str, default: str = '') -> str:
+    from app.infrastructure.user_scope import enabled
+    stored = get('provider:' + name)
+    if stored:
+        return stored
+    # Session-hosted users never inherit the host's paid credentials.
+    if enabled() and name in SECRET_NAMES:
+        return ''
+    return os.getenv(name, default)
 
 
 def get(key: str) -> str:

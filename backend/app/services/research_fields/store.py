@@ -9,7 +9,7 @@ import unicodedata
 from uuid import uuid4
 
 from app.infrastructure.db import connection
-from app.infrastructure.demo import base_path
+from app.infrastructure.user_scope import database_path as base_path
 from app.services.research_fields.prompts import VERSION
 
 def now():

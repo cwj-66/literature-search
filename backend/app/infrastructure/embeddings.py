@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+from app.infrastructure.config import value as provider_value
 from datetime import datetime, timezone
 
 import httpx
@@ -26,10 +27,10 @@ def model_name() -> str:
 
 
 def credentials() -> tuple[str, str]:
-    key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+    key = provider_value("SILICONFLOW_API_KEY", "").strip()
     if not key:
         raise EmbeddingError("未配置硅基流动密钥，无法计算语义向量")
-    base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
+    base = provider_value("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
     return key, base
 
 
@@ -151,13 +152,13 @@ async def embed_many(
 
 
 def siliconflow_model() -> str:
-    return os.getenv("SILICONFLOW_EMBEDDING_MODEL", "BAAI/bge-m3").strip() or "BAAI/bge-m3"
+    return provider_value("SILICONFLOW_EMBEDDING_MODEL", "BAAI/bge-m3").strip() or "BAAI/bge-m3"
 
 
 async def embed_siliconflow(texts: list[str], *, persist: bool = True) -> tuple[str, dict[str, list[float]]]:
-    key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+    key = provider_value("SILICONFLOW_API_KEY", "").strip()
     if not key:
         raise EmbeddingError("未配置硅基流动密钥，无法计算语义向量")
-    base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
+    base = provider_value("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
     model = siliconflow_model()
     return model, await embed_many(texts, model, key, base, persist=persist)

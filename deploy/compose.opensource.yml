@@ -1,4 +1,4 @@
-# Independent instance; never layer compose.demo.yml onto this service.
+# Independent browser-session instance.
 services:
   api:
     image: paper-search-opensource-api
@@ -10,7 +10,7 @@ services:
       - path: .env.opensource
         required: false
     environment:
-      PAPER_DEMO: "0"
+      PAPER_USER_SESSIONS: "1"
       PAPER_DB_PATH: /app/data/papers.sqlite3
       SQLITE_TMPDIR: /app/data
     ports:

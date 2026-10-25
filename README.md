@@ -6,19 +6,15 @@
 
 **论文是研究证据的来源，不是真理本身。** 系统区分作者陈述、实验支持的结论与研究建议，不把缺少证据的推测包装成事实。
 
-[开源版公开预览](https://papers.chenwj.click/) · [作品集演示](https://chenwj.click/demo/paper-search/) · [部署说明](deploy/README.md)
+[在线使用](https://papers.chenwj.click/) · [部署说明](deploy/README.md)
 
-## 两个入口有什么区别
+## 开始使用
 
-| | 开源版公开预览 | 作品集演示 |
-| --- | --- | --- |
-| 地址 | `papers.chenwj.click` | `chenwj.click/demo/paper-search/` |
-| 用途 | 查看普通部署界面与公开检索入口 | 体验配置完成的研究流程 |
-| 初始数据 | 空工作区，不加载作者的示例论文和对话 | 预置论文、已生成分析与演示对话 |
-| 模型密钥 | 不提供作者的密钥；AI 功能需自行部署配置 | 服务端由作者配置，不向浏览器返回密钥 |
-| 访问方式 | 公开入口，不跳转作品集演示 | 通过作品集登录，每位访客有独立数据 |
+打开设置页，在“大模型”中选择服务商，填写 API 地址、模型名称和自己的 API Key；按需补充向量与重排、MinerU、Semantic Scholar 配置，点击“保存配置”。后续请求立即使用已保存的配置。
 
-克隆项目不会获得作者的 API Key、服务器数据库或访客记录。默认 `PAPER_DEMO=0`。公开预览不接收个人 API Key，也不提供免费模型额度；完整 AI 功能请在自己的实例中配置。
+在线实例按浏览器会话隔离配置、论文和对话。密钥保存在该会话的服务端存储中，不回显到页面，也不会提供给其他访问者。清除 Cookie 后会建立新的会话，需要重新配置。
+
+自行部署也可使用服务端 `.env` 配置。默认从空工作区开始，不包含作者的 API Key 或私人数据库。
 
 ## 能做什么
 
@@ -34,7 +30,7 @@
 
 ## 项目截图
 
-以下均为实际运行页面，使用公开论文和作者维护的演示数据。截图中的示例内容不会在普通部署中自动创建。
+以下均为实际运行页面，使用公开论文构建的示例工作区。截图中的论文和对话不会在部署后自动创建。
 
 ### 从研究方向逐步找论文
 
@@ -90,7 +86,7 @@ flowchart LR
 | 存储与检索 | SQLite、FTS5、FAISS、RRF、BGE Embedding 与重排 |
 | 论文与全文 | arXiv、Semantic Scholar、MinerU |
 | 模型接入 | 服务端 OpenAI-compatible 接口，需支持相应 JSON 输出或工具调用 |
-| 部署 | Docker Compose、Nginx；普通实例与作品集演示使用独立配置和数据 |
+| 部署 | Docker Compose、Nginx；支持单人部署与会话隔离模式 |
 
 ## 快速开始
 
@@ -134,7 +130,7 @@ npm run dev
 | `QA_CHILD_TOKENS`、`QA_CHILD_OVERLAP_TOKENS`、`QA_PARENT_TOKENS` | QA 切分参数，默认 350 / 50 / 1,000 |
 | `LLM_FALLBACK_MODELS`、`LLM_FALLBACK_STATE` | 可选的额度耗尽切换顺序与持久状态文件，不会因普通限流或超时切换 |
 
-密钥由后端读取，修改后需重启后端。设置页显示配置状态，不返回密钥；浏览器中的连接信息不能代替后端配置。更换 Embedding 模型还需匹配 tokenizer、输入上限并重建相关索引，不能只更改模型名称。
+网页保存的配置立即生效，密钥不回显。`.env` 环境变量变更后需重启后端。会话托管模式仅使用当前用户的密钥，不继承主机的付费凭据。更换 Embedding 模型还需匹配 tokenizer、输入上限并重建相关索引，不能只更改模型名称。
 
 ### Docker 部署
 
@@ -144,7 +140,7 @@ npm run dev
 docker compose -p paper-search -f deploy/compose.yml up -d --build
 ```
 
-API 仅绑定 `127.0.0.1:15179`。前端另行 `npm run build`，由 Nginx 提供静态文件。独立子域名与作品集演示共存的配置见 [部署说明](deploy/README.md)。
+API 仅绑定 `127.0.0.1:15179`。前端另行 `npm run build`，由 Nginx 提供静态文件。Nginx 与会话托管模式的配置见 [部署说明](deploy/README.md)。
 
 ## 验证
 
@@ -152,7 +148,7 @@ API 仅绑定 `127.0.0.1:15179`。前端另行 `npm run build`，由 Nginx 提�
 
 ```sh
 cd backend
-../.venv/bin/python -m pytest tests/test_qa_workflow.py tests/test_qa_parent_child.py tests/test_qa_fulltext_index.py tests/test_research_assistant_policy.py tests/test_runtime_configuration.py
+../.venv/bin/python -m pytest tests/test_qa_workflow.py tests/test_qa_parent_child.py tests/test_qa_fulltext_index.py tests/test_research_assistant_policy.py tests/test_provider_settings.py
 ```
 
 Windows 将 Python 路径改为 `..\\.venv\\Scripts\\python.exe`。更多既有离线回归可用 `python backend/tests/run_offline.py`；它使用 unittest 发现规则，不包含所有 pytest 风格测试。
@@ -169,8 +165,7 @@ npm run test:research
 
 ## 使用边界
 
-- 普通版本面向单人自部署，不是已完成账户鉴权的多租户 SaaS。公开部署需要额外的认证、权限和用户数据隔离。
-- 作品集访客隔离依赖作者自己的登录服务；它不会随普通部署自动启用，也不是通用用户系统。
+- 会话模式提供匿名浏览器隔离，不是完整账户系统；正式服务仍需补充账户恢复、访问控制及运维策略。
 - 上游限流、全文不可访问、解析失败和证据不足都会影响结果；页面应保留这些真实状态。
 - 引用量、分区、会议等级和论文关系依赖来源与覆盖情况，不将缺失数据补成确定结论，不把语义相似当作真实引用。
 - 截图所含论文内容与公开来源素材的权利归各自权利人；模型和论文 API 仍须遵守服务提供方的条款。

@@ -1,6 +1,6 @@
+import { initializeSession } from "./session";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { initializeDemo } from "./demo";
 import { cssVars } from "./theme";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./styles/tokens.css";
@@ -12,7 +12,7 @@ import "./styles/readability.css";
 for (const [name, value] of Object.entries(cssVars)) document.documentElement.style.setProperty(name, value);
 
 async function start() {
-  await initializeDemo();
+  await initializeSession();
   const { default: App } = await import("./App");
   createRoot(document.getElementById("root")!).render(<StrictMode><AppErrorBoundary><App /></AppErrorBoundary></StrictMode>);
 }

@@ -46,10 +46,10 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    from app.infrastructure import demo
+    from app.infrastructure import user_scope
     from app.services.research_fields import evolution as field_evolution, identify as field_identify
-    if demo.enabled():
-        worker = asyncio.create_task(demo.workers())
+    if user_scope.enabled():
+        worker = asyncio.create_task(user_scope.workers())
         try:
             yield
         finally:
@@ -93,8 +93,10 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="文献检索", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
-from app.infrastructure.demo import DemoMiddleware
-app.add_middleware(DemoMiddleware)
+from app.infrastructure.user_scope import UserSessionMiddleware
+app.add_middleware(UserSessionMiddleware)
+from app.provider_api import router as provider_router
+app.include_router(provider_router)
 from app.services.research_fields.api import router as field_router
 app.include_router(field_router)
 app.include_router(conversation_router)
@@ -238,14 +240,20 @@ async def sources():
 
 @app.get("/api/runtime")
 async def runtime_configuration():
-    from app.infrastructure import demo
+    from app.infrastructure import user_scope
     return {
-        "mode": "portfolio_demo" if demo.enabled() else "public_preview" if os.getenv("PAPER_PUBLIC_PREVIEW") == "1" else "self_hosted",
+        "mode": "session_hosted" if user_scope.enabled() else "self_hosted",
         "model": llm.model_name(),
-        "llm_configured": bool(os.getenv("DASHSCOPE_API_KEY", "").strip()),
-        "embedding_configured": bool(os.getenv("SILICONFLOW_API_KEY", "").strip()),
-        "parser_configured": bool(os.getenv("MINERU_API_TOKEN", "").strip()),
+        "llm_configured": bool(server_config.value("DASHSCOPE_API_KEY").strip()),
+        "embedding_configured": bool(server_config.value("SILICONFLOW_API_KEY").strip()),
+        "parser_configured": bool(server_config.value("MINERU_API_TOKEN").strip()),
     }
+
+
+@app.get("/api/session")
+async def current_session():
+    from app.infrastructure.user_scope import visitor
+    return {"namespace": visitor.get()}
 
 
 class SemanticKeyRequest(BaseModel):
@@ -254,8 +262,6 @@ class SemanticKeyRequest(BaseModel):
 
 @app.post("/api/config/semantic-scholar")
 async def configure_semantic_key(payload: SemanticKeyRequest):
-    if os.getenv("PAPER_PUBLIC_PREVIEW") == "1":
-        raise HTTPException(403, "公开预览不接受密钥，请在自行部署的实例中配置")
     # The stored key is write-only over the API: it is never returned in any response.
     key = payload.api_key.strip()
     try:

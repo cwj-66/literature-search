@@ -70,7 +70,7 @@ def split_text(text: str) -> list[tuple[int, str]]:
 
 
 def faiss_path() -> Path:
-    from app.infrastructure.demo import visitor, database_path
+    from app.infrastructure.user_scope import visitor, database_path
     if visitor.get():
         return database_path().with_name("vectors.faiss")
     explicit = os.getenv("PAPER_FAISS_PATH", "").strip()

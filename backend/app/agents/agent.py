@@ -1164,8 +1164,8 @@ def build(checkpointer=None):
 
 _GRAPH = None
 _CHECKPOINTER = None
-_DEMO_GRAPHS = {}
-_DEMO_GRAPH_LOCK = asyncio.Lock()
+_USER_GRAPHS = {}
+_USER_GRAPH_LOCK = asyncio.Lock()
 
 
 async def make_async_checkpointer():
@@ -1184,14 +1184,14 @@ async def make_async_checkpointer():
 
 async def graph():
     global _GRAPH, _CHECKPOINTER
-    from app.infrastructure.demo import visitor
+    from app.infrastructure.user_scope import visitor
     ident = visitor.get()
     if ident:
-        async with _DEMO_GRAPH_LOCK:
-            if ident not in _DEMO_GRAPHS:
+        async with _USER_GRAPH_LOCK:
+            if ident not in _USER_GRAPHS:
                 saver = await make_async_checkpointer()
-                _DEMO_GRAPHS[ident] = (build(saver), saver)
-            return _DEMO_GRAPHS[ident][0]
+                _USER_GRAPHS[ident] = (build(saver), saver)
+            return _USER_GRAPHS[ident][0]
     if _GRAPH is None:
         _CHECKPOINTER = await make_async_checkpointer()
         _GRAPH = build(_CHECKPOINTER)
@@ -1200,8 +1200,8 @@ async def graph():
 
 async def reset_graph():
     global _GRAPH, _CHECKPOINTER
-    for ident in list(_DEMO_GRAPHS):
-        await close_demo_graph(ident)
+    for ident in list(_USER_GRAPHS):
+        await close_user_graph(ident)
     saver = _CHECKPOINTER
     _GRAPH = None
     _CHECKPOINTER = None
@@ -1210,8 +1210,8 @@ async def reset_graph():
         await conn.close()
 
 
-async def close_demo_graph(ident):
-    entry = _DEMO_GRAPHS.pop(ident, None)
+async def close_user_graph(ident):
+    entry = _USER_GRAPHS.pop(ident, None)
     if entry and getattr(entry[1], "conn", None) is not None:
         await entry[1].conn.close()
 
@@ -1226,7 +1226,7 @@ _CHANNELS: dict[str, "_Channel"] = {}
 
 
 def _runtime_id(task_id):
-    from app.infrastructure.demo import visitor
+    from app.infrastructure.user_scope import visitor
     ident = visitor.get()
     return f"{ident}:{task_id}" if ident else task_id
 

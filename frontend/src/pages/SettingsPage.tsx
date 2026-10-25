@@ -1,93 +1,75 @@
-import { pageTitle } from "../presentation";
 import { useEffect, useState } from "react";
-import { Alert, Button, Input } from "antd";
-import { fetchSources, saveSemanticKey } from "../api";
-import { isDemo, demoInfo } from "../demo";
+import { Alert, Button, Input, Select } from "antd";
+import { pageTitle } from "../presentation";
 
-const SECTIONS = [{ key: "providers", label: "模型配置" }, { key: "sources", label: "检索数据源" }, { key: "about", label: "说明" }] as const;
+type Settings = Record<string, string | boolean>;
+const GROUPS = [
+  { title: "大模型", fields: [["llm_base", "API 地址"], ["llm_model", "模型名称"], ["llm_key", "API Key"]] },
+  { title: "向量与重排", fields: [["embedding_base", "API 地址"], ["embedding_model", "向量模型"], ["rerank_model", "重排模型"], ["embedding_key", "API Key"]] },
+  { title: "全文解析", fields: [["mineru_key", "MinerU API Token"]] },
+  { title: "检索数据源", fields: [["semantic_key", "Semantic Scholar API Key（可选）"]] },
+];
+const PRESETS = [
+  { label: "阿里云百炼", value: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+  { label: "DeepSeek", value: "https://api.deepseek.com/v1" },
+  { label: "硅基流动", value: "https://api.siliconflow.cn/v1" },
+  { label: "OpenAI", value: "https://api.openai.com/v1" },
+  { label: "Moonshot", value: "https://api.moonshot.cn/v1" },
+];
 
-function SemanticKeyCard() {
-  const [configured, setConfigured] = useState<boolean | null>(null);
-  const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   useEffect(() => {
+    document.title = pageTitle("设置");
     const controller = new AbortController();
-    fetchSources(controller.signal)
-      .then(data => setConfigured(data.semantic_scholar.key_configured))
-      .catch(() => { if (!controller.signal.aborted) setConfigured(null); });
+    fetch("/api/providers", { signal: controller.signal }).then(async r => {
+      if (!r.ok) throw new Error("读取配置失败，请刷新重试");
+      const data = await r.json() as Settings;
+      setSettings(data);
+      setDraft(Object.fromEntries(Object.entries(data).filter(([, value]) => typeof value === "string")) as Record<string, string>);
+    }).catch(e => { if (!controller.signal.aborted) setError(e.message); });
     return () => controller.abort();
   }, []);
-  async function save(key: string) {
-    setSaving(true); setError(""); setNote("");
+  async function save(values: Record<string, string>) {
+    setBusy(true); setError(""); setNote("");
     try {
-      const result = await saveSemanticKey(key);
-      setConfigured(result.key_configured);
-      setDraft("");
-      setNote(result.key_configured ? "密钥已保存到服务器，检索会立即使用。" : "已清除服务器上的密钥，检索回到公开匿名额度。");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "保存失败，请重试");
-    } finally {
-      setSaving(false);
-    }
+      const r = await fetch("/api/providers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || "保存失败，请重试");
+      setSettings(data);
+      setDraft(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => !key.endsWith("_key"))));
+      setNote("配置已保存，后续请求将使用此配置。");
+    } catch (e) { setError(e instanceof Error ? e.message : "保存失败"); }
+    finally { setBusy(false); }
   }
-  return <section className="provider-card" aria-label="Semantic Scholar 密钥">
-    <h2>Semantic Scholar API Key</h2>
-    <p className="field-help">
-      状态：{configured === null ? "正在检查…" : configured ? "已配置" : "未配置（使用公开匿名额度，容易限流）"}。
-      密钥只保存在服务器，用于访问 Semantic Scholar 官方 API，不会回显。
-      没有密钥可到 <a href="https://www.semanticscholar.org/product/api#api-key-form" target="_blank" rel="noreferrer">Semantic Scholar 申请</a>。
-    </p>
-    <div className="provider-edit-actions">
-      <Input.Password value={draft} maxLength={200} placeholder={configured ? "输入新密钥以替换" : "粘贴 API Key"}
-        aria-label="Semantic Scholar API Key" onChange={e => { setDraft(e.target.value); setError(""); setNote(""); }} />
-      <Button type="primary" loading={saving} disabled={!draft.trim()} onClick={() => void save(draft)}>保存</Button>
-      {configured ? <Button danger loading={saving} onClick={() => void save("")}>清除密钥</Button> : null}
-    </div>
+  function submit() {
+    if (!draft.llm_model?.trim() && (draft.llm_key?.trim() || settings?.llm_key_configured)) {
+      setError("请填写要使用的模型名称"); return;
+    }
+    void save(Object.fromEntries(Object.entries(draft).filter(([key, value]) => !key.endsWith("_key") || value.trim())));
+  }
+  return <main className="settings-main provider-settings">
+    <h1 className="page-title">模型与 API 配置</h1>
+    <p className="page-sub">填写自己的服务地址和 API Key，即可开始研究。密钥保存后不回显；后续请求会使用已保存的配置。</p>
+    {settings?.session_scoped ? <p className="field-help">配置与工作区绑定当前浏览器会话，不与其他访问者共享。清除站点 Cookie 后需重新配置。</p> : null}
     {error ? <Alert type="error" showIcon message={error} /> : null}
     {note ? <Alert type="success" showIcon message={note} /> : null}
-  </section>;
-}
-
-type Runtime = { mode: string; model: string; llm_configured: boolean; embedding_configured: boolean; parser_configured: boolean };
-
-function ServerSettings() {
-  const [section, setSection] = useState<(typeof SECTIONS)[number]["key"]>("providers");
-  const [runtime, setRuntime] = useState<Runtime | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/runtime", { signal: controller.signal }).then(async response => {
-      if (!response.ok) throw new Error("无法读取服务配置状态，请稍后刷新。");
-      setRuntime(await response.json());
-    }).catch(err => { if (!controller.signal.aborted) setError(err.message); });
-    return () => controller.abort();
-  }, []);
-  const preview = runtime?.mode === "public_preview";
-  return <div className="settings-page">
-    <nav className="settings-nav" aria-label="设置分区">{SECTIONS.map(item => <button type="button" key={item.key} aria-current={section === item.key ? "page" : undefined} onClick={() => setSection(item.key)}>{item.label}</button>)}</nav>
-    <main className="settings-main">
-      {error ? <Alert type="error" showIcon message={error} /> : null}
-      {preview ? <Alert type="info" showIcon message="开源版公开预览" description="此站不提供作者的模型密钥，也不加载作品集演示数据。启用 AI 能力请克隆项目、自行部署并配置服务。" /> : null}
-      {section === "sources" ? preview ? <section className="provider-card"><h1 className="page-title">检索数据源</h1><p>arXiv 与 Semantic Scholar 可使用公开接口，可能受到上游限流。</p><p>公开预览不接收或保存个人 API Key。自行部署后，可在服务端配置可选的 Semantic Scholar 密钥。</p></section> : runtime ? <SemanticKeyCard /> : null
-      : section === "about" ? <section className="provider-card"><h1 className="page-title">部署说明</h1><p>普通部署从空工作区开始，模型、向量服务与全文解析均使用部署者自己的服务配置。</p><p>本地配置文件为 backend/.env，Docker Compose 默认配置文件为 deploy/.env。修改环境变量后需重新启动后端；仅在浏览器保存连接信息不会改变服务端调用。</p><p>单人自部署版不包含多用户权限系统。公开部署前应另行配置认证和用户数据隔离。</p><a href="https://github.com/cwj-66/literature-search#快速开始" target="_blank" rel="noreferrer">查看项目 README →</a></section>
-      : <section className="provider-card"><h1 className="page-title">模型配置</h1>
-        {!runtime && !error ? <p>正在读取服务配置…</p> : null}
-        {runtime ? <><p>大模型：{runtime.llm_configured ? `已配置（${runtime.model}）` : "未配置"}</p><p>向量与重排：{runtime.embedding_configured ? "已配置" : "未配置"}</p><p>MinerU 全文解析：{runtime.parser_configured ? "已配置" : "未配置"}</p></> : null}
-        <p>密钥由部署者在服务端配置，不会返回浏览器。论文搜索可使用公开接口；研究问答、向量检索和全文解析需要相应服务。</p>
-        <a href="https://github.com/cwj-66/literature-search#配置服务" target="_blank" rel="noreferrer">查看配置方法 →</a>
-      </section>}
-    </main>
-  </div>;
-}
-
-export default function SettingsPage() {
-  useEffect(() => { document.title = pageTitle("设置"); }, []);
-  if (isDemo) return <main className="settings-main">
-    <h1 className="page-title">演示配置</h1>
-    <section className="provider-card"><h2>演示模型</h2><p>{demoInfo?.model_configured ? "已配置，可直接在检索助手中提问。" : "模型暂不可用，请联系作者。"}</p><p>当前模型：{demoInfo?.model}</p><p>模型和检索服务由作者配置，无需填写 API Key。</p></section>
-    <section className="provider-card"><h2>体验数据</h2><p>每位访客有独立的示例工作区。新建工作区、增删论文与对话不会改变其他访客的体验。</p><p>每天最多发起 30 次研究或处理请求。</p></section>
+    {GROUPS.map(group => <section className="provider-card" key={group.title}>
+      <h2>{group.title}</h2>
+      {group.title === "大模型" ? <><label className="field-label" htmlFor="llm-preset">服务提供商</label><Select id="llm-preset" aria-label="服务提供商" options={PRESETS} value={PRESETS.some(p => p.value === draft.llm_base) ? draft.llm_base : undefined} placeholder="选择服务商，或填写下方地址" onChange={value => setDraft(p => ({ ...p, llm_base: value }))} /></> : null}
+      {group.fields.map(([key, label]) => <div className="provider-setting-field" key={key}>
+        <label className="field-label" htmlFor={key}>{label}</label>
+        {key.endsWith("_key") ? <div className="provider-edit-actions"><Input.Password id={key} aria-label={`${group.title} ${label}`} autoComplete="off" value={draft[key] || ""} placeholder={settings?.[key + "_configured"] ? "已配置；留空保持原值" : "粘贴你的 API Key"} onChange={e => setDraft(p => ({ ...p, [key]: e.target.value }))} />
+          {settings?.[key + "_configured"] ? <Button disabled={busy} onClick={() => void save({ [key]: "" })}>清除</Button> : null}
+        </div> : <Input id={key} aria-label={`${group.title} ${label}`} value={draft[key] || ""} placeholder={key === "llm_model" ? "例如 qwen-plus、deepseek-chat" : "填写配置"} onChange={e => setDraft(p => ({ ...p, [key]: e.target.value }))} />}
+      </div>)}
+      {group.title === "向量与重排" ? <p className="field-help">默认使用 BGE-M3 与 BGE reranker。更换向量模型需由部署者匹配 tokenizer 和输入上限，再重建索引。</p> : null}
+      {group.title === "检索数据源" ? <p className="field-help">留空可使用公开检索接口；上游服务可能限流。</p> : null}
+    </section>)}
+    <Button type="primary" loading={busy} disabled={!settings} onClick={submit}>保存配置</Button>
   </main>;
-  return <ServerSettings />;
 }

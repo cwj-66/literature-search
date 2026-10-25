@@ -8,10 +8,11 @@ from pathlib import Path
 
 @contextmanager
 def connection():
-    from app.infrastructure.demo import database_path
+    from app.infrastructure.user_scope import database_path
     path = database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=10)
+    path.chmod(0o600)
     db.row_factory = sqlite3.Row
     try:
         db.execute("PRAGMA foreign_keys = ON")

@@ -519,12 +519,6 @@
   .paper-title { font-size: 16px; }
   .paper-facts { font-size: var(--fs-xs); }
 }
-/* The shared portfolio session applies to all demo pages. */
-.demo-banner { grid-column: 1 / -1; display: flex; justify-content: center; align-items: center; height: 38px; box-sizing: border-box; padding: 0 20px; background: #d8e5ff; color: #102f63; font-size: 14px; line-height: 1.6; }
-.demo-banner a { white-space: nowrap; color: #102f63; font-weight: 700; }
 .app-startup { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px; color:#263445; text-align:center; background:#f5f9ff; }
 .app-startup button { padding:10px 20px; border:1px solid #b8ccef; border-radius:8px; background:#fff; color:#164fae; font:inherit; cursor:pointer; }
-.app:has(> .demo-banner) { padding-top: 38px; }
-.app > .demo-banner { position: fixed; inset: 0 0 auto; z-index: 100; }
-.app:has(> .demo-banner) .shell-side { top: 38px; height: calc(100dvh - 38px); }
-@media (max-width: 600px) { .demo-banner { padding-inline: 12px; } }
+@media (max-width: 600px) { }

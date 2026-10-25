@@ -98,7 +98,7 @@ def local_text(element, name: str) -> str | None:
 
 
 def s2_api_key() -> str:
-    env = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+    env = server_config.value("SEMANTIC_SCHOLAR_API_KEY").strip()
     if env:
         return env
     try:

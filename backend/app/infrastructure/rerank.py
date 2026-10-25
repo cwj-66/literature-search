@@ -2,6 +2,7 @@
 
 import logging
 import os
+from app.infrastructure.config import value as provider_value
 
 import httpx
 
@@ -15,16 +16,16 @@ class RerankError(Exception):
 
 
 def model_name() -> str:
-    return os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3").strip() or "BAAI/bge-reranker-v2-m3"
+    return provider_value("RERANK_MODEL", "BAAI/bge-reranker-v2-m3").strip() or "BAAI/bge-reranker-v2-m3"
 
 
 async def rerank(query: str, documents: list[str], top_n: int | None = None) -> list[tuple[int, float]]:
     if not documents:
         return []
-    key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+    key = provider_value("SILICONFLOW_API_KEY", "").strip()
     if not key:
         raise RerankError("未配置硅基流动密钥，无法重排序")
-    base = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
+    base = provider_value("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
     payload = {
         "model": model_name(),
         "query": query,

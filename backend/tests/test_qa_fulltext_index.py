@@ -218,17 +218,17 @@ class FulltextQAIndexTests(unittest.IsolatedAsyncioTestCase):
                 except asyncio.CancelledError:pass
         self.assertTrue(all(r['basis']=='full_text' for r in hybrid.load_chunks([self.paper.id]).values()))
 
-    async def test_qa_jobs_and_vectors_are_isolated_between_demo_visitors(self):
-        from app.infrastructure import demo
+    async def test_qa_jobs_and_vectors_are_isolated_between_users(self):
+        from app.infrastructure import user_scope
         locals={}
         for ident in ['a'*32,'b'*32]:
-            with demo.scope(ident):
+            with user_scope.scope(ident):
                 p,_=library.save_paper(PaperOut(id='arxiv:2409.00001',title='Scoped',abstract='Public summary'),'arxiv:2409.00001')
                 hybrid.index_abstracts([p]);documents.save(p.local_id,p.id,'## Methods\n\nPrivate evidence '+ident,'paper.pdf')
                 locals[ident]=p.local_id
-        with demo.scope('a'*32):
+        with user_scope.scope('a'*32):
             await self.run_job()
             self.assertEqual(qa_index.status(locals['a'*32])['status'],'ready')
-        with demo.scope('b'*32):
+        with user_scope.scope('b'*32):
             self.assertEqual(qa_index.status(locals['b'*32])['status'],'pending')
             self.assertTrue(all(r['basis']=='abstract' for r in hybrid.load_chunks(['arxiv:2409.00001']).values()))

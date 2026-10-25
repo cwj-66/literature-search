@@ -1,5 +1,4 @@
 import { pageTitle, formatMessageTime } from "../presentation";
-import { isDemoResearchMessage, isUnchangedDemoConversation } from "../demoRecordings";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, Button, Checkbox, Empty, Input, Modal, Popconfirm, Skeleton, message as notification } from "antd";
 import { DeleteOutlined, DoubleLeftOutlined, DoubleRightOutlined, EditOutlined, ExportOutlined, MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
@@ -107,7 +106,7 @@ function Studio({ project }: { project: Project }) {
         {!ready && !error ? <Skeleton active /> : null}
         {ready && !items.length ? <p className="muted">还没有对话。新建一个，在右侧勾选论文后提问。</p> : null}
         {items.map(item => <div key={item.id} className={`conversation-row${item.id === currentId ? " is-active" : ""}`}>
-          <button type="button" className="conversation-open" aria-current={item.id === currentId ? "true" : undefined} onClick={() => open(item.id)}><strong>{item.title}</strong><small>{item.paper_ids.length} 篇论文{isUnchangedDemoConversation(item) ? null : ` · ${formatMessageTime(item.updated_at)}`}</small></button>
+          <button type="button" className="conversation-open" aria-current={item.id === currentId ? "true" : undefined} onClick={() => open(item.id)}><strong>{item.title}</strong><small>{item.paper_ids.length} 篇论文{` · ${formatMessageTime(item.updated_at)}`}</small></button>
           <Popconfirm title="删除这个对话及其问答记录？" okText="删除" cancelText="取消" onConfirm={() => remove(item)}><Button type="text" size="small" icon={<DeleteOutlined />} aria-label={`删除对话：${item.title}`} /></Popconfirm>
         </div>)}
       </div>}
@@ -222,8 +221,8 @@ function ConversationView({ project, thread, onChange }: { project: Project; thr
             const titles = new Map(message.papers.map(paper => [paper.paper_id, paper.title]));
             const paths = new Map(message.papers.map(paper => [paper.paper_id, workspacePaperPath(project.id, paper.id, here)]));
             return <article key={message.id} className="qa-turn assistant-pair">
-              <UserBubble time={message.created_at} hideTime={isDemoResearchMessage(message)} onCopy={() => void copy(message.question)}>{message.question}</UserBubble>
-              <AssistantBubble time={message.created_at} hideTime={isDemoResearchMessage(message)} thinking={message.status === "pending"} onCopy={message.response ? () => void copy(message.response!.answer.replace(/\[(E\d+)\]/g, (_match, id) => {
+              <UserBubble time={message.created_at}  onCopy={() => void copy(message.question)}>{message.question}</UserBubble>
+              <AssistantBubble time={message.created_at}  thinking={message.status === "pending"} onCopy={message.response ? () => void copy(message.response!.answer.replace(/\[(E\d+)\]/g, (_match, id) => {
                 const index = message.response!.evidence.findIndex(item => item.evidence_id === id);
                 return index < 0 ? "" : `〔来源 ${index + 1}〕`;
               })) : undefined}>

@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+from app.infrastructure.config import value as provider_value
 import zipfile
 from urllib.parse import quote, urlparse
 
@@ -22,7 +23,7 @@ class MinerUError(Exception):
 
 
 def _token() -> str:
-    token = os.getenv("MINERU_API_TOKEN", "").strip()
+    token = provider_value("MINERU_API_TOKEN", "").strip()
     if not token:
         raise MinerUError("未配置 MinerU API Token，请在 MINERU_API_TOKEN 中填写")
     return token

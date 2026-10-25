@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from app.infrastructure import llm
 from app.infrastructure.db import connection
-from app.infrastructure.demo import scope
+from app.infrastructure.user_scope import scope
 from app.schemas import AnalysisFields, PaperOut, ResearchField
 from app.services.analysis import analysis_store, fulltext
 from app.services.papers import library, workspaces
@@ -38,7 +38,7 @@ def draft():
 class FieldTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        env=patch.dict(os.environ,{'PAPER_DB_PATH':str(Path(self.tmp.name)/'papers.sqlite3'),'PAPER_DEMO':'0'})
+        env=patch.dict(os.environ,{'PAPER_DB_PATH':str(Path(self.tmp.name)/'papers.sqlite3'),'PAPER_USER_SESSIONS':'0'})
         env.start(); self.addCleanup(env.stop)
         self.paper,_=library.save_paper(papers()[0],papers()[0].id)
         for wid in ['one','two']:
@@ -78,7 +78,7 @@ class FieldTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(store.report(fid)['computed_at'])
         store.finish(store.claim_report(),error='Temporary failure')
         self.assertEqual(store.report(fid)['report']['summary'],'Prior public report')
-    async def test_visitor_assignments_isolated_but_public_report_shared(self):
+    async def test_user_assignments_and_reports_are_both_isolated(self):
         fid=self.assign();store.request_report(fid,'model');store.finish(store.claim_report(),{'summary':'Public only','partial':False})
         with scope('a'*32):
             workspaces.register('one','Different visitor')
@@ -86,7 +86,7 @@ class FieldTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):store.require_membership('one',fid)
             p,_=library.save_paper(papers()[1],papers()[1].id);workspaces.add('one',p.local_id)
             with connection() as db,db:store.save_assignments(db,p.local_id,[field()])
-            self.assertEqual(store.workspace_fields('one')['fields'][0]['analysis']['report']['summary'],'Public only')
+            self.assertIsNone(store.workspace_fields('one')['fields'][0]['analysis']['report'])
     async def test_api_authorization_and_no_inline_model(self):
         from app.main import app
         fid=self.assign();workspaces.register('empty','empty')

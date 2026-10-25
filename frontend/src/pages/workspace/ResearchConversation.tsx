@@ -1,6 +1,5 @@
 import { AssistantBubble, UserBubble } from "../../components/ChatMessages";
 import { AnswerMarkdown } from "../../components/AnswerMarkdown";
-import { isDemoDiscoveryTurn } from "../../demoRecordings";
 import { evidenceLabels } from "../../presentation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -206,8 +205,8 @@ export function ResearchConversation({ id, chat, onChange, onBusy, disabled }: {
           <div className="assistant-thread">
             <AssistantBubble time={greetAt} hideTime>{WELCOME.map(line => <p key={line}>{line}</p>)}</AssistantBubble>
             {turns.map(turn => <div className="assistant-pair" key={turn.id}>
-              <UserBubble time={turn.id} hideTime={isDemoDiscoveryTurn(turn)} onCopy={() => void copy(turn.question)}>{turn.question}</UserBubble>
-              <AssistantBubble time={turn.answeredAt ?? turn.id} hideTime={isDemoDiscoveryTurn(turn)} thinking={turn.pending}
+              <UserBubble time={turn.id}  onCopy={() => void copy(turn.question)}>{turn.question}</UserBubble>
+              <AssistantBubble time={turn.answeredAt ?? turn.id}  thinking={turn.pending}
                 onCopy={turn.task?.answer ? () => void copy(turn.task!.answer!) : undefined}
                 actions={!turn.pending && (turn.error || turn.note || turn.task?.status === "failed" || turn.task?.stop_reason?.includes("取消"))
                   ? <Button size="small" icon={<ReloadOutlined />} aria-label="重试原问题" disabled={busy || disabled} onClick={() => void send(turn)}>重试原问题</Button> : null}>
